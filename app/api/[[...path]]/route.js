@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { v4 as uuid } from 'uuid';
 import { getDb } from '@/lib/mongo';
 import { COURSES, getCourse, getLesson } from '@/lib/content';
+import { getMedia } from '@/lib/media';
 import { schedule } from '@/lib/sm2';
 
 const json = (data, init = {}) => NextResponse.json(data, init);
@@ -37,7 +38,7 @@ export async function GET(request, { params }) {
     if (path[0] === 'lessons' && path[1] && path[2]) {
       const data = getLesson(path[1], path[2]);
       if (!data) return err('Lesson not found', 404);
-      return json(data);
+      return json({ ...data, media: getMedia(path[2]) });
     }
 
     // User-scoped

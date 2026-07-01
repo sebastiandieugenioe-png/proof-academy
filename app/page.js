@@ -54,7 +54,8 @@ function App() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
       <TopBar user={user} onNav={go} onLogout={logout} />
-      <main className="mx-auto max-w-6xl px-4 pb-24 pt-6 md:pt-10">
+      <main className="mx-auto max-w-6xl px-4 pb-28 md:pb-24 pt-6 md:pt-10">
+        <div className="fade-in">
         {route.name === 'landing' && <Landing courses={courses} onCta={() => go({ name: 'signup' })} />}
         {route.name === 'signup' && <Signup onLogin={login} onBack={() => go({ name: 'landing' })} />}
         {route.name === 'dashboard' && <Dashboard user={user} courses={courses} onNav={go} />}
@@ -63,6 +64,7 @@ function App() {
         {route.name === 'reviews' && <ReviewsView user={user} onNav={go} />}
         {route.name === 'profile' && <ProfileView user={user} setUser={setUser} onNav={go} />}
         {route.name === 'admin' && <AdminView />}
+        </div>
       </main>
       <BottomNav user={user} route={route} onNav={go} />
     </div>
@@ -108,14 +110,14 @@ const BottomNav = ({ user, route, onNav }) => {
     { key: 'profile', icon: UserIcon, label: 'Profile' },
   ]
   return (
-    <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur border-t border-slate-200">
+    <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur border-t border-slate-200 safe-bottom">
       <div className="mx-auto max-w-6xl grid grid-cols-3">
         {items.map((it) => {
           const active = route.name === it.key
           const Icon = it.icon
           return (
-            <button key={it.key} onClick={() => onNav({ name: it.key })} className={`py-2.5 flex flex-col items-center gap-0.5 text-xs ${active ? 'text-blue-700' : 'text-slate-500'}`}>
-              <Icon className="h-5 w-5" />{it.label}
+            <button key={it.key} onClick={() => onNav({ name: it.key })} className={`min-h-[56px] py-2.5 flex flex-col items-center gap-0.5 text-[11px] tap ${active ? 'text-blue-700' : 'text-slate-500'}`}>
+              <Icon className={`h-5 w-5 ${active ? 'scale-110' : ''} transition-transform`} />{it.label}
             </button>
           )
         })}
@@ -378,7 +380,7 @@ const LessonView = ({ courseSlug, lessonSlug, user, onNav }) => {
           <p className="mt-1 text-sm text-slate-500">{lesson.minutes} minute lesson · {STEPS[step].charAt(0).toUpperCase() + STEPS[step].slice(1)}</p>
         </div>
       </div>
-      {STEPS[step] === 'objectives' && <StepObjectives lesson={lesson} onNext={() => setStep(1)} />}
+      {STEPS[step] === 'objectives' && <StepObjectives lesson={lesson} media={data.media} onNext={() => setStep(1)} />}
       {STEPS[step] === 'theory' && <StepTheory lesson={lesson} onNext={() => setStep(2)} />}
       {STEPS[step] === 'flashcards' && <StepFlashcards lesson={lesson} onNext={() => setStep(3)} />}
       {STEPS[step] === 'quiz' && <StepQuiz lesson={lesson} onNext={(score) => { setStep(4); complete(score) }} />}
@@ -387,18 +389,27 @@ const LessonView = ({ courseSlug, lessonSlug, user, onNav }) => {
   )
 }
 
-const StepObjectives = ({ lesson, onNext }) => (
-  <section className="rounded-2xl border border-slate-200 bg-white p-6 md:p-8">
-    <div className="text-xs font-medium uppercase tracking-wide text-blue-700 flex items-center gap-1.5"><Target className="h-3.5 w-3.5" /> Learning objectives</div>
-    <ul className="mt-4 space-y-3">
-      {lesson.objectives.map((o, i) => (
-        <li key={i} className="flex gap-3 text-slate-800">
-          <div className="h-6 w-6 shrink-0 rounded-full bg-blue-50 text-blue-700 grid place-items-center text-xs font-semibold">{i + 1}</div>
-          <span className="leading-relaxed">{o}</span>
-        </li>
-      ))}
-    </ul>
-    <button onClick={onNext} className="mt-8 h-11 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium inline-flex items-center gap-2">Start lesson <ArrowRight className="h-4 w-4" /></button>
+const StepObjectives = ({ lesson, media, onNext }) => (
+  <section className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+    {media?.image && (
+      <div className="relative">
+        <img src={media.image} alt={media.imageAlt || lesson.title} className="w-full h-44 md:h-64 object-cover" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+        <div className="absolute bottom-3 left-4 right-4 text-white/95 text-xs">{media.imageAlt}</div>
+      </div>
+    )}
+    <div className="p-6 md:p-8">
+      <div className="text-xs font-medium uppercase tracking-wide text-blue-700 flex items-center gap-1.5"><Target className="h-3.5 w-3.5" /> Learning objectives</div>
+      <ul className="mt-4 space-y-3">
+        {lesson.objectives.map((o, i) => (
+          <li key={i} className="flex gap-3 text-slate-800">
+            <div className="h-6 w-6 shrink-0 rounded-full bg-blue-50 text-blue-700 grid place-items-center text-xs font-semibold">{i + 1}</div>
+            <span className="leading-relaxed">{o}</span>
+          </li>
+        ))}
+      </ul>
+      <button onClick={onNext} className="mt-8 w-full sm:w-auto h-12 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium inline-flex items-center justify-center gap-2 tap">Start lesson <ArrowRight className="h-4 w-4" /></button>
+    </div>
   </section>
 )
 
