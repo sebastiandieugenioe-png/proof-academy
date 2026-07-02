@@ -5,10 +5,10 @@ import { COURSES, getCourse, getLesson } from '@/lib/content';
 import { AI_COURSES } from '@/lib/ai-content';
 import { getMedia } from '@/lib/media';
 import { schedule } from '@/lib/sm2';
-import { startCourseGeneration, generateLesson, TEMPLATES } from '@/lib/course-generator';
+import { checkPassword, isAdminEmail, makeSessionToken, getAdminSessionFromRequest, ADMIN_COOKIE } from '@/lib/admin-auth';
 
 export const runtime = 'nodejs';
-export const maxDuration = 300;
+export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
 
 const json = (data, init = {}) => NextResponse.json(data, init);
@@ -31,7 +31,10 @@ async function allCoursesMerged() {
   for (const c of COURSES) map.set(c.slug, c);
   for (const c of AI_COURSES) map.set(c.slug, c);
   const pub = await loadPublishedCourses();
-  for (const p of pub) map.set(p.slug, p);
+  for (const p of pub) {
+    if (p.hidden) { map.delete(p.slug); continue; }
+    map.set(p.slug, p);
+  }
   return Array.from(map.values());
 }
 async function findCourseMerged(slug) {
@@ -72,6 +75,12 @@ export async function GET(request, { params }) {
   const url = new URL(request.url);
   const userId = url.searchParams.get('userId') || request.headers.get('x-user-id');
   const seg = path.join('/');
+
+  // Guard: all /api/admin/** requires a valid signed admin cookie
+  if (path[0] === 'admin') {
+    const s = getAdminSessionFromRequest(request);
+    if (!s) return err('Admin authentication required', 401);
+  }
 
   try {
     // Public
@@ -118,6 +127,7 @@ export async function GET(request, { params }) {
       const user = await db.collection('users').findOne({ id: userId });
       if (!user) return err('User not found', 404);
       delete user._id;
+      user.isAdmin = isAdminEmail(user.email);
       return json(user);
     }
 
@@ -163,28 +173,35 @@ export async function GET(request, { params }) {
       return json(rows.map((r) => ({ ...r, _id: undefined })));
     }
 
-    if (seg === 'admin/templates') {
-      return json(TEMPLATES);
-    }
-
-    if (seg === 'admin/drafts') {
+    if (seg === 'admin/comments') {
       const db = await getDb();
-      const rows = await db.collection('drafts').find({}).sort({ createdAt: -1 }).toArray();
+      const rows = await db.collection('comments').find({}).sort({ createdAt: -1 }).limit(500).toArray();
       return json(rows.map((r) => ({ ...r, _id: undefined })));
     }
 
-    if (path[0] === 'admin' && path[1] === 'drafts' && path[2]) {
+    if (seg === 'admin/users') {
       const db = await getDb();
-      const row = await db.collection('drafts').findOne({ id: path[2] });
-      if (!row) return err('Draft not found', 404);
-      delete row._id;
-      return json(row);
+      const all = await db.collection('users').find({}).sort({ createdAt: -1 }).limit(500).toArray();
+      const total = await db.collection('users').countDocuments({});
+      const newsletter = await db.collection('users').countDocuments({ newsletter: true });
+      const weekAgo = new Date(Date.now() - 7 * 86400e3);
+      const last7d = await db.collection('users').countDocuments({ createdAt: { $gte: weekAgo } });
+      const activeIds = await db.collection('progress').distinct('userId');
+      return json({
+        total, newsletter, last7d, active: activeIds.length,
+        users: all.map((u) => ({ id: u.id, name: u.name, email: u.email, newsletter: !!u.newsletter, createdAt: u.createdAt })),
+      });
     }
 
-    if (seg === 'admin/generations') {
+    if (seg === 'admin/newsletter') {
       const db = await getDb();
-      const rows = await db.collection('generations').find({}).sort({ createdAt: -1 }).limit(50).toArray();
+      const rows = await db.collection('newsletter').find({}).sort({ createdAt: -1 }).limit(2000).toArray();
       return json(rows.map((r) => ({ ...r, _id: undefined })));
+    }
+
+    // Removed: /admin/drafts, /admin/generations, /admin/templates — AI generation disabled.
+    if (seg === 'admin/drafts' || seg === 'admin/generations' || seg === 'admin/templates' || (path[0] === 'admin' && path[1] === 'drafts')) {
+      return err('AI generation is disabled', 410);
     }
 
     return err('Not found', 404);
@@ -197,24 +214,27 @@ export async function GET(request, { params }) {
 export async function PATCH(request, { params }) {
   const { path = [] } = await params;
   const body = await request.json().catch(() => ({}));
+
+  // Admin guard
+  if (path[0] === 'admin') {
+    const s = getAdminSessionFromRequest(request);
+    if (!s) return NextResponse.json({ error: 'Admin authentication required' }, { status: 401 });
+  }
+
   try {
-    if (path[0] === 'admin' && path[1] === 'drafts' && path[2]) {
+    if (path[0] === 'admin' && path[1] === 'comments' && path[2]) {
       const db = await getDb();
-      const set = { updatedAt: new Date() };
-      if (body.course) set.course = body.course;
-      if (body.notes !== undefined) set.notes = body.notes;
-      await db.collection('drafts').updateOne({ id: path[2] }, { $set: set });
-      const draft = await db.collection('drafts').findOne({ id: path[2] });
-      if (draft) delete draft._id;
-      // If the draft is already published, sync updates to courses_published
-      if (draft && draft.status === 'published' && draft.course) {
-        await db.collection('courses_published').updateOne(
-          { slug: draft.course.slug },
-          { $set: { ...draft.course, sourceDraftId: draft.id, updatedAt: new Date() } },
-          { upsert: true }
-        );
-      }
-      return NextResponse.json({ ok: true, draft });
+      const set = {};
+      if (typeof body.approved === 'boolean') set.approved = body.approved;
+      if (typeof body.text === 'string') set.text = body.text.slice(0, 800);
+      await db.collection('comments').updateOne({ id: path[2] }, { $set: set });
+      const row = await db.collection('comments').findOne({ id: path[2] });
+      if (row) delete row._id;
+      return NextResponse.json({ ok: true, comment: row });
+    }
+    // Legacy draft edits (AI) - disabled
+    if (path[0] === 'admin' && path[1] === 'drafts') {
+      return NextResponse.json({ error: 'AI generation is disabled' }, { status: 410 });
     }
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   } catch (e) {
@@ -225,13 +245,20 @@ export async function PATCH(request, { params }) {
 
 export async function DELETE(request, { params }) {
   const { path = [] } = await params;
+
+  if (path[0] === 'admin') {
+    const s = getAdminSessionFromRequest(request);
+    if (!s) return NextResponse.json({ error: 'Admin authentication required' }, { status: 401 });
+  }
+
   try {
-    if (path[0] === 'admin' && path[1] === 'drafts' && path[2]) {
+    if (path[0] === 'admin' && path[1] === 'comments' && path[2]) {
       const db = await getDb();
-      const draft = await db.collection('drafts').findOne({ id: path[2] });
-      if (draft?.course?.slug) await db.collection('courses_published').deleteOne({ slug: draft.course.slug });
-      await db.collection('drafts').deleteOne({ id: path[2] });
+      await db.collection('comments').deleteOne({ id: path[2] });
       return NextResponse.json({ ok: true });
+    }
+    if (path[0] === 'admin' && path[1] === 'drafts') {
+      return NextResponse.json({ error: 'AI generation is disabled' }, { status: 410 });
     }
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   } catch (e) {
@@ -244,6 +271,33 @@ export async function POST(request, { params }) {
   const { path = [] } = await params;
   const seg = path.join('/');
   const body = await request.json().catch(() => ({}));
+
+  // Public admin-auth endpoints (do not need the cookie yet)
+  if (seg === 'admin-auth') {
+    const { email, password } = body || {};
+    if (!isAdminEmail(email)) {
+      // Deliberately generic error to avoid leaking whether an email is on the allowlist
+      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
+    }
+    if (!checkPassword(password)) {
+      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
+    }
+    const token = makeSessionToken(email);
+    const res = NextResponse.json({ ok: true });
+    res.cookies.set({ ...ADMIN_COOKIE.options, name: ADMIN_COOKIE.name, value: token });
+    return res;
+  }
+  if (seg === 'admin-auth/logout') {
+    const res = NextResponse.json({ ok: true });
+    res.cookies.set({ ...ADMIN_COOKIE.options, name: ADMIN_COOKIE.name, value: '', maxAge: 0 });
+    return res;
+  }
+
+  // All other admin POSTs require the cookie
+  if (path[0] === 'admin') {
+    const s = getAdminSessionFromRequest(request);
+    if (!s) return NextResponse.json({ error: 'Admin authentication required' }, { status: 401 });
+  }
 
   try {
     if (seg === 'auth') {
@@ -364,112 +418,36 @@ export async function POST(request, { params }) {
       return json({ ok: true });
     }
 
-    if (seg === 'admin/generate-course') {
-      const { category, level, courseTitle, tagline, accent, icon, lessonTitles, notes } = body;
-      if (!courseTitle || !Array.isArray(lessonTitles) || lessonTitles.length === 0) return err('courseTitle and lessonTitles[] required');
-      if (!process.env.EMERGENT_LLM_KEY) return err('EMERGENT_LLM_KEY not configured on server', 500);
-      const draft = await startCourseGeneration({ category, level, courseTitle, tagline, accent, icon, lessonTitles, notes });
-      return json({ ok: true, draft });
-    }
-
-    if (seg === 'admin/generate-lesson') {
-      const { draftId, lessonTitle, notes } = body;
-      if (!draftId || !lessonTitle) return err('draftId and lessonTitle required');
+    if (seg === 'admin/course-override') {
+      const { course } = body;
+      if (!course?.slug) return err('course.slug required');
       const db = await getDb();
-      const draft = await db.collection('drafts').findOne({ id: draftId });
-      if (!draft) return err('Draft not found', 404);
-      const lesson = await generateLesson({
-        courseTitle: draft.course.title,
-        courseCategory: draft.course.category,
-        level: draft.course.level,
-        lessonTitle,
-        lessonNumber: (draft.course.lessons?.length || 0) + 1,
-        totalLessons: (draft.course.lessons?.length || 0) + 1,
-        notes: notes || draft.notes,
-      });
-      await db.collection('drafts').updateOne({ id: draftId }, { $push: { 'course.lessons': lesson }, $set: { updatedAt: new Date() } });
-      return json({ ok: true, lesson });
-    }
-
-    if (path[0] === 'admin' && path[1] === 'drafts' && path[2] && path[3] === 'retry') {
-      const db = await getDb();
-      const draft = await db.collection('drafts').findOne({ id: path[2] });
-      if (!draft) return err('Draft not found', 404);
-      // Determine which lessons still need generating
-      const doneTitles = new Set((draft.course.lessons || []).map((l) => (l.title || '').toLowerCase()));
-      const original = body.lessonTitles || (draft.originalLessonTitles || (draft.course.lessons || []).map((l) => l.title));
-      const remaining = original.filter((t) => !doneTitles.has(t.toLowerCase()));
-      if (remaining.length === 0) {
-        await db.collection('drafts').updateOne({ id: draft.id }, { $set: { status: 'ready', error: null, updatedAt: new Date() } });
-        return json({ ok: true, message: 'Nothing to retry', status: 'ready' });
-      }
-      await db.collection('drafts').updateOne(
-        { id: draft.id },
-        { $set: { status: 'generating', error: null, 'progress.total': (draft.course.lessons?.length || 0) + remaining.length, updatedAt: new Date() } }
-      );
-      // Fire and forget
-      (async () => {
-        try {
-          for (const lt of remaining) {
-            const lesson = await generateLesson({
-              courseTitle: draft.course.title,
-              courseCategory: draft.course.category,
-              level: draft.course.level,
-              lessonTitle: lt,
-              lessonNumber: (draft.course.lessons?.length || 0) + 1,
-              totalLessons: (draft.course.lessons?.length || 0) + remaining.length,
-              notes: draft.notes,
-            });
-            await db.collection('drafts').updateOne(
-              { id: draft.id },
-              { $push: { 'course.lessons': lesson }, $inc: { 'progress.done': 1 }, $set: { updatedAt: new Date() } }
-            );
-          }
-          await db.collection('drafts').updateOne({ id: draft.id }, { $set: { status: 'ready', updatedAt: new Date() } });
-        } catch (e) {
-          await db.collection('drafts').updateOne({ id: draft.id }, { $set: { status: 'error', error: e.message, updatedAt: new Date() } });
-        }
-      })();
-      return json({ ok: true, remaining });
-    }
-
-    if (path[0] === 'admin' && path[1] === 'drafts' && path[2] && path[3] === 'publish') {
-      const db = await getDb();
-      const draft = await db.collection('drafts').findOne({ id: path[2] });
-      if (!draft) return err('Draft not found', 404);
-      if (draft.status !== 'ready') return err('Draft not ready for publish (status=' + draft.status + ')');
-      // Upsert into courses_published
       await db.collection('courses_published').updateOne(
-        { slug: draft.course.slug },
-        { $set: { ...draft.course, sourceDraftId: draft.id, publishedAt: new Date() } },
+        { slug: course.slug },
+        { $set: { ...course, updatedAt: new Date() } },
         { upsert: true }
       );
-      await db.collection('drafts').updateOne({ id: draft.id }, { $set: { status: 'published', publishedAt: new Date() } });
-      return json({ ok: true, slug: draft.course.slug });
+      const saved = await db.collection('courses_published').findOne({ slug: course.slug });
+      if (saved) delete saved._id;
+      return json({ ok: true, course: saved });
     }
 
-    if (path[0] === 'admin' && path[1] === 'drafts' && path[2] && path[3] === 'unpublish') {
+    if (seg === 'admin/course-publish') {
+      const { slug, published } = body;
+      if (!slug) return err('slug required');
       const db = await getDb();
-      const draft = await db.collection('drafts').findOne({ id: path[2] });
-      if (!draft) return err('Draft not found', 404);
-      await db.collection('courses_published').deleteOne({ slug: draft.course.slug });
-      await db.collection('drafts').updateOne({ id: draft.id }, { $set: { status: 'ready', unpublishedAt: new Date() } });
+      if (published === false) {
+        await db.collection('courses_published').updateOne({ slug }, { $set: { hidden: true, updatedAt: new Date() } });
+      } else {
+        await db.collection('courses_published').updateOne({ slug }, { $set: { hidden: false, updatedAt: new Date() } });
+      }
       return json({ ok: true });
     }
 
-    if (seg === 'admin/generate') {
-      // Placeholder workflow \u2014 saves a request record; future: call LLM to produce lesson JSON
-      const { category, level, notes } = body;
-      if (!category || !level) return err('category and level required');
-      const db = await getDb();
-      const doc = {
-        id: uuid(), category, level, notes: notes || '',
-        status: 'queued',
-        createdAt: new Date(),
-        // future fields: objectives, theory, flashcards, quiz, sources, imagePrompts
-      };
-      await db.collection('generations').insertOne(doc);
-      return json({ ok: true, generation: { ...doc, _id: undefined } });
+    // AI generation endpoints removed. Kept path to return a clean 410.
+    if (seg === 'admin/generate-course' || seg === 'admin/generate-lesson' || seg === 'admin/generate' ||
+        (path[0] === 'admin' && path[1] === 'drafts' && (path[3] === 'retry' || path[3] === 'publish' || path[3] === 'unpublish'))) {
+      return err('AI generation is disabled', 410);
     }
 
     return err('Not found', 404);

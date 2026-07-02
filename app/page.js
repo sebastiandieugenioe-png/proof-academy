@@ -1,6 +1,5 @@
 'use client'
 
-import AdminPanel from '@/components/admin/AdminPanel'
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import {
   GlassWater, Flame, Sparkles, ChevronRight, ChevronLeft, Check, X,
@@ -64,7 +63,6 @@ function App() {
         {route.name === 'lesson' && <LessonView courseSlug={route.courseSlug} lessonSlug={route.lessonSlug} user={user} onNav={go} />}
         {route.name === 'reviews' && <ReviewsView user={user} onNav={go} />}
         {route.name === 'profile' && <ProfileView user={user} setUser={setUser} onNav={go} />}
-        {route.name === 'admin' && <AdminPanel />}
         </div>
       </main>
       <BottomNav user={user} route={route} onNav={go} />
@@ -92,7 +90,6 @@ const TopBar = ({ user, onNav, onLogout }) => (
           <>
             <button onClick={() => onNav({ name: 'reviews' })} className="hidden md:inline-flex text-sm px-3 h-9 items-center rounded-md hover:bg-slate-100 text-slate-700">Reviews</button>
             <button onClick={() => onNav({ name: 'profile' })} className="hidden md:inline-flex text-sm px-3 h-9 items-center rounded-md hover:bg-slate-100 text-slate-700">Profile</button>
-            <button onClick={() => onNav({ name: 'admin' })} className="hidden md:inline-flex text-sm px-3 h-9 items-center rounded-md hover:bg-slate-100 text-slate-500" title="Admin"><Wrench className="h-4 w-4" /></button>
             <button onClick={onLogout} className="text-sm px-3 h-9 inline-flex items-center gap-1.5 rounded-md hover:bg-slate-100 text-slate-600"><LogOut className="h-4 w-4" /><span className="hidden sm:inline">Log out</span></button>
           </>
         ) : (
@@ -749,6 +746,18 @@ const ProfileView = ({ user, setUser, onNav }) => {
           <div><div className="text-2xl font-semibold text-slate-900">{stats?.minutesStudied ?? 0}m</div><div className="text-xs text-slate-500 uppercase tracking-wide mt-1">Time</div></div>
         </div>
       </div>
+      {user?.isAdmin && (
+        <a href="/admin" className="block rounded-2xl border border-slate-900 bg-slate-900 text-white p-5 hover:bg-slate-800 transition">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-xs uppercase tracking-wide text-slate-300">Admin</div>
+              <div className="font-semibold mt-0.5">Open admin dashboard</div>
+              <div className="text-xs text-slate-400 mt-0.5">Manage courses, comments, users and newsletter.</div>
+            </div>
+            <ArrowRight className="h-5 w-5" />
+          </div>
+        </a>
+      )}
     </div>
   )
 }
