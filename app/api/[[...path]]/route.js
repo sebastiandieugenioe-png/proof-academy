@@ -179,17 +179,113 @@ export async function GET(request, { params }) {
       return json(rows.map((r) => ({ ...r, _id: undefined })));
     }
 
+    if (seg === 'admin/overview') {
+      const db = await getDb();
+      const now = new Date();
+      const d7 = new Date(now - 7 * 86400e3);
+      const d30 = new Date(now - 30 * 86400e3);
+      const [total, last7d, last30d, newsletter, lessonsCompleted, cardsReviewed, activeIds, activeIds7d, avgQuizAgg, courseAgg] = await Promise.all([
+        db.collection('users').countDocuments({}),
+        db.collection('users').countDocuments({ createdAt: { $gte: d7 } }),
+        db.collection('users').countDocuments({ createdAt: { $gte: d30 } }),
+        db.collection('users').countDocuments({ newsletter: true }),
+        db.collection('progress').countDocuments({ completed: true }),
+        db.collection('reviews').countDocuments({ lastReviewedAt: { $ne: null } }),
+        db.collection('progress').distinct('userId'),
+        db.collection('progress').distinct('userId', { updatedAt: { $gte: d7 } }),
+        db.collection('progress').aggregate([
+          { $match: { quizScore: { $ne: null } } },
+          { $group: { _id: null, avg: { $avg: '$quizScore' }, count: { $sum: 1 } } },
+        ]).toArray(),
+        db.collection('progress').aggregate([
+          { $group: { _id: { u: '$userId', c: '$courseSlug' }, done: { $max: { $cond: ['$completed', 1, 0] } } } },
+          { $group: { _id: '$_id.c', started: { $sum: 1 }, completed: { $sum: '$done' } } },
+        ]).toArray(),
+      ]);
+      const courseStats = new Map();
+      for (const c of courseAgg) courseStats.set(c._id, c);
+      const totalStarted = courseAgg.reduce((s, c) => s + c.started, 0);
+      const totalCourseCompletions = courseAgg.reduce((s, c) => s + c.completed, 0);
+      const completionRate = totalStarted ? Math.round((totalCourseCompletions / totalStarted) * 100) : 0;
+      return json({
+        users: { total, last7d, last30d, newsletter, active: activeIds.length, active7d: activeIds7d.length },
+        learning: {
+          lessonsCompleted, cardsReviewed,
+          courseCompletions: totalCourseCompletions,
+          avgQuizScore: avgQuizAgg[0]?.avg ? Math.round(avgQuizAgg[0].avg * 10) / 10 : null,
+          quizzesTaken: avgQuizAgg[0]?.count || 0,
+          completionRate,
+        },
+      });
+    }
+
+    if (seg === 'admin/analytics') {
+      const db = await getDb();
+      const [byCourse, byLesson, dropoff, dailyReviews] = await Promise.all([
+        db.collection('progress').aggregate([
+          { $group: { _id: { u: '$userId', c: '$courseSlug' }, done: { $max: { $cond: ['$completed', 1, 0] } }, avg: { $avg: '$quizScore' } } },
+          { $group: { _id: '$_id.c', started: { $sum: 1 }, completed: { $sum: '$done' }, avgQuiz: { $avg: '$avg' } } },
+          { $sort: { started: -1 } }, { $limit: 20 },
+        ]).toArray(),
+        db.collection('progress').aggregate([
+          { $group: { _id: { c: '$courseSlug', l: '$lessonSlug' }, started: { $sum: 1 }, completed: { $sum: { $cond: ['$completed', 1, 0] } } } },
+          { $sort: { completed: -1 } }, { $limit: 20 },
+        ]).toArray(),
+        db.collection('progress').aggregate([
+          { $group: { _id: { c: '$courseSlug', l: '$lessonSlug' }, started: { $sum: 1 }, completed: { $sum: { $cond: ['$completed', 1, 0] } } } },
+          { $addFields: { dropoff: { $cond: [{ $gt: ['$started', 0] }, { $subtract: [1, { $divide: ['$completed', '$started'] }] }, 0] } } },
+          { $match: { started: { $gte: 2 } } },
+          { $sort: { dropoff: -1 } }, { $limit: 10 },
+        ]).toArray(),
+        db.collection('reviews').aggregate([
+          { $match: { lastReviewedAt: { $ne: null } } },
+          { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$lastReviewedAt' } }, count: { $sum: 1 } } },
+          { $sort: { _id: -1 } }, { $limit: 30 },
+        ]).toArray(),
+      ]);
+      return json({
+        byCourse: byCourse.map((r) => ({ slug: r._id, started: r.started, completed: r.completed, avgQuiz: r.avgQuiz ? Math.round(r.avgQuiz * 10) / 10 : null })),
+        byLesson: byLesson.map((r) => ({ courseSlug: r._id.c, lessonSlug: r._id.l, started: r.started, completed: r.completed })),
+        dropoff: dropoff.map((r) => ({ courseSlug: r._id.c, lessonSlug: r._id.l, started: r.started, completed: r.completed, dropoff: Math.round(r.dropoff * 100) })),
+        dailyReviews: dailyReviews.map((r) => ({ date: r._id, count: r.count })).reverse(),
+      });
+    }
+
     if (seg === 'admin/users') {
       const db = await getDb();
-      const all = await db.collection('users').find({}).sort({ createdAt: -1 }).limit(500).toArray();
-      const total = await db.collection('users').countDocuments({});
-      const newsletter = await db.collection('users').countDocuments({ newsletter: true });
-      const weekAgo = new Date(Date.now() - 7 * 86400e3);
-      const last7d = await db.collection('users').countDocuments({ createdAt: { $gte: weekAgo } });
-      const activeIds = await db.collection('progress').distinct('userId');
+      const q = (url.searchParams.get('q') || '').trim().toLowerCase();
+      const filter = q ? { $or: [
+        { email: { $regex: q, $options: 'i' } },
+        { name: { $regex: q, $options: 'i' } },
+      ] } : {};
+      const rows = await db.collection('users').find(filter).sort({ createdAt: -1 }).limit(500).toArray();
+      const total = await db.collection('users').countDocuments(filter);
+      return json({ total, users: rows.map((u) => ({ ...u, _id: undefined })) });
+    }
+
+    if (path[0] === 'admin' && path[1] === 'users' && path[2]) {
+      const db = await getDb();
+      const user = await db.collection('users').findOne({ id: path[2] });
+      if (!user) return err('User not found', 404);
+      delete user._id;
+      const progress = await db.collection('progress').find({ userId: user.id }).sort({ updatedAt: -1 }).toArray();
+      const reviewsCount = await db.collection('reviews').countDocuments({ userId: user.id });
+      const reviewsDone = await db.collection('reviews').countDocuments({ userId: user.id, lastReviewedAt: { $ne: null } });
+      const totalTime = await db.collection('progress').aggregate([
+        { $match: { userId: user.id } }, { $group: { _id: null, total: { $sum: '$minutesSpent' } } },
+      ]).toArray();
+      const coursesStarted = new Set(progress.map((p) => p.courseSlug)).size;
+      const lessonsCompleted = progress.filter((p) => p.completed).length;
       return json({
-        total, newsletter, last7d, active: activeIds.length,
-        users: all.map((u) => ({ id: u.id, name: u.name, email: u.email, newsletter: !!u.newsletter, createdAt: u.createdAt })),
+        user,
+        stats: {
+          coursesStarted,
+          lessonsCompleted,
+          minutesStudied: totalTime[0]?.total || 0,
+          flashcardsInQueue: reviewsCount,
+          flashcardsReviewed: reviewsDone,
+        },
+        progress: progress.map((p) => ({ ...p, _id: undefined })),
       });
     }
 
@@ -222,6 +318,17 @@ export async function PATCH(request, { params }) {
   }
 
   try {
+    if (path[0] === 'admin' && path[1] === 'users' && path[2]) {
+      const db = await getDb();
+      const set = { updatedAt: new Date() };
+      if (typeof body.name === 'string') set.name = body.name.trim();
+      if (typeof body.email === 'string') set.email = body.email.trim().toLowerCase();
+      if (typeof body.newsletter === 'boolean') set.newsletter = body.newsletter;
+      await db.collection('users').updateOne({ id: path[2] }, { $set: set });
+      const u = await db.collection('users').findOne({ id: path[2] });
+      if (u) delete u._id;
+      return NextResponse.json({ ok: true, user: u });
+    }
     if (path[0] === 'admin' && path[1] === 'comments' && path[2]) {
       const db = await getDb();
       const set = {};
@@ -252,6 +359,17 @@ export async function DELETE(request, { params }) {
   }
 
   try {
+    if (path[0] === 'admin' && path[1] === 'users' && path[2]) {
+      const db = await getDb();
+      const uid = path[2];
+      await Promise.all([
+        db.collection('users').deleteOne({ id: uid }),
+        db.collection('progress').deleteMany({ userId: uid }),
+        db.collection('reviews').deleteMany({ userId: uid }),
+        db.collection('comments').deleteMany({ userId: uid }),
+      ]);
+      return NextResponse.json({ ok: true });
+    }
     if (path[0] === 'admin' && path[1] === 'comments' && path[2]) {
       const db = await getDb();
       await db.collection('comments').deleteOne({ id: path[2] });
@@ -309,7 +427,11 @@ export async function POST(request, { params }) {
       if (!user) {
         user = {
           id: uuid(), email, name, provider: 'email',
+          authMethod: 'email',          // future: 'magic-link' | 'google'
+          verified: true,               // future: false until magic-link click
           newsletter: !!body.newsletter,
+          newsletterSyncedAt: null,     // future: Beehiiv sync timestamp
+          source: body.source || null,  // capture referrer / course context
           createdAt: new Date(), updatedAt: new Date(),
         };
         await db.collection('users').insertOne({ ...user });
