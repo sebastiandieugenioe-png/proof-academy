@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { COURSES, allLessonPointers } from '@/lib/content';
+import { AI_COURSES } from '@/lib/ai-content';
 import { getMedia } from '@/lib/media';
 import { getDb } from '@/lib/mongo';
 import SeoLessonBody from './seo-body';
@@ -10,13 +11,27 @@ export const dynamicParams = true;
 export const revalidate = 60;
 
 export async function generateStaticParams() {
-  return allLessonPointers().map((p) => ({ slug: p.lessonSlug }));
+  const staticSlugs = allLessonPointers().map((p) => ({ slug: p.lessonSlug }));
+  const aiSlugs = AI_COURSES.flatMap((c) => (c.lessons || []).map((l) => ({ slug: l.slug })));
+  return [...staticSlugs, ...aiSlugs];
 }
 
 async function findByLessonSlug(slug) {
   for (const c of COURSES) {
     const l = c.lessons.find((x) => x.slug === slug);
     if (l) return { course: c, lesson: l, media: getMedia(slug) };
+  }
+  for (const c of AI_COURSES) {
+    const l = (c.lessons || []).find((x) => x.slug === slug);
+    if (l) {
+      const media = {
+        image: l.image || null,
+        imageAlt: l.imagePrompt || l.title,
+        imageCredit: l.image ? 'External' : null,
+        sources: l.sources || [],
+      };
+      return { course: c, lesson: l, media };
+    }
   }
   try {
     const db = await getDb();

@@ -1,4 +1,5 @@
 import { allLessonPointers } from '@/lib/content';
+import { AI_COURSES } from '@/lib/ai-content';
 import { getDb } from '@/lib/mongo';
 
 const site = process.env.NEXT_PUBLIC_BASE_URL || 'https://onlinespiritsclub.com';
@@ -16,12 +17,25 @@ export default async function sitemap() {
     changeFrequency: 'monthly',
     priority: 0.8,
   }));
+  const aiLessons = AI_COURSES.flatMap((c) =>
+    (c.lessons || []).map((l) => ({
+      url: `${site}/learn/${l.slug}`,
+      lastModified: c.updatedAt || c.publishedAt || now,
+      changeFrequency: 'monthly',
+      priority: 0.75,
+    }))
+  );
   let published = [];
   try {
     const db = await getDb();
     const pubs = await db.collection('courses_published').find({}).toArray();
+    const knownSlugs = new Set([
+      ...allLessonPointers().map((p) => p.lessonSlug),
+      ...AI_COURSES.flatMap((c) => (c.lessons || []).map((l) => l.slug)),
+    ]);
     for (const c of pubs) {
       for (const l of (c.lessons || [])) {
+        if (knownSlugs.has(l.slug)) continue; // avoid dups
         published.push({
           url: `${site}/learn/${l.slug}`,
           lastModified: c.updatedAt || c.publishedAt || now,
@@ -31,5 +45,5 @@ export default async function sitemap() {
       }
     }
   } catch (_) {}
-  return [...base, ...staticLessons, ...published];
+  return [...base, ...staticLessons, ...aiLessons, ...published];
 }

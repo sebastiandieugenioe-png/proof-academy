@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { v4 as uuid } from 'uuid';
 import { getDb } from '@/lib/mongo';
 import { COURSES, getCourse, getLesson } from '@/lib/content';
+import { AI_COURSES } from '@/lib/ai-content';
 import { getMedia } from '@/lib/media';
 import { schedule } from '@/lib/sm2';
 import { startCourseGeneration, generateLesson, TEMPLATES } from '@/lib/course-generator';
@@ -13,7 +14,11 @@ export const dynamic = 'force-dynamic';
 const json = (data, init = {}) => NextResponse.json(data, init);
 const err = (msg, code = 400) => NextResponse.json({ error: msg }, { status: code });
 
-// Merge static COURSES with published AI-generated courses.
+// Merge sources of truth for courses:
+//   1) Static content in /lib/content.js (bundled)
+//   2) Static AI content in /lib/ai-content.js (bundled, ships with the deploy)
+//   3) DB "courses_published" (admin-edited overrides, per-environment)
+// Later sources override earlier ones on the same slug.
 async function loadPublishedCourses() {
   try {
     const db = await getDb();
@@ -22,17 +27,31 @@ async function loadPublishedCourses() {
   } catch { return []; }
 }
 async function allCoursesMerged() {
+  const map = new Map();
+  for (const c of COURSES) map.set(c.slug, c);
+  for (const c of AI_COURSES) map.set(c.slug, c);
   const pub = await loadPublishedCourses();
-  const staticMap = new Map(COURSES.map((c) => [c.slug, c]));
-  for (const p of pub) staticMap.set(p.slug, p); // AI-published overrides same slug
-  return Array.from(staticMap.values());
+  for (const p of pub) map.set(p.slug, p);
+  return Array.from(map.values());
 }
 async function findCourseMerged(slug) {
   const staticC = getCourse(slug);
   if (staticC) return staticC;
-  const db = await getDb();
-  const p = await db.collection('courses_published').findOne({ slug });
-  if (p) { delete p._id; return p; }
+  const ai = AI_COURSES.find((c) => c.slug === slug);
+  if (ai) {
+    // DB override wins if present
+    try {
+      const db = await getDb();
+      const p = await db.collection('courses_published').findOne({ slug });
+      if (p) { delete p._id; return p; }
+    } catch {}
+    return ai;
+  }
+  try {
+    const db = await getDb();
+    const p = await db.collection('courses_published').findOne({ slug });
+    if (p) { delete p._id; return p; }
+  } catch (e) { console.error('findCourseMerged DB error', e); }
   return null;
 }
 async function findLessonMerged(courseSlug, lessonSlug) {
