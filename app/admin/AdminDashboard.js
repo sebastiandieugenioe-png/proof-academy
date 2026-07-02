@@ -1160,8 +1160,33 @@ function PagesManager() {
   const [pages, setPages] = useState(null)
   const [openId, setOpenId] = useState(null)
   const [creating, setCreating] = useState(false)
+  const [seeding, setSeeding] = useState(false)
   const load = useCallback(async () => { try { setPages(await api('/admin/pages')) } catch (e) { toast.error(e.message) } }, [])
   useEffect(() => { load() }, [load])
+
+  const runSeed = useCallback(async (force) => {
+    const confirmMsg = force
+      ? 'Overwrite legal-page content with the built-in defaults?\n\nAny manual edits to Privacy, Terms, Cookies, Contact, Data Rights or About will be REPLACED. Published/draft state is preserved.'
+      : 'Sync legal pages?\n\nMissing pages (Privacy, Terms, Cookies, Contact, Data Rights, About) will be created and published. Existing pages keep their content — only metadata (title/SEO) is refreshed.'
+    if (typeof window !== 'undefined' && !window.confirm(confirmMsg)) return
+    setSeeding(true)
+    try {
+      const res = await api('/admin/seed-legal-pages', { method: 'POST', body: { force: !!force } })
+      const s = res?.summary || {}
+      const parts = []
+      if (s.created) parts.push(`${s.created} created`)
+      if (s.updatedContent) parts.push(`${s.updatedContent} content updated`)
+      if (s.updatedMetadata) parts.push(`${s.updatedMetadata} metadata refreshed`)
+      if (s.preserved) parts.push(`${s.preserved} preserved`)
+      toast.success(parts.length ? `Legal pages: ${parts.join(', ')}.` : 'Legal pages already up to date.')
+      await load()
+    } catch (e) {
+      toast.error(e.message || 'Seed failed')
+    } finally {
+      setSeeding(false)
+    }
+  }, [load])
+
   if (openId) return <PageEditor id={openId} onBack={() => { setOpenId(null); load() }} onDeleted={() => { setOpenId(null); load() }} />
   if (creating) return <PageEditor id={null} onBack={() => { setCreating(false); load() }} />
   if (!pages) return <Spinner />
@@ -1172,7 +1197,35 @@ function PagesManager() {
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Pages</h1>
           <p className="text-sm text-slate-500">Public HTML pages (About, Privacy, Terms, custom landing pages, etc.).</p>
         </div>
-        <button onClick={() => setCreating(true)} className="h-10 px-4 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm inline-flex items-center gap-1.5"><Plus className="h-4 w-4" /> New page</button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => runSeed(false)}
+            disabled={seeding}
+            title="Create missing legal pages and refresh their metadata. Preserves your edits."
+            className="h-10 px-3 rounded-md border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-sm inline-flex items-center gap-1.5 disabled:opacity-60"
+          >
+            {seeding ? 'Syncing…' : 'Sync legal pages'}
+          </button>
+          <button
+            onClick={() => runSeed(true)}
+            disabled={seeding}
+            title="Overwrite legal-page content with built-in defaults. Preserves published state."
+            className="h-10 px-3 rounded-md border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800 text-sm inline-flex items-center gap-1.5 disabled:opacity-60"
+          >
+            Force overwrite
+          </button>
+          <button onClick={() => setCreating(true)} className="h-10 px-4 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm inline-flex items-center gap-1.5"><Plus className="h-4 w-4" /> New page</button>
+        </div>
+      </div>
+      <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+        <span className="font-medium text-slate-700">Tip:</span> Use <em>Sync legal pages</em> once on a fresh production database to publish
+        <code className="mx-1 px-1 rounded bg-white border border-slate-200 text-[11px]">/privacy</code>,
+        <code className="mx-1 px-1 rounded bg-white border border-slate-200 text-[11px]">/terms</code>,
+        <code className="mx-1 px-1 rounded bg-white border border-slate-200 text-[11px]">/cookies</code>,
+        <code className="mx-1 px-1 rounded bg-white border border-slate-200 text-[11px]">/contact</code>,
+        <code className="mx-1 px-1 rounded bg-white border border-slate-200 text-[11px]">/data-rights</code> and
+        <code className="mx-1 px-1 rounded bg-white border border-slate-200 text-[11px]">/about</code>.
+        Safe to re-run — existing edits are preserved unless you press <em>Force overwrite</em>.
       </div>
       {pages.length === 0 ? (
         <Empty>No pages yet. Create your first one.</Empty>

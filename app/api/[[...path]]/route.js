@@ -8,6 +8,7 @@ import { schedule } from '@/lib/sm2';
 import { checkPassword, isAdminEmail, makeSessionToken, getAdminSessionFromRequest, ADMIN_COOKIE } from '@/lib/admin-auth';
 import { uploadImage, uploadImageFromUrl, fetchImageBuffer, deleteImage, MAX_UPLOAD_BYTES, ALLOWED_MIME } from '@/lib/image-storage';
 import { sanitizeContentHtml, htmlToPlainText } from '@/lib/sanitize';
+import { getLegalPages } from '@/lib/legal-pages';
 import { getUserIdFromRequest, makeUserSessionToken, USER_COOKIE, USER_COOKIE_CLEAR } from '@/lib/user-session';
 import { isSafeId, assertSafeId, isSafeSlug, assertSafeSlug, isSafeEmail, assertSafeEmail } from '@/lib/validators';
 import { rateLimit, ipFromRequest, rateLimitResponse } from '@/lib/rate-limit';
@@ -1236,6 +1237,76 @@ function sanitizeUserOut2Remove() { /* removed — using module-level sanitizeUs
       const saved = await db.collection('courses_published').findOne({ slug: finalSlug });
       if (saved) delete saved._id;
       return json({ ok: true, course: saved, renamed: finalSlug !== originalSlug ? { from: originalSlug, to: finalSlug } : null });
+    }
+
+    // Pages CMS — one-click seed of legal/info pages.
+    // Idempotent: creates missing pages, updates metadata by default, preserves
+    // published state + user-edited content. Pass { force: true } to overwrite content.
+    if (seg === 'admin/seed-legal-pages') {
+      const force = !!(body && body.force);
+      const db = await getDb();
+      const now = new Date();
+      const results = [];
+      const summary = { created: 0, updatedMetadata: 0, updatedContent: 0, preserved: 0 };
+      const legal = getLegalPages();
+      for (const p of legal) {
+        try {
+          const existing = await db.collection('pages').findOne({ slug: p.slug });
+          if (!existing) {
+            const doc = {
+              id: uuid(),
+              title: p.title,
+              slug: p.slug,
+              seoTitle: p.seoTitle || '',
+              seoDescription: p.seoDescription || '',
+              contentHtml: sanitizeContentHtml(p.contentHtml),
+              published: true,
+              createdAt: now,
+              updatedAt: now,
+            };
+            await db.collection('pages').insertOne({ ...doc });
+            summary.created += 1;
+            results.push({ slug: p.slug, action: 'created', published: true });
+            continue;
+          }
+          if (force) {
+            // Overwrite content + metadata. Preserve published state + id.
+            await db.collection('pages').updateOne(
+              { slug: p.slug },
+              {
+                $set: {
+                  title: p.title,
+                  seoTitle: p.seoTitle || '',
+                  seoDescription: p.seoDescription || '',
+                  contentHtml: sanitizeContentHtml(p.contentHtml),
+                  updatedAt: now,
+                },
+              }
+            );
+            summary.updatedContent += 1;
+            results.push({ slug: p.slug, action: 'updated-content', published: !!existing.published });
+            continue;
+          }
+          // Default (non-force): only refresh metadata (title + SEO) if changed. Preserve content + published.
+          const metaSet = {};
+          if (existing.title !== p.title) metaSet.title = p.title;
+          if ((existing.seoTitle || '') !== (p.seoTitle || '')) metaSet.seoTitle = p.seoTitle || '';
+          if ((existing.seoDescription || '') !== (p.seoDescription || '')) metaSet.seoDescription = p.seoDescription || '';
+          if (Object.keys(metaSet).length > 0) {
+            metaSet.updatedAt = now;
+            await db.collection('pages').updateOne({ slug: p.slug }, { $set: metaSet });
+            summary.updatedMetadata += 1;
+            results.push({ slug: p.slug, action: 'updated-metadata', published: !!existing.published });
+          } else {
+            summary.preserved += 1;
+            results.push({ slug: p.slug, action: 'preserved', published: !!existing.published });
+          }
+        } catch (e) {
+          console.error('seed-legal-pages error for slug', p.slug, e);
+          results.push({ slug: p.slug, action: 'error', error: e.message || 'failed' });
+        }
+      }
+      return json({ ok: true, force, summary, results });
     }
 
     // Pages CMS — create
