@@ -5,11 +5,10 @@
 import Link from 'next/link';
 
 const LEGAL_LINKS = [
-  { href: '/about', label: 'About' },
+  { href: '/privacy', label: 'Privacy Policy' },
+  { href: '/terms', label: 'Terms of Service' },
+  { href: '/cookies', label: 'Cookie Policy' },
   { href: '/contact', label: 'Contact' },
-  { href: '/privacy', label: 'Privacy' },
-  { href: '/terms', label: 'Terms' },
-  { href: '/cookies', label: 'Cookies' },
   { href: '/data-rights', label: 'Data Rights' },
 ];
 

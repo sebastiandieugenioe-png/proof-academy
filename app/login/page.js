@@ -5,6 +5,7 @@ import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Loader2, ArrowRight, ArrowLeft, ShieldCheck } from 'lucide-react'
+import PublicFooter from '@/components/PublicFooter'
 
 async function api(path, opts = {}) {
   const r = await fetch(`/api${path}`, {
@@ -20,9 +21,12 @@ async function api(path, opts = {}) {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen grid place-items-center bg-slate-50"><Loader2 className="h-6 w-6 animate-spin text-slate-400" /></div>}>
-      <LoginInner />
-    </Suspense>
+    <>
+      <Suspense fallback={<div className="min-h-[70vh] grid place-items-center bg-slate-50"><Loader2 className="h-6 w-6 animate-spin text-slate-400" /></div>}>
+        <LoginInner />
+      </Suspense>
+      <PublicFooter />
+    </>
   )
 }
 

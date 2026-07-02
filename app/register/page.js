@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Loader2, ArrowRight, ArrowLeft, ShieldCheck } from 'lucide-react'
+import PublicFooter from '@/components/PublicFooter'
 
 const ROLE_OPTIONS = ['Bartender','Barback','Waiter/Server','Hospitality student','Cocktail enthusiast','Spirits enthusiast','Beer enthusiast','Wine enthusiast','Bar manager','Other']
 
@@ -40,6 +41,7 @@ function AuthShell({ children, title, subtitle }) {
           </div>
         </div>
       </main>
+      <PublicFooter />
     </div>
   )
 }

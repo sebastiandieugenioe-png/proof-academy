@@ -55,20 +55,22 @@ function App() {
   }, [])
   const go = useCallback((r) => setRoute(r), [])
 
-  if (booting) return <FullPageLoader />
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
       <TopBar user={user} onNav={go} onLogout={logout} />
       <main className="mx-auto max-w-6xl px-4 pb-28 md:pb-24 pt-6 md:pt-10">
-        <div className="fade-in">
-        {route.name === 'landing' && <Landing courses={courses} onCta={() => { if (typeof window !== 'undefined') window.location.href = '/register' }} />}
-        {route.name === 'dashboard' && <Dashboard user={user} courses={courses} onNav={go} />}
-        {route.name === 'course' && <CourseView slug={route.slug} onNav={go} user={user} />}
-        {route.name === 'lesson' && <LessonView courseSlug={route.courseSlug} lessonSlug={route.lessonSlug} user={user} onNav={go} />}
-        {route.name === 'study' && <StudyView user={user} onNav={go} />}
-        {route.name === 'profile' && <ProfileView user={user} setUser={setUser} onNav={go} />}
-        </div>
+        {booting ? (
+          <div className="min-h-[60vh] grid place-items-center text-slate-500"><Loader2 className="h-6 w-6 animate-spin" /></div>
+        ) : (
+          <div className="fade-in">
+            {route.name === 'landing' && <Landing courses={courses} onCta={() => { if (typeof window !== 'undefined') window.location.href = '/register' }} />}
+            {route.name === 'dashboard' && <Dashboard user={user} courses={courses} onNav={go} />}
+            {route.name === 'course' && <CourseView slug={route.slug} onNav={go} user={user} />}
+            {route.name === 'lesson' && <LessonView courseSlug={route.courseSlug} lessonSlug={route.lessonSlug} user={user} onNav={go} />}
+            {route.name === 'study' && <StudyView user={user} onNav={go} />}
+            {route.name === 'profile' && <ProfileView user={user} setUser={setUser} onNav={go} />}
+          </div>
+        )}
       </main>
       <PublicFooter />
       <BottomNav user={user} route={route} onNav={go} />
