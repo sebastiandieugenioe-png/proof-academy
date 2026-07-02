@@ -13,6 +13,13 @@ import { getUserIdFromRequest, makeUserSessionToken, USER_COOKIE, USER_COOKIE_CL
 import { isSafeId, assertSafeId, isSafeSlug, assertSafeSlug, isSafeEmail, assertSafeEmail } from '@/lib/validators';
 import { rateLimit, ipFromRequest, rateLimitResponse } from '@/lib/rate-limit';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
+
+// Generate a URL-safe random token for one-click newsletter unsubscribe links.
+// 32 bytes = 43 chars base64url — plenty of entropy, no PII, safe in mailto links.
+function newUnsubToken() {
+  return crypto.randomBytes(32).toString('base64url');
+}
 
 const BCRYPT_ROUNDS = 10;
 const MIN_PASSWORD = 8;
@@ -95,7 +102,7 @@ const RESERVED_SLUGS = new Set([
 // Reserved slugs specifically for PUBLIC PAGES (pages tab) — courses live under /learn/*,
 // so course slugs can be more flexible. But pages sit at site root, so we forbid clashes with the SPA.
 const RESERVED_PAGE_SLUGS = new Set([
-  'admin', 'api', 'learn', 'p',
+  'admin', 'api', 'learn', 'p', 'unsubscribe',
   'manifest.json', 'sitemap.xml', 'robots.txt', 'favicon.ico', 'placeholder-lesson.svg',
   '_next', 'assets', 'static', 'images',
 ]);
@@ -329,6 +336,28 @@ export async function GET(request, { params }) {
       out.isAdmin = isAdminEmail(user.email);
       out.hasPassword = !!user.passwordHash;
       return json(out);
+    }
+
+    // Public: look up a newsletter subscription by unsubscribe token so the
+    // /unsubscribe page can display the (partially-masked) email being unsubscribed
+    // BEFORE the user clicks confirm. Returns 404 if the token doesn't match.
+    if (seg === 'newsletter/unsubscribe') {
+      const token = (request.nextUrl?.searchParams?.get('token') || '').trim().slice(0, 200);
+      if (!token) return err('Missing token', 400);
+      const db = await getDb();
+      const [u, sub] = await Promise.all([
+        db.collection('users').findOne({ newsletterUnsubscribeToken: token }, { projection: { email: 1, newsletter: 1, newsletterWithdrawnAt: 1 } }),
+        db.collection('newsletter').findOne({ unsubscribeToken: token }, { projection: { email: 1, withdrawnAt: 1 } }),
+      ]);
+      const email = u?.email || sub?.email;
+      if (!email) return err('Invalid or expired token', 404);
+      // Mask the local part for privacy: a**@example.com
+      const [local, domain] = email.split('@');
+      const maskedEmail = local && domain
+        ? `${local[0]}${'*'.repeat(Math.max(1, local.length - 1))}@${domain}`
+        : email;
+      const alreadyOff = u ? (!u.newsletter || !!u.newsletterWithdrawnAt) : !!sub?.withdrawnAt;
+      return json({ ok: true, maskedEmail, alreadyUnsubscribed: alreadyOff });
     }
 
     if (seg === 'progress') {
@@ -923,19 +952,44 @@ function sanitizeUserOut2Remove() { /* removed — using module-level sanitizeUs
       }
 
       const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+      const now = new Date();
+      // Newsletter consent metadata — GDPR/ePrivacy audit trail.
+      // Consent is granular: users can register without opting in. `newsletter`
+      // reflects the current subscription state; the three *At timestamps + token
+      // give us the audit trail + a one-click unsubscribe link for future Beehiiv sync.
+      const unsubToken = newsletter ? newUnsubToken() : null;
       const user = {
         id: uuid(), email, name, provider: 'email',
         authMethod: 'password',
         verified: true,
         passwordHash,
-        newsletter, newsletterSyncedAt: null,
+        newsletter,
+        newsletterConsentAt: newsletter ? now : null,
+        newsletterWithdrawnAt: null,
+        newsletterUnsubscribeToken: unsubToken,
+        newsletterSource: newsletter ? 'register' : null,
+        newsletterSyncedAt: null,
         source: body.source || null,
         country, city, role,
-        createdAt: new Date(), updatedAt: new Date(),
+        createdAt: now, updatedAt: now,
       };
       await db.collection('users').insertOne({ ...user });
       if (newsletter) {
-        await db.collection('newsletter').insertOne({ id: uuid(), email, source: 'register', createdAt: new Date() });
+        await db.collection('newsletter').updateOne(
+          { email },
+          { $set: {
+              email,
+              source: 'register',
+              consentAt: now,
+              withdrawnAt: null,
+              unsubscribeToken: unsubToken,
+              userId: user.id,
+              updatedAt: now,
+            },
+            $setOnInsert: { id: uuid(), createdAt: now },
+          },
+          { upsert: true }
+        );
       }
       const res = json({ user: sanitizeUserOut(user) });
       attachUserSession(res, user.id);
@@ -991,10 +1045,52 @@ function sanitizeUserOut2Remove() { /* removed — using module-level sanitizeUs
       const db = await getDb();
       const set = { updatedAt: new Date() };
       if (typeof name === 'string') set.name = name.trim().slice(0, 100);
-      if (typeof newsletter === 'boolean') set.newsletter = newsletter;
       if (typeof country === 'string') set.country = sanitizeProfileField(country, 60);
       if (typeof city === 'string') set.city = sanitizeProfileField(city, 80);
       if (typeof role === 'string') set.role = sanitizeRole(role);
+      // Newsletter consent: only touch consent metadata when the value ACTUALLY changes,
+      // so unrelated profile updates don't move the audit timestamps.
+      if (typeof newsletter === 'boolean') {
+        const now = new Date();
+        const current = await db.collection('users').findOne({ id: userId }, { projection: { newsletter: 1, email: 1, newsletterUnsubscribeToken: 1 } });
+        set.newsletter = newsletter;
+        if (current && current.newsletter !== newsletter) {
+          if (newsletter) {
+            // Opting in — fresh consent timestamp + issue a token if we don't have one yet.
+            const token = current.newsletterUnsubscribeToken || newUnsubToken();
+            set.newsletterConsentAt = now;
+            set.newsletterWithdrawnAt = null;
+            set.newsletterUnsubscribeToken = token;
+            set.newsletterSource = 'profile';
+            if (current.email) {
+              await db.collection('newsletter').updateOne(
+                { email: current.email },
+                { $set: {
+                    email: current.email,
+                    source: 'profile',
+                    consentAt: now,
+                    withdrawnAt: null,
+                    unsubscribeToken: token,
+                    userId,
+                    updatedAt: now,
+                  },
+                  $setOnInsert: { id: uuid(), createdAt: now },
+                },
+                { upsert: true }
+              );
+            }
+          } else {
+            // Opting out — record withdrawal, keep the token so unsubscribe links keep working.
+            set.newsletterWithdrawnAt = now;
+            if (current.email) {
+              await db.collection('newsletter').updateOne(
+                { email: current.email },
+                { $set: { withdrawnAt: now, updatedAt: now } }
+              );
+            }
+          }
+        }
+      }
       await db.collection('users').updateOne({ id: userId }, { $set: set });
       const user = await db.collection('users').findOne({ id: userId });
       return json({ user: sanitizeUserOut(user) });
@@ -1085,12 +1181,63 @@ function sanitizeUserOut2Remove() { /* removed — using module-level sanitizeUs
       const email = (body.email || '').trim().toLowerCase();
       if (!email.includes('@')) return err('Valid email required');
       const db = await getDb();
+      const now = new Date();
+      const token = newUnsubToken();
       await db.collection('newsletter').updateOne(
         { email },
-        { $setOnInsert: { id: uuid(), email, source: body.source || 'landing', createdAt: new Date() } },
+        {
+          $set: {
+            email,
+            source: body.source || 'landing',
+            consentAt: now,
+            withdrawnAt: null,
+            updatedAt: now,
+          },
+          $setOnInsert: { id: uuid(), createdAt: now, unsubscribeToken: token },
+        },
         { upsert: true }
       );
       return json({ ok: true });
+    }
+
+    // Public: one-click newsletter unsubscribe. Works without login.
+    // Accepts either a signed-in user's session OR a token OR (as a last resort)
+    // an email that we can match to a subscriber. Idempotent — always returns ok.
+    if (seg === 'newsletter/unsubscribe') {
+      const ip = ipFromRequest(request);
+      const rl = rateLimit(`nlunsub:${ip}`, { max: 20, windowMs: 10 * 60 * 1000 });
+      if (!rl.allowed) return tooMany(rl.retryAfterMs);
+
+      const rawToken = typeof body.token === 'string' ? body.token.trim().slice(0, 200) : '';
+      const rawEmail = (body.email || '').trim().toLowerCase();
+      const db = await getDb();
+      const now = new Date();
+
+      // Prefer token — proves the request came from an actual unsubscribe link.
+      let userDoc = null;
+      let subDoc = null;
+      if (rawToken) {
+        userDoc = await db.collection('users').findOne({ newsletterUnsubscribeToken: rawToken });
+        subDoc = await db.collection('newsletter').findOne({ unsubscribeToken: rawToken });
+      }
+      if (!userDoc && !subDoc && rawEmail && isSafeEmail(rawEmail)) {
+        userDoc = await db.collection('users').findOne({ email: rawEmail });
+        subDoc = await db.collection('newsletter').findOne({ email: rawEmail });
+      }
+
+      // Idempotent — don't leak whether a match was found. Always 200.
+      const matchedEmail = userDoc?.email || subDoc?.email || null;
+      if (matchedEmail) {
+        await db.collection('users').updateOne(
+          { email: matchedEmail },
+          { $set: { newsletter: false, newsletterWithdrawnAt: now, updatedAt: now } }
+        );
+        await db.collection('newsletter').updateOne(
+          { email: matchedEmail },
+          { $set: { withdrawnAt: now, updatedAt: now } }
+        );
+      }
+      return json({ ok: true, email: matchedEmail });
     }
 
     if (seg === 'admin/course-override') {

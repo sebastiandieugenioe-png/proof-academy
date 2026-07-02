@@ -120,10 +120,21 @@ export default function RegisterPage() {
             {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
           </select>
         </Field>
-        <label className="flex items-start gap-2.5 text-sm text-slate-700 cursor-pointer pt-1">
-          <input type="checkbox" checked={newsletter} onChange={(e) => setNewsletter(e.target.checked)} className="mt-0.5 h-4 w-4 rounded accent-blue-600" />
-          <span>Email me the free weekly spirits newsletter. Unsubscribe anytime.</span>
-        </label>
+        <div className="pt-1 rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
+          <label className="flex items-start gap-2.5 text-sm text-slate-800 cursor-pointer">
+            <input type="checkbox" checked={newsletter} onChange={(e) => setNewsletter(e.target.checked)} className="mt-0.5 h-4 w-4 rounded accent-blue-600" />
+            <span>
+              <span className="font-medium">Subscribe to the free weekly newsletter (optional).</span>
+              <span className="block text-xs text-slate-600 mt-0.5 leading-relaxed">
+                One short email per week with a new mini-lesson, a curated flashcard set, cocktail history and hospitality tips. No ads. One-click unsubscribe in every email — your account and lessons stay untouched.
+              </span>
+            </span>
+          </label>
+          <p className="text-[11px] text-slate-500 leading-relaxed">
+            <span className="font-medium text-slate-600">Not subscribing?</span> That&rsquo;s fine — you&rsquo;ll still receive occasional service emails (password reset, security alerts, account deletion confirmations) as required to run your account. See our{' '}
+            <Link href="/privacy" className="text-blue-700 hover:underline">Privacy Policy</Link>.
+          </p>
+        </div>
         {error && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md p-2">{error}</div>}
         <button disabled={loading} className="w-full h-11 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium disabled:opacity-60 inline-flex items-center justify-center gap-2">
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Create account <ArrowRight className="h-4 w-4" /></>}
