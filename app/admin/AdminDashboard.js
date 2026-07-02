@@ -152,6 +152,8 @@ function LearningAnalytics() {
         </div>
       </Section>
 
+      {d.audience && <AudienceInsights audience={d.audience} />}
+
       <Section title="Most completed lessons" note="Top 20 lessons by completion count.">
         <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
           <table className="w-full text-sm">
@@ -225,6 +227,88 @@ const Section = ({ title, note, children }) => (
   </div>
 )
 const Empty = ({ children }) => <div className="rounded-lg border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">{children}</div>
+
+/* ==================== AUDIENCE INSIGHTS ==================== */
+function AudienceInsights({ audience }) {
+  const { byCountry = [], byCity = [], byRole = [], newsletterByRole = [], totalUsers = 0 } = audience || {}
+  const withProfile = byCountry.reduce((s, r) => s + r.count, 0)
+  const roleCoverage = byRole.reduce((s, r) => s + r.count, 0)
+  const maxCountry = Math.max(1, ...byCountry.map((r) => r.count))
+  const maxCity = Math.max(1, ...byCity.map((r) => r.count))
+  const maxRole = Math.max(1, ...byRole.map((r) => r.count))
+  return (
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-lg font-semibold text-slate-900">Audience insights</h2>
+        <p className="text-xs text-slate-500">Signals collected at signup. {withProfile}/{totalUsers} users shared their country, {roleCoverage}/{totalUsers} their role.</p>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <Section title="Users by country" note="Top 30 countries.">
+          {byCountry.length === 0 ? <Empty>No country data yet. Ask users to fill in profile.</Empty> : (
+            <div className="space-y-1.5">
+              {byCountry.map((r) => (
+                <div key={r.country} className="flex items-center gap-2 text-sm">
+                  <div className="w-32 truncate text-slate-700 shrink-0">{r.country}</div>
+                  <div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden"><div className="h-full bg-blue-500" style={{ width: `${(r.count / maxCountry) * 100}%` }} /></div>
+                  <div className="w-8 text-right text-xs text-slate-500 tabular-nums">{r.count}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Section>
+        <Section title="Users by role / status" note="Distribution across roles.">
+          {byRole.length === 0 ? <Empty>No role data yet.</Empty> : (
+            <div className="space-y-1.5">
+              {byRole.map((r) => (
+                <div key={r.role} className="flex items-center gap-2 text-sm">
+                  <div className="w-40 truncate text-slate-700 shrink-0">{r.role}</div>
+                  <div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden"><div className="h-full bg-indigo-500" style={{ width: `${(r.count / maxRole) * 100}%` }} /></div>
+                  <div className="w-8 text-right text-xs text-slate-500 tabular-nums">{r.count}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Section>
+      </div>
+      <Section title="Users by city" note="Top 30 cities (city + country).">
+        {byCity.length === 0 ? <Empty>No city data yet.</Empty> : (
+          <div className="grid gap-1.5 md:grid-cols-2">
+            {byCity.map((r) => (
+              <div key={`${r.city}-${r.country}`} className="flex items-center gap-2 text-sm">
+                <div className="w-40 truncate text-slate-700 shrink-0">{r.city}<span className="text-slate-400 text-xs"> · {r.country}</span></div>
+                <div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden"><div className="h-full bg-emerald-500" style={{ width: `${(r.count / maxCity) * 100}%` }} /></div>
+                <div className="w-8 text-right text-xs text-slate-500 tabular-nums">{r.count}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Section>
+      <Section title="Newsletter opt-in rate by role" note="Percentage of each role who opted into the newsletter at signup.">
+        {newsletterByRole.length === 0 ? <Empty>Not enough role data.</Empty> : (
+          <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
+                <tr><th className="text-left px-4 py-2">Role</th><th className="text-right px-4 py-2">Users</th><th className="text-right px-4 py-2">Opted in</th><th className="text-right px-4 py-2">Rate</th></tr>
+              </thead>
+              <tbody>
+                {newsletterByRole.map((r) => (
+                  <tr key={r.role} className="border-t border-slate-100">
+                    <td className="px-4 py-2 text-slate-900">{r.role}</td>
+                    <td className="px-4 py-2 text-right text-slate-600 tabular-nums">{r.total}</td>
+                    <td className="px-4 py-2 text-right text-slate-600 tabular-nums">{r.optedIn}</td>
+                    <td className="px-4 py-2 text-right font-medium tabular-nums">
+                      <span className={`px-2 py-0.5 rounded-full text-xs ${r.rate >= 70 ? 'bg-emerald-100 text-emerald-800' : r.rate >= 40 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'}`}>{r.rate}%</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Section>
+    </div>
+  )
+}
 
 /* ==================== COURSES ===================== */
 function CoursesList({ onOpen }) {
@@ -896,10 +980,13 @@ function UsersView({ onOpen }) {
   const [data, setData] = useState(null)
   const load = useCallback(async () => setData(await api(`/admin/users${q ? `?q=${encodeURIComponent(q)}` : ''}`)), [q])
   useEffect(() => { load() }, [load])
+  const csvEscape = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
   const exportCsv = () => {
     if (!data) return
-    const csv = 'email,name,newsletter,createdAt\n' + data.users.map((u) => `${u.email},"${(u.name||'').replace(/"/g,'""')}",${!!u.newsletter},${u.createdAt}`).join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
+    const header = ['email','name','country','city','role','newsletter','createdAt'].join(',')
+    const rows = data.users.map((u) => [u.email, u.name, u.country, u.city, u.role, !!u.newsletter, u.createdAt].map(csvEscape).join(','))
+    const csv = [header, ...rows].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'osc-users.csv'; a.click()
   }
   if (!data) return <Spinner />
@@ -916,14 +1003,26 @@ function UsersView({ onOpen }) {
       <div className="rounded-xl border border-slate-200 bg-white overflow-hidden overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
-            <tr><th className="text-left px-4 py-2">Name</th><th className="text-left px-4 py-2">Email</th><th className="text-left px-4 py-2">Joined</th><th className="text-left px-4 py-2">Newsletter</th><th></th></tr>
+            <tr>
+              <th className="text-left px-4 py-2">Name</th>
+              <th className="text-left px-4 py-2">Email</th>
+              <th className="text-left px-4 py-2 hidden md:table-cell">Country</th>
+              <th className="text-left px-4 py-2 hidden lg:table-cell">City</th>
+              <th className="text-left px-4 py-2">Role</th>
+              <th className="text-left px-4 py-2 hidden md:table-cell">Joined</th>
+              <th className="text-left px-4 py-2">Newsletter</th>
+              <th></th>
+            </tr>
           </thead>
           <tbody>
             {data.users.map((u) => (
               <tr key={u.id} className="border-t border-slate-100 hover:bg-slate-50 cursor-pointer" onClick={() => onOpen(u.id)}>
                 <td className="px-4 py-2 text-slate-900">{u.name}</td>
                 <td className="px-4 py-2 text-slate-600">{u.email}</td>
-                <td className="px-4 py-2 text-slate-500 text-xs">{new Date(u.createdAt).toLocaleDateString()}</td>
+                <td className="px-4 py-2 text-slate-500 hidden md:table-cell">{u.country || <span className="text-slate-300">—</span>}</td>
+                <td className="px-4 py-2 text-slate-500 hidden lg:table-cell">{u.city || <span className="text-slate-300">—</span>}</td>
+                <td className="px-4 py-2 text-slate-500">{u.role ? <span className="text-xs bg-slate-100 rounded px-1.5 py-0.5">{u.role}</span> : <span className="text-slate-300">—</span>}</td>
+                <td className="px-4 py-2 text-slate-500 text-xs hidden md:table-cell">{new Date(u.createdAt).toLocaleDateString()}</td>
                 <td className="px-4 py-2">{u.newsletter ? <Check className="h-4 w-4 text-emerald-600" /> : <X className="h-4 w-4 text-slate-300" />}</td>
                 <td className="px-4 py-2 text-right"><ChevronRight className="h-4 w-4 text-slate-400" /></td>
               </tr>

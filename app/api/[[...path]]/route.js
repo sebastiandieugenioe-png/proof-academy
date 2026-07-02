@@ -63,6 +63,13 @@ async function allCoursesMerged() {
   }
   return Array.from(map.values());
 }
+// Strip "Beginner" suffix from public-facing course titles (level is still "Beginner" for filtering/admin).
+function publicCourseTitle(course) {
+  if (!course?.title) return course?.title;
+  // Only strip when there's a trailing " Beginner" (case-insensitive) — e.g. "Whiskey Beginner" -> "Whiskey"
+  return course.title.replace(/\s+Beginner\s*$/i, '').trim();
+}
+
 async function findCourseMerged(slug) {
   // Try DB override first — that's where admin edits live.
   const staticC = getCourse(slug);
@@ -115,7 +122,7 @@ async function findLessonMerged(courseSlug, lessonSlug) {
   const lesson = c.lessons[idx];
   const next = c.lessons[idx + 1] || null;
   const prev = c.lessons[idx - 1] || null;
-  return { course: { slug: c.slug, title: c.title, accent: c.accent }, lesson, next, prev, index: idx, total: c.lessons.length };
+  return { course: { slug: c.slug, title: publicCourseTitle(c), rawTitle: c.title, accent: c.accent }, lesson, next, prev, index: idx, total: c.lessons.length };
 }
 
 export async function GET(request, { params }) {
@@ -137,7 +144,7 @@ export async function GET(request, { params }) {
     if (seg === 'courses') {
       const merged = await allCoursesMerged();
       return json(merged.map(({ slug, title, tagline, level, accent, icon, category, lessons }) => ({
-        slug, title, tagline, level, accent, icon, category: category || null,
+        slug, title: publicCourseTitle({ title, level }), tagline, level, accent, icon, category: category || null,
         lessonCount: lessons.length,
         lessons: lessons.map((l) => ({ slug: l.slug, title: l.title, minutes: l.minutes, hasImage: !!(l.image && (typeof l.image === 'string' ? l.image : l.image.url)) })),
       })));
@@ -175,7 +182,7 @@ export async function GET(request, { params }) {
       const c = await findCourseMerged(path[1]);
       if (!c) return err('Course not found', 404);
       return json({
-        slug: c.slug, title: c.title, tagline: c.tagline, level: c.level, accent: c.accent, icon: c.icon, category: c.category || null,
+        slug: c.slug, title: publicCourseTitle(c), tagline: c.tagline, level: c.level, accent: c.accent, icon: c.icon, category: c.category || null,
         lessons: c.lessons.map((l) => ({ slug: l.slug, title: l.title, minutes: l.minutes, objectives: l.objectives })),
       });
     }
@@ -421,7 +428,7 @@ export async function GET(request, { params }) {
 
     if (seg === 'admin/analytics') {
       const db = await getDb();
-      const [byCourse, byLesson, dropoff, dailyReviews] = await Promise.all([
+      const [byCourse, byLesson, dropoff, dailyReviews, byCountry, byCity, byRole, newsletterByRole, totalUsers] = await Promise.all([
         db.collection('progress').aggregate([
           { $group: { _id: { u: '$userId', c: '$courseSlug' }, done: { $max: { $cond: ['$completed', 1, 0] } }, avg: { $avg: '$quizScore' } } },
           { $group: { _id: '$_id.c', started: { $sum: 1 }, completed: { $sum: '$done' }, avgQuiz: { $avg: '$avg' } } },
@@ -442,12 +449,45 @@ export async function GET(request, { params }) {
           { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$lastReviewedAt' } }, count: { $sum: 1 } } },
           { $sort: { _id: -1 } }, { $limit: 30 },
         ]).toArray(),
+        // Audience: by country
+        db.collection('users').aggregate([
+          { $match: { country: { $ne: null, $exists: true } } },
+          { $group: { _id: '$country', count: { $sum: 1 } } },
+          { $sort: { count: -1 } }, { $limit: 30 },
+        ]).toArray(),
+        // Audience: by city
+        db.collection('users').aggregate([
+          { $match: { city: { $ne: null, $exists: true } } },
+          { $group: { _id: { city: '$city', country: '$country' }, count: { $sum: 1 } } },
+          { $sort: { count: -1 } }, { $limit: 30 },
+        ]).toArray(),
+        // Audience: by role
+        db.collection('users').aggregate([
+          { $match: { role: { $ne: null, $exists: true } } },
+          { $group: { _id: '$role', count: { $sum: 1 } } },
+          { $sort: { count: -1 } },
+        ]).toArray(),
+        // Newsletter opt-in rate by role
+        db.collection('users').aggregate([
+          { $match: { role: { $ne: null, $exists: true } } },
+          { $group: { _id: '$role', total: { $sum: 1 }, optedIn: { $sum: { $cond: ['$newsletter', 1, 0] } } } },
+          { $addFields: { rate: { $cond: [{ $gt: ['$total', 0] }, { $round: [{ $multiply: [{ $divide: ['$optedIn', '$total'] }, 100] }, 1] }, 0] } } },
+          { $sort: { total: -1 } },
+        ]).toArray(),
+        db.collection('users').countDocuments({}),
       ]);
       return json({
         byCourse: byCourse.map((r) => ({ slug: r._id, started: r.started, completed: r.completed, avgQuiz: r.avgQuiz ? Math.round(r.avgQuiz * 10) / 10 : null })),
         byLesson: byLesson.map((r) => ({ courseSlug: r._id.c, lessonSlug: r._id.l, started: r.started, completed: r.completed })),
         dropoff: dropoff.map((r) => ({ courseSlug: r._id.c, lessonSlug: r._id.l, started: r.started, completed: r.completed, dropoff: Math.round(r.dropoff * 100) })),
         dailyReviews: dailyReviews.map((r) => ({ date: r._id, count: r.count })).reverse(),
+        audience: {
+          totalUsers,
+          byCountry: byCountry.map((r) => ({ country: r._id, count: r.count })),
+          byCity: byCity.map((r) => ({ city: r._id.city, country: r._id.country, count: r.count })),
+          byRole: byRole.map((r) => ({ role: r._id, count: r.count })),
+          newsletterByRole: newsletterByRole.map((r) => ({ role: r._id, total: r.total, optedIn: r.optedIn, rate: r.rate })),
+        },
       });
     }
 
@@ -704,42 +744,73 @@ export async function POST(request, { params }) {
   }
 
   try {
+const ROLE_OPTIONS = new Set(['Bartender','Barback','Waiter/Server','Hospitality student','Cocktail enthusiast','Spirits enthusiast','Beer enthusiast','Wine enthusiast','Bar manager','Other']);
+
+function sanitizeProfileField(v, max = 80) {
+  if (typeof v !== 'string') return null;
+  const t = v.trim().slice(0, max);
+  return t || null;
+}
+function sanitizeRole(v) {
+  const t = sanitizeProfileField(v, 40);
+  if (!t) return null;
+  return ROLE_OPTIONS.has(t) ? t : 'Other';
+}
+
     if (seg === 'auth') {
       const email = (body.email || '').trim().toLowerCase();
       const name = (body.name || '').trim() || email.split('@')[0];
       if (!email || !email.includes('@')) return err('Valid email required');
+      const country = sanitizeProfileField(body.country, 60);
+      const city = sanitizeProfileField(body.city, 80);
+      const role = sanitizeRole(body.role);
       const db = await getDb();
       let user = await db.collection('users').findOne({ email });
       if (!user) {
         user = {
           id: uuid(), email, name, provider: 'email',
-          authMethod: 'email',          // future: 'magic-link' | 'google'
-          verified: true,               // future: false until magic-link click
+          authMethod: 'email',
+          verified: true,
           newsletter: !!body.newsletter,
-          newsletterSyncedAt: null,     // future: Beehiiv sync timestamp
-          source: body.source || null,  // capture referrer / course context
+          newsletterSyncedAt: null,
+          source: body.source || null,
+          country, city, role,
           createdAt: new Date(), updatedAt: new Date(),
         };
         await db.collection('users').insertOne({ ...user });
         if (user.newsletter) {
           await db.collection('newsletter').insertOne({ id: uuid(), email, source: 'signup', createdAt: new Date() });
         }
-      } else if (body.newsletter && !user.newsletter) {
-        await db.collection('users').updateOne({ id: user.id }, { $set: { newsletter: true, updatedAt: new Date() } });
-        await db.collection('newsletter').insertOne({ id: uuid(), email, source: 'signup', createdAt: new Date() });
-        user.newsletter = true;
+      } else {
+        // Fill in profile fields if user provided them (don't overwrite existing values with blanks).
+        const patch = { updatedAt: new Date() };
+        if (body.newsletter && !user.newsletter) {
+          patch.newsletter = true;
+          await db.collection('newsletter').insertOne({ id: uuid(), email, source: 'signup', createdAt: new Date() });
+          user.newsletter = true;
+        }
+        if (country && !user.country) patch.country = country;
+        if (city && !user.city) patch.city = city;
+        if (role && !user.role) patch.role = role;
+        if (Object.keys(patch).length > 1) {
+          await db.collection('users').updateOne({ id: user.id }, { $set: patch });
+          Object.assign(user, patch);
+        }
       }
       delete user._id;
       return json({ user });
     }
 
     if (seg === 'me/update') {
-      const { userId, name, newsletter } = body;
+      const { userId, name, newsletter, country, city, role } = body;
       if (!userId) return err('Not authenticated', 401);
       const db = await getDb();
       const set = { updatedAt: new Date() };
       if (typeof name === 'string') set.name = name;
       if (typeof newsletter === 'boolean') set.newsletter = newsletter;
+      if (typeof country === 'string') set.country = sanitizeProfileField(country, 60);
+      if (typeof city === 'string') set.city = sanitizeProfileField(city, 80);
+      if (typeof role === 'string') set.role = sanitizeRole(role);
       await db.collection('users').updateOne({ id: userId }, { $set: set });
       const user = await db.collection('users').findOne({ id: userId });
       delete user._id;

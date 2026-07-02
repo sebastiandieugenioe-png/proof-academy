@@ -16,6 +16,9 @@ export async function generateStaticParams() {
   return [...staticSlugs, ...aiSlugs];
 }
 
+// Strip trailing " Beginner" for public-facing displays (level field still stores it for filtering/admin).
+function publicCourseTitle(t) { return typeof t === 'string' ? t.replace(/\s+Beginner\s*$/i, '').trim() : t; }
+
 async function findByLessonSlug(slug) {
   // Priority: DB override → static → AI content.
   // This ensures admin edits (images, theory, etc.) always win.
@@ -34,18 +37,17 @@ async function findByLessonSlug(slug) {
     for (const c of pubs) {
       const l = (c.lessons || []).find((x) => x.slug === slug);
       if (l) {
-        const hydrated = hydrateWithCanonical(c.slug, slug, l);
-        return { course: c, lesson: hydrated, media: resolveMedia(hydrated, slug) };
+    return { course: { ...c, title: publicCourseTitle(c.title) }, lesson: hydrated, media: resolveMedia(hydrated, slug) };
       }
     }
   } catch (e) { console.error('findByLessonSlug DB error', e); }
   for (const c of COURSES) {
     const l = c.lessons.find((x) => x.slug === slug);
-    if (l) return { course: c, lesson: l, media: resolveMedia(l, slug) };
+    if (l) return { course: { ...c, title: publicCourseTitle(c.title) }, lesson: l, media: resolveMedia(l, slug) };
   }
   for (const c of AI_COURSES) {
     const l = (c.lessons || []).find((x) => x.slug === slug);
-    if (l) return { course: c, lesson: l, media: resolveMedia(l, slug) };
+    if (l) return { course: { ...c, title: publicCourseTitle(c.title) }, lesson: l, media: resolveMedia(l, slug) };
   }
   return null;
 }

@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import {
-  GlassWater, Flame, Sparkles, ChevronRight, ChevronLeft, Check, X,
+  GlassWater, Flame, Sparkles, ChevronRight, ChevronLeft, ChevronDown, Check, X,
   BookOpen, Brain, Layers, Target, Loader2, LogOut, User as UserIcon,
   Home, Wrench, ArrowRight, PartyPopper, Repeat, TrendingUp,
-  Zap, StopCircle, Timer, Award,
+  Zap, StopCircle, Timer, Award, Download, Smartphone, Share2,
 } from 'lucide-react'
 
 const APP_BUILD = 'Admin Changes v1.1'
@@ -212,16 +212,24 @@ const CourseCard = ({ course, onClick, progressMap }) => {
   )
 }
 
+const ROLE_OPTIONS = ['Bartender','Barback','Waiter/Server','Hospitality student','Cocktail enthusiast','Spirits enthusiast','Beer enthusiast','Wine enthusiast','Bar manager','Other']
+
 const Signup = ({ onLogin, onBack }) => {
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
+  const [country, setCountry] = useState('')
+  const [city, setCity] = useState('')
+  const [role, setRole] = useState('')
+  const [showAbout, setShowAbout] = useState(false)
   const [newsletter, setNewsletter] = useState(true)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const submit = async (e) => {
     e.preventDefault(); setError(''); setLoading(true)
-    try { const { user } = await api('/auth', { method: 'POST', body: { email, name, newsletter } }); onLogin(user) }
-    catch (e) { setError(e.message) } finally { setLoading(false) }
+    try {
+      const { user } = await api('/auth', { method: 'POST', body: { email, name, newsletter, country, city, role } })
+      onLogin(user)
+    } catch (e) { setError(e.message) } finally { setLoading(false) }
   }
   return (
     <div className="max-w-md mx-auto pt-6 md:pt-16">
@@ -238,6 +246,34 @@ const Signup = ({ onLogin, onBack }) => {
             <label className="block text-xs font-medium text-slate-700 mb-1.5">Email</label>
             <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required placeholder="you@example.com" className="w-full h-11 rounded-lg border border-slate-200 px-3.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
+
+          {/* Optional profile — collapsible to keep signup fast */}
+          <button type="button" onClick={() => setShowAbout((s) => !s)} className="w-full flex items-center justify-between text-left text-xs text-slate-500 hover:text-slate-700 py-1">
+            <span className="inline-flex items-center gap-1.5"><UserIcon className="h-3.5 w-3.5" /> Tell us a bit about you <span className="text-slate-400">(optional, helps us build content)</span></span>
+            {showAbout ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          </button>
+          {showAbout && (
+            <div className="space-y-3 pl-1 border-l-2 border-slate-100">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-600 mb-1">Country</label>
+                  <input value={country} onChange={(e) => setCountry(e.target.value)} placeholder="e.g. Italy" maxLength={60} className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-600 mb-1">City</label>
+                  <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Milan" maxLength={80} className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-slate-600 mb-1">Your role</label>
+                <select value={role} onChange={(e) => setRole(e.target.value)} className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">Select…</option>
+                  {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
+            </div>
+          )}
+
           <label className="flex items-start gap-2.5 text-sm text-slate-700 cursor-pointer">
             <input type="checkbox" checked={newsletter} onChange={(e) => setNewsletter(e.target.checked)} className="mt-0.5 h-4 w-4 rounded accent-blue-600" />
             <span>Email me the free spirits newsletter (1× / week, unsubscribe anytime).</span>
@@ -271,6 +307,7 @@ const Dashboard = ({ user, courses, onNav }) => {
         <p className="text-sm text-slate-500">Welcome back{user?.name ? `, ${user.name}` : ''}</p>
         <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-slate-900">Learn something new today.</h1>
       </div>
+      <InstallAppBanner />
       <div className="grid gap-4 md:grid-cols-3">
         <StatCard label="Lessons completed" value={stats?.lessonsCompleted ?? 0} icon={BookOpen} />
         <StatCard label="Flashcards learned" value={stats?.flashcardsLearned ?? 0} icon={Layers} />
@@ -294,6 +331,101 @@ const Dashboard = ({ user, courses, onNav }) => {
         </div>
       </section>
     </div>
+  )
+}
+
+/* ============ PWA INSTALL BANNER ============ */
+// Shows only on mobile / tablet AND only when not already installed.
+// Priority: (a) beforeinstallprompt (Chrome/Edge/Android) → native prompt
+//           (b) iOS Safari → open a modal with "Share → Add to Home Screen" instructions.
+const InstallAppBanner = () => {
+  const [deferredPrompt, setDeferredPrompt] = useState(null)
+  const [isMobile, setIsMobile] = useState(false)
+  const [isStandalone, setIsStandalone] = useState(false)
+  const [isIOS, setIsIOS] = useState(false)
+  const [dismissed, setDismissed] = useState(false)
+  const [showIosSheet, setShowIosSheet] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    // Small screens (<= 900px) OR touch-enabled small viewport => treat as mobile/tablet
+    const mq = window.matchMedia('(max-width: 900px)')
+    const update = () => setIsMobile(mq.matches)
+    update()
+    mq.addEventListener?.('change', update)
+    // Detect standalone (installed) mode
+    const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true
+    setIsStandalone(standalone)
+    // Detect iOS (no BIP support)
+    const ua = window.navigator.userAgent || ''
+    setIsIOS(/iPad|iPhone|iPod/.test(ua) && !window.MSStream)
+    // Persisted dismissal
+    setDismissed(localStorage.getItem('osc.install.dismissed') === '1')
+    // beforeinstallprompt
+    const onBIP = (e) => { e.preventDefault(); setDeferredPrompt(e) }
+    window.addEventListener('beforeinstallprompt', onBIP)
+    const onInstalled = () => { setDeferredPrompt(null); setIsStandalone(true) }
+    window.addEventListener('appinstalled', onInstalled)
+    return () => {
+      mq.removeEventListener?.('change', update)
+      window.removeEventListener('beforeinstallprompt', onBIP)
+      window.removeEventListener('appinstalled', onInstalled)
+    }
+  }, [])
+
+  const dismiss = () => { setDismissed(true); localStorage.setItem('osc.install.dismissed', '1') }
+
+  const trigger = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt()
+      try {
+        const choice = await deferredPrompt.userChoice
+        if (choice?.outcome === 'accepted') dismiss()
+      } catch (_) { /* prompt closed without a choice */ }
+      setDeferredPrompt(null)
+    } else if (isIOS) {
+      setShowIosSheet(true)
+    }
+  }
+
+  if (isStandalone || dismissed || !isMobile) return null
+  if (!deferredPrompt && !isIOS) return null // No install path available
+
+  return (
+    <>
+      <div className="rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-4 flex items-center gap-3">
+        <div className="h-10 w-10 shrink-0 rounded-xl bg-blue-600 text-white grid place-items-center shadow-sm"><Smartphone className="h-5 w-5" /></div>
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-semibold text-slate-900">Install Online Spirits Club</div>
+          <div className="text-xs text-slate-600">One-tap access from your home screen. Works offline for lessons you&apos;ve opened.</div>
+        </div>
+        <button onClick={trigger} className="h-9 px-3 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium inline-flex items-center gap-1.5 shrink-0"><Download className="h-3.5 w-3.5" /> Install</button>
+        <button onClick={dismiss} className="h-9 w-9 rounded-md text-slate-400 hover:bg-white/70 grid place-items-center shrink-0" aria-label="Dismiss"><X className="h-4 w-4" /></button>
+      </div>
+      {showIosSheet && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-4" onClick={() => setShowIosSheet(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-md p-6 space-y-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <div className="h-9 w-9 rounded-lg bg-blue-50 text-blue-600 grid place-items-center"><Smartphone className="h-5 w-5" /></div>
+                <div>
+                  <h3 className="font-semibold text-slate-900">Install on iOS</h3>
+                  <p className="text-xs text-slate-500">Add Online Spirits Club to your home screen.</p>
+                </div>
+              </div>
+              <button onClick={() => setShowIosSheet(false)} className="text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
+            </div>
+            <ol className="space-y-3 text-sm text-slate-700">
+              <li className="flex gap-3"><span className="h-6 w-6 shrink-0 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold grid place-items-center">1</span><div>Tap the <strong className="inline-flex items-center gap-1"><Share2 className="h-3.5 w-3.5" /> Share</strong> button in the Safari toolbar.</div></li>
+              <li className="flex gap-3"><span className="h-6 w-6 shrink-0 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold grid place-items-center">2</span><div>Scroll and tap <strong>Add to Home Screen</strong>.</div></li>
+              <li className="flex gap-3"><span className="h-6 w-6 shrink-0 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold grid place-items-center">3</span><div>Tap <strong>Add</strong> in the top-right corner. Done!</div></li>
+            </ol>
+            <p className="text-[11px] text-slate-500">Works only in Safari — Chrome on iOS doesn&apos;t support Add to Home Screen yet.</p>
+            <button onClick={() => setShowIosSheet(false)} className="w-full h-10 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium text-sm">Got it</button>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 
@@ -836,11 +968,14 @@ const StudyView = ({ user, onNav }) => {
 const ProfileView = ({ user, setUser, onNav }) => {
   const [name, setName] = useState(user?.name || '')
   const [newsletter, setNewsletter] = useState(user?.newsletter || false)
+  const [country, setCountry] = useState(user?.country || '')
+  const [city, setCity] = useState(user?.city || '')
+  const [role, setRole] = useState(user?.role || '')
   const [saved, setSaved] = useState(false)
   const [stats, setStats] = useState(null)
   useEffect(() => { if (user) api('/stats', { userId: user.id }).then(setStats) }, [user])
   const save = async () => {
-    const { user: u } = await api('/me/update', { method: 'POST', body: { userId: user.id, name, newsletter } })
+    const { user: u } = await api('/me/update', { method: 'POST', body: { userId: user.id, name, newsletter, country, city, role } })
     setUser(u); setSaved(true); setTimeout(() => setSaved(false), 1500)
   }
   return (
@@ -854,6 +989,23 @@ const ProfileView = ({ user, setUser, onNav }) => {
         <div>
           <label className="block text-xs font-medium text-slate-700 mb-1.5">Email</label>
           <div className="w-full h-10 rounded-lg border border-slate-200 px-3 grid items-center bg-slate-50 text-slate-600 text-sm">{user.email}</div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1.5">Country</label>
+            <input value={country} onChange={(e) => setCountry(e.target.value)} placeholder="e.g. Italy" maxLength={60} className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1.5">City</label>
+            <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Milan" maxLength={80} className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-700 mb-1.5">Your role</label>
+          <select value={role} onChange={(e) => setRole(e.target.value)} className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="">Prefer not to say</option>
+            {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+          </select>
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-700 mb-1.5">Authentication</label>
