@@ -6,8 +6,11 @@ try {
   if (baseUrl) allowedOrigin = new URL(baseUrl).origin;
 } catch { /* fall through */ }
 
-// Content Security Policy: no unsafe-inline scripts, no wildcard frame-ancestors.
-// Note: Next.js dev needs 'unsafe-eval' + 'unsafe-inline' for HMR; only relax in dev.
+// Content Security Policy.
+// script-src includes 'unsafe-inline' because Next.js 15 App Router streams RSC
+// payloads through inline <script> tags (self.__next_f.push). A stricter,
+// nonce-based CSP is possible via a middleware.js that injects a per-request
+// nonce — tracked as a follow-up. 'unsafe-eval' is needed in dev for HMR only.
 const csp = [
   "default-src 'self'",
   "base-uri 'self'",
@@ -19,11 +22,9 @@ const csp = [
   "media-src 'self' https:",
   "object-src 'none'",
   isProd
-    ? "script-src 'self'"
+    ? "script-src 'self' 'unsafe-inline'"
     : "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
-  isProd
-    ? "style-src 'self' 'unsafe-inline'"
-    : "style-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline'",
 ].join('; ');
 
 const nextConfig = {
