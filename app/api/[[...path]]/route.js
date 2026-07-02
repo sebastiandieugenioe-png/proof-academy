@@ -657,7 +657,7 @@ export async function PATCH(request, { params }) {
       if (typeof body.newsletter === 'boolean') set.newsletter = body.newsletter;
       await db.collection('users').updateOne({ id: path[2] }, { $set: set });
       const u = await db.collection('users').findOne({ id: path[2] });
-      if (u) delete u._id;
+      if (u) { delete u._id; delete u.passwordHash; }
       return NextResponse.json({ ok: true, user: u });
     }
     if (path[0] === 'admin' && path[1] === 'comments' && path[2]) {
@@ -1059,7 +1059,7 @@ function sanitizeUserOut2Remove() { /* removed — using module-level sanitizeUs
 
     if (seg === 'admin/course-override') {
       const { course } = body;
-      if (!course?.slug) return err('course.slug required');
+      if (!course || !isSafeSlug(course.slug)) return err('Valid course.slug required');
       // Rehydrate lessons — never save a lesson without theory/embedded/flashcards/quiz.
       // The client's course.lessons may be a truncated projection (from GET /api/courses/:slug),
       // so we must merge with the canonical source before persisting.
@@ -1081,7 +1081,7 @@ function sanitizeUserOut2Remove() { /* removed — using module-level sanitizeUs
     // Save/replace/remove a lesson image. Body: { courseSlug, lessonSlug, image: {url, alt, caption, credit, id} | null }
     if (seg === 'admin/lesson-image') {
       const { courseSlug, lessonSlug, image } = body || {};
-      if (!courseSlug || !lessonSlug) return err('courseSlug and lessonSlug are required');
+      if (!isSafeSlug(courseSlug) || !isSafeSlug(lessonSlug)) return err('Invalid courseSlug or lessonSlug');
       const course = await findCourseMerged(courseSlug);
       if (!course) return err('Course not found', 404);
       const idx = (course.lessons || []).findIndex((l) => l.slug === lessonSlug);
@@ -1127,7 +1127,7 @@ function sanitizeUserOut2Remove() { /* removed — using module-level sanitizeUs
 
     if (seg === 'admin/course-publish') {
       const { slug, published } = body;
-      if (!slug) return err('slug required');
+      if (!isSafeSlug(slug)) return err('Invalid slug');
       const db = await getDb();
       if (published === false) {
         await db.collection('courses_published').updateOne({ slug }, { $set: { hidden: true, updatedAt: new Date() } });
@@ -1141,7 +1141,8 @@ function sanitizeUserOut2Remove() { /* removed — using module-level sanitizeUs
     // Slug renames create a 301 alias and migrate all progress/reviews.
     if (seg === 'admin/course-meta') {
       const { originalSlug, title, slug: newSlug, tagline, category, level } = body || {};
-      if (!originalSlug) return err('originalSlug required');
+      if (!isSafeSlug(originalSlug)) return err('Invalid originalSlug');
+      if (typeof newSlug === 'string' && newSlug !== originalSlug && !isSafeSlug(newSlug)) return err('Invalid new slug');
       const current = await findCourseMerged(originalSlug);
       if (!current) return err('Course not found', 404);
       const db = await getDb();
