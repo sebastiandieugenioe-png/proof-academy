@@ -1125,3 +1125,210 @@ agent_communication:
       2. Investigate SSR metadata generation to ensure "Beginner" is stripped from page titles
       3. Preserve rawTitle in API responses for admin/internal use
       4. Retest SSR pages after fixes
+
+#====================================================================================================
+# SESSION 5 — Mandatory email+password auth, legacy migration, PWA install button
+#====================================================================================================
+
+user_problem_statement: |
+  Backend regression test for the new mandatory email+password authentication flow.
+  Legacy /api/auth endpoint has been deprecated. Users now register via /api/register
+  (password + Country + City + Role mandatory), log in via /api/login, and legacy
+  email-only users are auto-prompted to set a password via /api/set-password on first
+  login.
+
+backend:
+  - task: "Legacy /api/auth deprecation"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js (POST /api/auth returns 410)"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "POST /api/auth now returns 410 Gone with message directing users to /api/register or /api/login. All frontend calls to /api/auth have been removed."
+      - working: true
+        agent: "testing"
+        comment: "✅ VERIFIED (2 tests): POST /api/auth returns 410 with error message mentioning deprecation/register. Endpoint correctly deprecated."
+
+  - task: "Register endpoint (email+password, mandatory Country/City/Role)"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js (POST /api/register)"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "POST /api/register validates: valid email, password >= 8 chars, password === confirmPassword, country, city, role mandatory. Creates user with passwordHash (bcrypt), authMethod='password', verified=true. Returns 409 if email already has a password. Migrates legacy email-only user in place (keeps progress + newsletter). Newsletter subscription added when opted in."
+      - working: true
+        agent: "testing"
+        comment: "✅ VERIFIED (27 tests): All validation working (missing password→400, password<8→400, mismatch→400, missing country/city/role→400). New user registration: returns 200 with sanitized user (no passwordHash/_id), correct fields (email/name/country/city/role/newsletter/authMethod='password'/verified=true), newsletter doc created in DB. Duplicate email with password→409. Legacy migration: returns 200 with migrated=true, preserves existing country/city/role/newsletter (not overwritten), sets passwordHash, authMethod='password', migrated user can log in with new password."
+
+  - task: "Login endpoint (bcrypt compare + legacy 428 needsPasswordSetup)"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js (POST /api/login)"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "POST /api/login returns user on valid email+password (bcrypt.compare). Returns 401 for invalid creds. For legacy users with no passwordHash returns 428 { needsPasswordSetup: true, email } so the frontend can prompt them to set a password."
+      - working: true
+        agent: "testing"
+        comment: "✅ VERIFIED (10 tests): Valid credentials→200 with correct user (no passwordHash). Wrong password→401. Unknown email→401. Legacy user without password→428 with needsPasswordSetup=true, userId, email. All scenarios working correctly."
+
+  - task: "Set-password endpoint (legacy migration path)"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js (POST /api/set-password)"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "POST /api/set-password accepts email + password + confirmPassword. Only allowed for users that do NOT have a passwordHash (409 otherwise). Sets passwordHash (bcrypt), authMethod='password'. Preserves all other user fields (progress, newsletter, country, city, role)."
+      - working: true
+        agent: "testing"
+        comment: "✅ VERIFIED (8 tests): Legacy user set-password→200 with sanitized user (no passwordHash), user can log in after set-password. User with existing password→409 with clear error. Validation: password<8→400, mismatch→400. All scenarios working correctly."
+
+  - task: "sanitizeUserOut strips passwordHash from all responses"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js (sanitizeUserOut, /api/me, /api/register, /api/login, /api/set-password)"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "sanitizeUserOut deletes passwordHash + _id. All auth endpoints return the sanitized user. /api/me now also exposes hasPassword boolean."
+      - working: true
+        agent: "testing"
+        comment: "✅ VERIFIED (3 tests): POST /api/register, POST /api/login, GET /api/me all return users without passwordHash field. Security sanitization working correctly across all auth endpoints."
+
+metadata:
+  created_by: "main_agent"
+  version: "1.5"
+  test_sequence: 5
+  run_ui: false
+
+test_plan:
+  current_focus: []
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+  - agent: "main"
+    message: |
+      Please run backend regression tests focused on the new auth flow. Do NOT touch the
+      admin endpoints or any other feature — those already have passing coverage.
+
+      Scope for this run:
+      1) POST /api/auth → must now return HTTP 410 for any body.
+      2) POST /api/register:
+         a) Missing password OR password<8 chars → 400.
+         b) password !== confirmPassword → 400.
+         c) Missing country / city / role → 400.
+         d) Valid new user → 200, response contains user without passwordHash,
+            country/city/role echoed back, newsletter honored (creates newsletter doc
+            when newsletter=true).
+         e) Duplicate registration for an email that already has a passwordHash → 409.
+         f) Legacy email-only user (no passwordHash) registering again → migrated in
+            place: user gets a passwordHash, existing country/city/role/newsletter NOT
+            overwritten if they were already set, response.migrated === true.
+      3) POST /api/login:
+         a) Valid email+password → 200 with sanitized user.
+         b) Wrong password → 401.
+         c) Unknown email → 401.
+         d) Legacy user with no passwordHash → 428, body { needsPasswordSetup: true, email }.
+      4) POST /api/set-password:
+         a) Legacy user (no passwordHash) → 200, subsequent /api/login with the new
+            password works.
+         b) User that already has a passwordHash → 409.
+         c) password<8 or mismatch → 400.
+      5) Ensure /api/me and every auth response NEVER returns a passwordHash field.
+      6) Cleanup: delete every test user created during the run.
+  
+  - agent: "testing"
+    message: |
+      🎉 ALL BACKEND TESTS PASSED - 53/53 (100%)
+      
+      Re-ran Session 5 auth backend regression tests after DB_NAME fix (osc_db).
+      All 4 legacy-user tests that previously failed with 401/404/missing migrated flag now PASS.
+      
+      ROOT CAUSE CONFIRMED FIXED:
+      The previous failures were caused by test harness inserting legacy users into a different
+      MongoDB database (literal "your_database_name") than the app was reading from ("osc_db").
+      After updating .env to DB_NAME=osc_db and restarting Next.js, both test harness and app
+      now use the same database, and all tests pass.
+      
+      ✅ TEST 1: Legacy /api/auth deprecation (2 tests)
+         - POST /api/auth → 410 with deprecation message
+      
+      ✅ TEST 2: Register validation (6 tests)
+         - Missing password → 400
+         - Password < 8 chars → 400 with clear message
+         - Password mismatch → 400 with clear message
+         - Missing country → 400 with clear message
+         - Missing city → 400 with clear message
+         - Missing role → 400 with clear message
+      
+      ✅ TEST 3: Register successful new user (12 tests)
+         - Valid registration → 200
+         - Response contains user.id, email, name, country, city, role, newsletter, authMethod='password', verified=true
+         - Response does NOT contain passwordHash or _id (security sanitization working)
+         - Newsletter doc created in osc_db.newsletter when newsletter=true
+      
+      ✅ TEST 4: Register duplicate email (3 tests)
+         - First registration → 200
+         - Duplicate email with existing passwordHash → 409 with clear error
+      
+      ✅ TEST 5: Register legacy migration (9 tests) — PREVIOUSLY FAILED, NOW FIXED
+         - Legacy user pre-inserted into osc_db.users with no passwordHash
+         - Registration → 200 with migrated=true flag
+         - Existing country/city/role/newsletter PRESERVED (not overwritten)
+         - authMethod updated to 'password'
+         - Response does NOT contain passwordHash
+         - Migrated user can log in with new password
+      
+      ✅ TEST 6: Login endpoint (10 tests)
+         - Valid credentials → 200 with correct user (no passwordHash)
+         - Wrong password → 401
+         - Unknown email → 401
+         - Legacy user without passwordHash → 428 with needsPasswordSetup=true, userId, email
+      
+      ✅ TEST 7: Set-password endpoint (8 tests)
+         - Legacy user → 200, can log in with new password
+         - User with existing passwordHash → 409
+         - Password < 8 chars → 400
+         - Password mismatch → 400
+      
+      ✅ TEST 8: Universal sanitization (3 tests)
+         - POST /api/register response does NOT contain passwordHash
+         - POST /api/login response does NOT contain passwordHash
+         - GET /api/me response does NOT contain passwordHash (tested with userId query param)
+      
+      🧹 CLEANUP:
+         - 9 test users deleted successfully
+         - 1 newsletter doc deleted successfully
+      
+      🎯 SUMMARY:
+         All expected outcomes achieved:
+         1. ✅ POST /api/auth → 410 (deprecated)
+         2. ✅ POST /api/register validation (6 scenarios)
+         3. ✅ POST /api/register successful new-user path (sanitized user, newsletter doc created)
+         4. ✅ POST /api/register duplicate email → 409
+         5. ✅ POST /api/register legacy migration (migrated=true, preserved fields, passwordHash set)
+         6. ✅ POST /api/login (valid→200, wrong pw→401, unknown→401, legacy→428)
+         7. ✅ POST /api/set-password (legacy→200+login works, existing→409, validation→400)
+         8. ✅ All responses NEVER expose passwordHash
+      
+      Ready for production deployment.

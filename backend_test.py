@@ -1,546 +1,837 @@
 #!/usr/bin/env python3
 """
-Comprehensive backend test for Online Spirits Club v1.2 pre-launch changes.
-Tests SSR "Beginner" stripping, rawTitle preservation, audience profiling, and regressions.
+Backend regression test for Online Spirits Club - Session 5
+Focus: Mandatory email+password authentication flow
 """
 
+import os
+import sys
 import requests
 import json
-import re
-from urllib.parse import urljoin
+from uuid import uuid4
+from datetime import datetime
+from pymongo import MongoClient
+from dotenv import load_dotenv
 
-# Base URLs from .env
-BASE_URL = "https://proof-academy.preview.emergentagent.com"
-API_URL = f"{BASE_URL}/api"
+# Load environment variables
+load_dotenv('/app/.env')
 
-# Admin credentials
-ADMIN_EMAIL = "sebastiandieugenioe@gmail.com"
-ADMIN_PASSWORD = "preview-only-change-in-prod"
+BASE_URL = os.getenv('NEXT_PUBLIC_BASE_URL', 'http://localhost:3000')
+API_BASE = f"{BASE_URL}/api"
+MONGO_URL = os.getenv('MONGO_URL', 'mongodb://localhost:27017')
+DB_NAME = os.getenv('DB_NAME', 'your_database_name')
 
-# Test counters
-tests_passed = 0
-tests_failed = 0
+# Test state
 test_users = []
+test_emails = []
+passed = 0
+failed = 0
+
+def log(msg):
+    print(f"[TEST] {msg}")
 
 def log_pass(msg):
-    global tests_passed
-    tests_passed += 1
+    global passed
+    passed += 1
     print(f"✅ PASS: {msg}")
 
 def log_fail(msg):
-    global tests_failed
-    tests_failed += 1
+    global failed
+    failed += 1
     print(f"❌ FAIL: {msg}")
 
-def admin_login():
-    """Login as admin and return session cookie"""
+def create_legacy_user(email, name="Legacy User", country=None, city=None, role=None, newsletter=False):
+    """Insert a legacy email-only user directly into MongoDB (no passwordHash)"""
     try:
-        r = requests.post(f"{API_URL}/admin-auth", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}, timeout=10)
-        if r.status_code == 200:
-            cookie = r.cookies.get("osc_admin")
-            if cookie:
-                log_pass("Admin login successful")
-                return {"osc_admin": cookie}
-            else:
-                log_fail("Admin login: no cookie returned")
-                return None
-        else:
-            log_fail(f"Admin login failed: {r.status_code} {r.text[:200]}")
-            return None
+        client = MongoClient(MONGO_URL)
+        db = client[DB_NAME]
+        user_id = str(uuid4())
+        user = {
+            'id': user_id,
+            'email': email,
+            'name': name,
+            'provider': 'email',
+            'authMethod': 'email',
+            'verified': True,
+            'newsletter': newsletter,
+            'newsletterSyncedAt': None,
+            'source': 'test',
+            'createdAt': datetime.utcnow(),
+            'updatedAt': datetime.utcnow(),
+        }
+        if country:
+            user['country'] = country
+        if city:
+            user['city'] = city
+        if role:
+            user['role'] = role
+        
+        db.users.insert_one(user)
+        test_users.append(user_id)
+        test_emails.append(email)
+        log(f"Created legacy user: {email} (id: {user_id})")
+        return user_id
     except Exception as e:
-        log_fail(f"Admin login exception: {e}")
+        log_fail(f"Failed to create legacy user: {e}")
         return None
 
-def test_ssr_beginner_stripping():
-    """Test 1: SSR pages should NOT contain 'Beginner' in <title> tags"""
-    print("\n=== TEST 1: SSR 'Beginner' Stripping ===")
-    
-    # Test lessons that previously had hardcoded "Beginner" in SEO titles
-    test_lessons = [
-        "what-is-vodka",
-        "what-is-tequila", 
-        "what-is-wine",
-        "what-are-liqueurs",
-        "vodka-production",
-        "triple-sec-and-orange-liqueurs"
-    ]
-    
-    for slug in test_lessons:
-        try:
-            url = f"{BASE_URL}/learn/{slug}"
-            r = requests.get(url, timeout=10)
-            if r.status_code != 200:
-                log_fail(f"SSR {slug}: returned {r.status_code}")
-                continue
-            
-            html = r.text
-            
-            # Extract <title> tag
-            title_match = re.search(r'<title[^>]*>(.*?)</title>', html, re.IGNORECASE | re.DOTALL)
-            if not title_match:
-                log_fail(f"SSR {slug}: no <title> tag found")
-                continue
-            
-            title_content = title_match.group(1).strip()
-            
-            # Check if "Beginner" appears in title (should NOT)
-            if re.search(r'\bBeginner\b', title_content, re.IGNORECASE):
-                log_fail(f"SSR {slug}: <title> contains 'Beginner': {title_content}")
-            else:
-                log_pass(f"SSR {slug}: <title> clean (no 'Beginner'): {title_content[:80]}")
-            
-            # Check og:title meta tag
-            og_title_match = re.search(r'<meta[^>]*property=["\']og:title["\'][^>]*content=["\']([^"\']*)["\']', html, re.IGNORECASE)
-            if og_title_match:
-                og_title = og_title_match.group(1)
-                if re.search(r'\bBeginner\b', og_title, re.IGNORECASE):
-                    log_fail(f"SSR {slug}: og:title contains 'Beginner': {og_title}")
-                else:
-                    log_pass(f"SSR {slug}: og:title clean")
-            
-            # Check twitter:title meta tag
-            twitter_title_match = re.search(r'<meta[^>]*name=["\']twitter:title["\'][^>]*content=["\']([^"\']*)["\']', html, re.IGNORECASE)
-            if twitter_title_match:
-                twitter_title = twitter_title_match.group(1)
-                if re.search(r'\bBeginner\b', twitter_title, re.IGNORECASE):
-                    log_fail(f"SSR {slug}: twitter:title contains 'Beginner': {twitter_title}")
-                else:
-                    log_pass(f"SSR {slug}: twitter:title clean")
-            
-            # Check og:description meta tag
-            og_desc_match = re.search(r'<meta[^>]*property=["\']og:description["\'][^>]*content=["\']([^"\']*)["\']', html, re.IGNORECASE)
-            if og_desc_match:
-                og_desc = og_desc_match.group(1)
-                if re.search(r'\bBeginner\b', og_desc, re.IGNORECASE):
-                    log_fail(f"SSR {slug}: og:description contains 'Beginner': {og_desc[:100]}")
-                else:
-                    log_pass(f"SSR {slug}: og:description clean")
-            
-            # VERIFY: "Beginner" SHOULD still appear in:
-            # 1. Schema.org educationalLevel
-            if '"educationalLevel":"Beginner"' in html or '"educationalLevel": "Beginner"' in html:
-                log_pass(f"SSR {slug}: schema.org educationalLevel='Beginner' present (intentional)")
-            
-            # 2. Meta badge (e.g., "VODKA · BEGINNER · 5 MIN READ")
-            if re.search(r'BEGINNER\s*·', html, re.IGNORECASE):
-                log_pass(f"SSR {slug}: meta badge contains 'BEGINNER' (intentional)")
-            
-        except Exception as e:
-            log_fail(f"SSR {slug}: exception {e}")
-
-def test_rawtitle_preservation():
-    """Test 2: API should return rawTitle with original 'Beginner' suffix"""
-    print("\n=== TEST 2: rawTitle Preservation ===")
-    
+def cleanup():
+    """Delete all test users and newsletter docs"""
     try:
-        r = requests.get(f"{API_URL}/lessons/vodka-beginner/what-is-vodka", timeout=10)
-        if r.status_code != 200:
-            log_fail(f"GET /api/lessons/vodka-beginner/what-is-vodka: {r.status_code}")
-            return
+        client = MongoClient(MONGO_URL)
+        db = client[DB_NAME]
         
-        data = r.json()
-        course_title = data.get("course", {}).get("title")
-        raw_title = data.get("course", {}).get("rawTitle")
+        # Delete users
+        if test_users:
+            result = db.users.delete_many({'id': {'$in': test_users}})
+            log(f"Deleted {result.deleted_count} test users")
         
-        # Title should be stripped
-        if course_title and not re.search(r'\bBeginner\b', course_title, re.IGNORECASE):
-            log_pass(f"API lesson: course.title stripped: '{course_title}'")
-        else:
-            log_fail(f"API lesson: course.title NOT stripped: '{course_title}'")
+        # Delete newsletter docs
+        if test_emails:
+            result = db.newsletter.delete_many({'email': {'$in': test_emails}})
+            log(f"Deleted {result.deleted_count} newsletter docs")
         
-        # rawTitle should preserve original (may be "Vodka Beginner" or just "Vodka" if static content was updated)
-        if raw_title:
-            log_pass(f"API lesson: course.rawTitle present: '{raw_title}'")
-            # NOTE: If static content.js was edited to remove "Beginner", rawTitle will equal title
-            # The key is that rawTitle field exists and title is stripped
-        else:
-            log_fail(f"API lesson: course.rawTitle missing")
-        
+        client.close()
     except Exception as e:
-        log_fail(f"rawTitle test exception: {e}")
+        log_fail(f"Cleanup error: {e}")
 
-def test_findbylessonslug_fix():
-    """Test 3: Verify findByLessonSlug fix (no undefined 'hydrated' error)"""
-    print("\n=== TEST 3: findByLessonSlug Fix ===")
-    
-    # Test multiple SSR pages to ensure no crashes
-    test_slugs = ["what-is-vodka", "what-is-alcohol", "scotch-whisky", "london-dry-gin"]
-    
-    for slug in test_slugs:
-        try:
-            r = requests.get(f"{BASE_URL}/learn/{slug}", timeout=10)
-            if r.status_code == 200:
-                # Check for hydration errors in HTML
-                if "ReferenceError" in r.text or "hydrated is not defined" in r.text:
-                    log_fail(f"SSR {slug}: contains ReferenceError")
-                else:
-                    log_pass(f"SSR {slug}: renders without crash (200)")
-            else:
-                log_fail(f"SSR {slug}: returned {r.status_code}")
-        except Exception as e:
-            log_fail(f"SSR {slug}: exception {e}")
-
-def test_all_lessons_load():
-    """Test 4: Verify all 58 lessons load via API without crashing"""
-    print("\n=== TEST 4: All Lessons Load (Regression) ===")
+def test_auth_deprecated():
+    """Test 1: POST /api/auth should return 410"""
+    log("\n=== TEST 1: Legacy /api/auth deprecation ===")
     
     try:
-        # Get all courses
-        r = requests.get(f"{API_URL}/courses", timeout=10)
-        if r.status_code != 200:
-            log_fail(f"GET /api/courses: {r.status_code}")
-            return
-        
-        courses = r.json()
-        total_lessons = sum(len(c.get("lessons", [])) for c in courses)
-        
-        if len(courses) == 12:
-            log_pass(f"GET /api/courses: 12 courses returned")
+        # Test with any body
+        resp = requests.post(f"{API_BASE}/auth", json={'email': 'test@example.com'}, timeout=10)
+        if resp.status_code == 410:
+            log_pass("POST /api/auth returns 410 (Gone)")
+            data = resp.json()
+            if 'error' in data and ('deprecated' in data['error'].lower() or 'register' in data['error'].lower()):
+                log_pass("Error message mentions deprecation/register")
+            else:
+                log_fail(f"Error message unclear: {data.get('error')}")
         else:
-            log_fail(f"GET /api/courses: expected 12 courses, got {len(courses)}")
-        
-        if total_lessons == 58:
-            log_pass(f"Total lessons: 58 (expected)")
+            log_fail(f"POST /api/auth returned {resp.status_code}, expected 410. Body: {resp.text}")
+    except Exception as e:
+        log_fail(f"POST /api/auth test failed: {e}")
+
+def test_register_validation():
+    """Test 2: POST /api/register validation"""
+    log("\n=== TEST 2: Register endpoint validation ===")
+    
+    # 2a: Missing password
+    try:
+        resp = requests.post(f"{API_BASE}/register", json={
+            'email': 'test1@example.com',
+            'confirmPassword': 'password123',
+            'country': 'USA',
+            'city': 'New York',
+            'role': 'Bartender'
+        }, timeout=10)
+        if resp.status_code == 400:
+            log_pass("Missing password → 400")
         else:
-            log_fail(f"Total lessons: {total_lessons} (expected 58)")
+            log_fail(f"Missing password returned {resp.status_code}, expected 400")
+    except Exception as e:
+        log_fail(f"Missing password test failed: {e}")
+    
+    # 2b: Password too short
+    try:
+        resp = requests.post(f"{API_BASE}/register", json={
+            'email': 'test2@example.com',
+            'password': 'short',
+            'confirmPassword': 'short',
+            'country': 'USA',
+            'city': 'New York',
+            'role': 'Bartender'
+        }, timeout=10)
+        if resp.status_code == 400:
+            data = resp.json()
+            if 'password' in data.get('error', '').lower() and '8' in data.get('error', ''):
+                log_pass("Password < 8 chars → 400 with clear message")
+            else:
+                log_fail(f"Password < 8 chars → 400 but unclear message: {data.get('error')}")
+        else:
+            log_fail(f"Password < 8 chars returned {resp.status_code}, expected 400")
+    except Exception as e:
+        log_fail(f"Password < 8 chars test failed: {e}")
+    
+    # 2c: Password mismatch
+    try:
+        resp = requests.post(f"{API_BASE}/register", json={
+            'email': 'test3@example.com',
+            'password': 'password123',
+            'confirmPassword': 'password456',
+            'country': 'USA',
+            'city': 'New York',
+            'role': 'Bartender'
+        }, timeout=10)
+        if resp.status_code == 400:
+            data = resp.json()
+            if 'match' in data.get('error', '').lower():
+                log_pass("Password mismatch → 400 with clear message")
+            else:
+                log_fail(f"Password mismatch → 400 but unclear message: {data.get('error')}")
+        else:
+            log_fail(f"Password mismatch returned {resp.status_code}, expected 400")
+    except Exception as e:
+        log_fail(f"Password mismatch test failed: {e}")
+    
+    # 2d: Missing country
+    try:
+        resp = requests.post(f"{API_BASE}/register", json={
+            'email': 'test4@example.com',
+            'password': 'password123',
+            'confirmPassword': 'password123',
+            'city': 'New York',
+            'role': 'Bartender'
+        }, timeout=10)
+        if resp.status_code == 400:
+            data = resp.json()
+            if 'country' in data.get('error', '').lower():
+                log_pass("Missing country → 400 with clear message")
+            else:
+                log_fail(f"Missing country → 400 but unclear message: {data.get('error')}")
+        else:
+            log_fail(f"Missing country returned {resp.status_code}, expected 400")
+    except Exception as e:
+        log_fail(f"Missing country test failed: {e}")
+    
+    # 2e: Missing city
+    try:
+        resp = requests.post(f"{API_BASE}/register", json={
+            'email': 'test5@example.com',
+            'password': 'password123',
+            'confirmPassword': 'password123',
+            'country': 'USA',
+            'role': 'Bartender'
+        }, timeout=10)
+        if resp.status_code == 400:
+            data = resp.json()
+            if 'city' in data.get('error', '').lower():
+                log_pass("Missing city → 400 with clear message")
+            else:
+                log_fail(f"Missing city → 400 but unclear message: {data.get('error')}")
+        else:
+            log_fail(f"Missing city returned {resp.status_code}, expected 400")
+    except Exception as e:
+        log_fail(f"Missing city test failed: {e}")
+    
+    # 2f: Missing role
+    try:
+        resp = requests.post(f"{API_BASE}/register", json={
+            'email': 'test6@example.com',
+            'password': 'password123',
+            'confirmPassword': 'password123',
+            'country': 'USA',
+            'city': 'New York'
+        }, timeout=10)
+        if resp.status_code == 400:
+            data = resp.json()
+            if 'role' in data.get('error', '').lower():
+                log_pass("Missing role → 400 with clear message")
+            else:
+                log_fail(f"Missing role → 400 but unclear message: {data.get('error')}")
+        else:
+            log_fail(f"Missing role returned {resp.status_code}, expected 400")
+    except Exception as e:
+        log_fail(f"Missing role test failed: {e}")
+
+def test_register_success():
+    """Test 3: POST /api/register successful registration"""
+    log("\n=== TEST 3: Register endpoint - successful registration ===")
+    
+    email = f"newuser-{uuid4()}@example.com"
+    test_emails.append(email)
+    
+    try:
+        resp = requests.post(f"{API_BASE}/register", json={
+            'email': email,
+            'password': 'password123',
+            'confirmPassword': 'password123',
+            'name': 'Test User',
+            'country': 'USA',
+            'city': 'New York',
+            'role': 'Bartender',
+            'newsletter': True
+        }, timeout=10)
         
-        # Sample test: load a few lessons from different courses
-        sample_lessons = [
-            ("vodka-beginner", "what-is-vodka"),
-            ("alcohol-fundamentals", "what-is-alcohol"),
-            ("whiskey-beginner", "scotch-whisky"),
-            ("gin-beginner", "london-dry-gin"),
-        ]
-        
-        for course_slug, lesson_slug in sample_lessons:
+        if resp.status_code == 200:
+            log_pass("Valid registration → 200")
+            data = resp.json()
+            user = data.get('user')
+            
+            if not user:
+                log_fail("Response missing 'user' field")
+                return
+            
+            # Check required fields
+            if user.get('id'):
+                log_pass("Response contains user.id")
+                test_users.append(user['id'])
+            else:
+                log_fail("Response missing user.id")
+            
+            if user.get('email') == email:
+                log_pass("Response contains correct email")
+            else:
+                log_fail(f"Email mismatch: {user.get('email')} vs {email}")
+            
+            if user.get('name') == 'Test User':
+                log_pass("Response contains correct name")
+            else:
+                log_fail(f"Name mismatch: {user.get('name')}")
+            
+            if user.get('country') == 'USA':
+                log_pass("Response contains correct country")
+            else:
+                log_fail(f"Country mismatch: {user.get('country')}")
+            
+            if user.get('city') == 'New York':
+                log_pass("Response contains correct city")
+            else:
+                log_fail(f"City mismatch: {user.get('city')}")
+            
+            if user.get('role') == 'Bartender':
+                log_pass("Response contains correct role")
+            else:
+                log_fail(f"Role mismatch: {user.get('role')}")
+            
+            if user.get('newsletter') == True:
+                log_pass("Response contains correct newsletter opt-in")
+            else:
+                log_fail(f"Newsletter mismatch: {user.get('newsletter')}")
+            
+            if user.get('authMethod') == 'password':
+                log_pass("authMethod is 'password'")
+            else:
+                log_fail(f"authMethod mismatch: {user.get('authMethod')}")
+            
+            if user.get('verified') == True:
+                log_pass("verified is true")
+            else:
+                log_fail(f"verified mismatch: {user.get('verified')}")
+            
+            # Check forbidden fields
+            if 'passwordHash' in user:
+                log_fail("Response contains passwordHash (SECURITY ISSUE)")
+            else:
+                log_pass("Response does NOT contain passwordHash")
+            
+            if '_id' in user:
+                log_fail("Response contains _id (should be sanitized)")
+            else:
+                log_pass("Response does NOT contain _id")
+            
+            # Verify newsletter doc was created
             try:
-                r = requests.get(f"{API_URL}/lessons/{course_slug}/{lesson_slug}", timeout=10)
-                if r.status_code == 200:
-                    data = r.json()
-                    # Verify lesson has theory, flashcards, quiz (hydration working)
-                    lesson = data.get("lesson", {})
-                    if lesson.get("theory") and lesson.get("flashcards") and lesson.get("quiz"):
-                        log_pass(f"Lesson {course_slug}/{lesson_slug}: fully hydrated")
-                    else:
-                        log_fail(f"Lesson {course_slug}/{lesson_slug}: missing theory/flashcards/quiz")
+                client = MongoClient(MONGO_URL)
+                db = client[DB_NAME]
+                newsletter_doc = db.newsletter.find_one({'email': email})
+                if newsletter_doc:
+                    log_pass("Newsletter doc created in database")
                 else:
-                    log_fail(f"Lesson {course_slug}/{lesson_slug}: {r.status_code}")
+                    log_fail("Newsletter doc NOT created in database")
+                client.close()
             except Exception as e:
-                log_fail(f"Lesson {course_slug}/{lesson_slug}: exception {e}")
-        
+                log_fail(f"Failed to verify newsletter doc: {e}")
+        else:
+            log_fail(f"Valid registration returned {resp.status_code}, expected 200. Body: {resp.text}")
     except Exception as e:
-        log_fail(f"All lessons test exception: {e}")
+        log_fail(f"Valid registration test failed: {e}")
 
-def test_audience_signup():
-    """Test 5: Audience profiling on signup"""
-    print("\n=== TEST 5: Audience Profiling on Signup ===")
+def test_register_duplicate():
+    """Test 4: POST /api/register duplicate email with password"""
+    log("\n=== TEST 4: Register endpoint - duplicate email ===")
     
-    # Test 1: New user with all fields
+    email = f"duplicate-{uuid4()}@example.com"
+    test_emails.append(email)
+    
+    # First registration
     try:
-        email = f"test-audience-{tests_passed}@example.com"
-        r = requests.post(f"{API_URL}/auth", json={
-            "email": email,
-            "name": "Test User",
-            "country": "United States",
-            "city": "New York",
-            "role": "Bartender",
-            "newsletter": True
+        resp1 = requests.post(f"{API_BASE}/register", json={
+            'email': email,
+            'password': 'password123',
+            'confirmPassword': 'password123',
+            'country': 'USA',
+            'city': 'New York',
+            'role': 'Bartender'
         }, timeout=10)
         
-        if r.status_code == 200:
-            data = r.json()
-            user = data.get("user", {})
-            test_users.append(user.get("id"))
-            
-            if user.get("country") == "United States" and user.get("city") == "New York" and user.get("role") == "Bartender":
-                log_pass("Signup: new user with country/city/role created")
-            else:
-                log_fail(f"Signup: fields not saved correctly: {user}")
+        if resp1.status_code == 200:
+            data = resp1.json()
+            test_users.append(data['user']['id'])
+            log_pass("First registration successful")
         else:
-            log_fail(f"Signup: {r.status_code} {r.text[:200]}")
+            log_fail(f"First registration failed: {resp1.status_code}")
+            return
     except Exception as e:
-        log_fail(f"Signup test exception: {e}")
+        log_fail(f"First registration failed: {e}")
+        return
     
-    # Test 2: Invalid role should default to "Other"
+    # Second registration (duplicate)
     try:
-        email = f"test-invalid-role-{tests_passed}@example.com"
-        r = requests.post(f"{API_URL}/auth", json={
-            "email": email,
-            "role": "InvalidRole123"
+        resp2 = requests.post(f"{API_BASE}/register", json={
+            'email': email,
+            'password': 'password456',
+            'confirmPassword': 'password456',
+            'country': 'Canada',
+            'city': 'Toronto',
+            'role': 'Bar manager'
         }, timeout=10)
         
-        if r.status_code == 200:
-            user = r.json().get("user", {})
-            test_users.append(user.get("id"))
-            
-            if user.get("role") == "Other":
-                log_pass("Signup: invalid role sanitized to 'Other'")
+        if resp2.status_code == 409:
+            log_pass("Duplicate email with password → 409")
+            data = resp2.json()
+            if 'error' in data and ('exists' in data['error'].lower() or 'log in' in data['error'].lower()):
+                log_pass("Error message mentions account exists / log in")
             else:
-                log_fail(f"Signup: invalid role not sanitized: {user.get('role')}")
+                log_fail(f"Error message unclear: {data.get('error')}")
         else:
-            log_fail(f"Signup invalid role: {r.status_code}")
+            log_fail(f"Duplicate email returned {resp2.status_code}, expected 409. Body: {resp2.text}")
     except Exception as e:
-        log_fail(f"Signup invalid role exception: {e}")
+        log_fail(f"Duplicate email test failed: {e}")
 
-def test_admin_analytics():
-    """Test 6: Admin analytics audience breakdowns"""
-    print("\n=== TEST 6: Admin Analytics Audience Breakdowns ===")
+def test_register_legacy_migration():
+    """Test 5: POST /api/register with legacy email-only user"""
+    log("\n=== TEST 5: Register endpoint - legacy user migration ===")
     
-    cookies = admin_login()
-    if not cookies:
-        log_fail("Admin analytics: login failed")
+    email = f"legacy-{uuid4()}@example.com"
+    test_emails.append(email)
+    
+    # Create legacy user with existing profile fields
+    user_id = create_legacy_user(
+        email=email,
+        name="Legacy User",
+        country="France",
+        city="Paris",
+        role="Wine enthusiast",
+        newsletter=True
+    )
+    
+    if not user_id:
+        log_fail("Failed to create legacy user")
         return
     
+    # Register with password (migration)
     try:
-        r = requests.get(f"{API_URL}/admin/analytics", cookies=cookies, timeout=10)
-        if r.status_code != 200:
-            log_fail(f"GET /api/admin/analytics: {r.status_code}")
-            return
+        resp = requests.post(f"{API_BASE}/register", json={
+            'email': email,
+            'password': 'newpassword123',
+            'confirmPassword': 'newpassword123',
+            'country': 'USA',  # Should NOT overwrite existing
+            'city': 'New York',  # Should NOT overwrite existing
+            'role': 'Bartender',  # Should NOT overwrite existing
+            'newsletter': False  # Should NOT overwrite existing
+        }, timeout=10)
         
-        data = r.json()
-        audience = data.get("audience", {})
-        
-        # Check structure
-        if "totalUsers" in audience:
-            log_pass(f"Admin analytics: totalUsers present ({audience['totalUsers']})")
-        else:
-            log_fail("Admin analytics: totalUsers missing")
-        
-        if "byCountry" in audience and isinstance(audience["byCountry"], list):
-            log_pass(f"Admin analytics: byCountry present ({len(audience['byCountry'])} entries)")
-        else:
-            log_fail("Admin analytics: byCountry missing or invalid")
-        
-        if "byCity" in audience and isinstance(audience["byCity"], list):
-            log_pass(f"Admin analytics: byCity present ({len(audience['byCity'])} entries)")
-        else:
-            log_fail("Admin analytics: byCity missing or invalid")
-        
-        if "byRole" in audience and isinstance(audience["byRole"], list):
-            log_pass(f"Admin analytics: byRole present ({len(audience['byRole'])} entries)")
-        else:
-            log_fail("Admin analytics: byRole missing or invalid")
-        
-        if "newsletterByRole" in audience and isinstance(audience["newsletterByRole"], list):
-            log_pass(f"Admin analytics: newsletterByRole present ({len(audience['newsletterByRole'])} entries)")
-            # Check rate format (0-100 with max 1 decimal)
-            for entry in audience["newsletterByRole"]:
-                rate = entry.get("rate")
-                if isinstance(rate, (int, float)) and 0 <= rate <= 100:
-                    log_pass(f"Admin analytics: newsletterByRole rate valid ({entry.get('role')}: {rate}%)")
-                    break
-        else:
-            log_fail("Admin analytics: newsletterByRole missing or invalid")
-        
-    except Exception as e:
-        log_fail(f"Admin analytics exception: {e}")
-
-def test_admin_users():
-    """Test 7: Admin users endpoint exposes profile fields"""
-    print("\n=== TEST 7: Admin Users Endpoint ===")
-    
-    cookies = admin_login()
-    if not cookies:
-        log_fail("Admin users: login failed")
-        return
-    
-    try:
-        r = requests.get(f"{API_URL}/admin/users", cookies=cookies, timeout=10)
-        if r.status_code != 200:
-            log_fail(f"GET /api/admin/users: {r.status_code}")
-            return
-        
-        data = r.json()
-        users = data.get("users", [])
-        
-        if len(users) > 0:
-            log_pass(f"Admin users: {len(users)} users returned")
+        if resp.status_code == 200:
+            log_pass("Legacy user migration → 200")
+            data = resp.json()
+            user = data.get('user')
             
-            # Check if first user has profile fields
-            first_user = users[0]
-            if "country" in first_user or "city" in first_user or "role" in first_user:
-                log_pass("Admin users: profile fields (country/city/role) present")
+            if data.get('migrated') == True:
+                log_pass("Response contains migrated=true")
             else:
-                log_fail("Admin users: profile fields missing")
-        else:
-            log_fail("Admin users: no users returned")
-        
-    except Exception as e:
-        log_fail(f"Admin users exception: {e}")
-
-def test_version_endpoint():
-    """Test 8: Version endpoint returns v1.1-admin-changes"""
-    print("\n=== TEST 8: Version Endpoint ===")
-    
-    try:
-        r = requests.get(f"{API_URL}/version", timeout=10)
-        if r.status_code != 200:
-            log_fail(f"GET /api/version: {r.status_code}")
-            return
-        
-        data = r.json()
-        version = data.get("version")
-        
-        if version == "v1.1-admin-changes":
-            log_pass(f"Version endpoint: {version}")
-        else:
-            log_fail(f"Version endpoint: expected 'v1.1-admin-changes', got '{version}'")
-        
-    except Exception as e:
-        log_fail(f"Version endpoint exception: {e}")
-
-def test_slug_alias_redirect():
-    """Test 9: Slug alias 301 redirects"""
-    print("\n=== TEST 9: Slug Alias 301 Redirects ===")
-    
-    # Note: This test assumes a slug alias exists from previous testing
-    # If no aliases exist, this test will be skipped
-    
-    cookies = admin_login()
-    if not cookies:
-        log_fail("Slug alias: login failed")
-        return
-    
-    try:
-        # Check if any aliases exist
-        r = requests.get(f"{API_URL}/admin/course-aliases", cookies=cookies, timeout=10)
-        if r.status_code == 200:
-            aliases = r.json()
-            if len(aliases) > 0:
-                # Test first alias
-                alias = aliases[0]
-                old_slug = alias.get("from")
-                new_slug = alias.get("to")
+                log_fail(f"Response missing migrated flag or false: {data.get('migrated')}")
+            
+            # Verify existing fields were NOT overwritten
+            if user.get('country') == 'France':
+                log_pass("Existing country NOT overwritten")
+            else:
+                log_fail(f"Country was overwritten: {user.get('country')} (expected France)")
+            
+            if user.get('city') == 'Paris':
+                log_pass("Existing city NOT overwritten")
+            else:
+                log_fail(f"City was overwritten: {user.get('city')} (expected Paris)")
+            
+            if user.get('role') == 'Wine enthusiast':
+                log_pass("Existing role NOT overwritten")
+            else:
+                log_fail(f"Role was overwritten: {user.get('role')} (expected Wine enthusiast)")
+            
+            if user.get('newsletter') == True:
+                log_pass("Existing newsletter NOT overwritten")
+            else:
+                log_fail(f"Newsletter was overwritten: {user.get('newsletter')} (expected True)")
+            
+            if user.get('authMethod') == 'password':
+                log_pass("authMethod updated to 'password'")
+            else:
+                log_fail(f"authMethod not updated: {user.get('authMethod')}")
+            
+            if 'passwordHash' in user:
+                log_fail("Response contains passwordHash (SECURITY ISSUE)")
+            else:
+                log_pass("Response does NOT contain passwordHash")
+            
+            # Verify user can now log in with new password
+            try:
+                login_resp = requests.post(f"{API_BASE}/login", json={
+                    'email': email,
+                    'password': 'newpassword123'
+                }, timeout=10)
                 
-                r = requests.get(f"{API_URL}/courses/{old_slug}", allow_redirects=False, timeout=10)
-                if r.status_code == 301:
-                    data = r.json()
-                    if data.get("redirect") == new_slug:
-                        log_pass(f"Slug alias: {old_slug} → {new_slug} (301 redirect)")
-                    else:
-                        log_fail(f"Slug alias: redirect target mismatch")
+                if login_resp.status_code == 200:
+                    log_pass("Migrated user can log in with new password")
                 else:
-                    log_fail(f"Slug alias: expected 301, got {r.status_code}")
+                    log_fail(f"Migrated user login failed: {login_resp.status_code}")
+            except Exception as e:
+                log_fail(f"Migrated user login test failed: {e}")
+        else:
+            log_fail(f"Legacy user migration returned {resp.status_code}, expected 200. Body: {resp.text}")
+    except Exception as e:
+        log_fail(f"Legacy user migration test failed: {e}")
+
+def test_login():
+    """Test 6: POST /api/login"""
+    log("\n=== TEST 6: Login endpoint ===")
+    
+    email = f"logintest-{uuid4()}@example.com"
+    test_emails.append(email)
+    password = 'testpassword123'
+    
+    # Create user first
+    try:
+        resp = requests.post(f"{API_BASE}/register", json={
+            'email': email,
+            'password': password,
+            'confirmPassword': password,
+            'country': 'USA',
+            'city': 'New York',
+            'role': 'Bartender'
+        }, timeout=10)
+        
+        if resp.status_code == 200:
+            data = resp.json()
+            test_users.append(data['user']['id'])
+            log_pass("Test user created for login tests")
+        else:
+            log_fail(f"Failed to create test user: {resp.status_code}")
+            return
+    except Exception as e:
+        log_fail(f"Failed to create test user: {e}")
+        return
+    
+    # 6a: Valid credentials
+    try:
+        resp = requests.post(f"{API_BASE}/login", json={
+            'email': email,
+            'password': password
+        }, timeout=10)
+        
+        if resp.status_code == 200:
+            log_pass("Valid credentials → 200")
+            data = resp.json()
+            user = data.get('user')
+            
+            if user and user.get('email') == email:
+                log_pass("Response contains correct user")
             else:
-                log_pass("Slug alias: no aliases to test (skipped)")
+                log_fail(f"Response user mismatch: {user}")
+            
+            if 'passwordHash' in user:
+                log_fail("Login response contains passwordHash (SECURITY ISSUE)")
+            else:
+                log_pass("Login response does NOT contain passwordHash")
         else:
-            log_fail(f"Slug alias: GET /api/admin/course-aliases failed: {r.status_code}")
+            log_fail(f"Valid login returned {resp.status_code}, expected 200. Body: {resp.text}")
     except Exception as e:
-        log_fail(f"Slug alias exception: {e}")
-
-def test_study_next():
-    """Test 10: Study/next endpoint requires auth"""
-    print("\n=== TEST 10: Study/next Endpoint ===")
+        log_fail(f"Valid login test failed: {e}")
     
+    # 6b: Wrong password
     try:
-        # Without userId, should return 401
-        r = requests.get(f"{API_URL}/study/next", timeout=10)
-        if r.status_code == 401:
-            log_pass("Study/next: requires auth (401 without userId)")
-        else:
-            log_fail(f"Study/next: expected 401, got {r.status_code}")
+        resp = requests.post(f"{API_BASE}/login", json={
+            'email': email,
+            'password': 'wrongpassword'
+        }, timeout=10)
         
+        if resp.status_code == 401:
+            log_pass("Wrong password → 401")
+        else:
+            log_fail(f"Wrong password returned {resp.status_code}, expected 401")
     except Exception as e:
-        log_fail(f"Study/next exception: {e}")
-
-def test_pages_crud():
-    """Test 11: Pages CRUD endpoints"""
-    print("\n=== TEST 11: Pages CRUD ===")
+        log_fail(f"Wrong password test failed: {e}")
     
-    cookies = admin_login()
-    if not cookies:
-        log_fail("Pages CRUD: login failed")
-        return
-    
+    # 6c: Unknown email
     try:
-        # GET /api/pages (public)
-        r = requests.get(f"{API_URL}/pages", timeout=10)
-        if r.status_code == 200:
-            log_pass("Pages: GET /api/pages works")
-        else:
-            log_fail(f"Pages: GET /api/pages failed: {r.status_code}")
+        resp = requests.post(f"{API_BASE}/login", json={
+            'email': f"unknown-{uuid4()}@example.com",
+            'password': 'anypassword'
+        }, timeout=10)
         
-        # GET /api/admin/pages (admin)
-        r = requests.get(f"{API_URL}/admin/pages", cookies=cookies, timeout=10)
-        if r.status_code == 200:
-            log_pass("Pages: GET /api/admin/pages works")
+        if resp.status_code == 401:
+            log_pass("Unknown email → 401")
         else:
-            log_fail(f"Pages: GET /api/admin/pages failed: {r.status_code}")
-        
+            log_fail(f"Unknown email returned {resp.status_code}, expected 401")
     except Exception as e:
-        log_fail(f"Pages CRUD exception: {e}")
-
-def test_ai_generation_disabled():
-    """Test 12: AI generation returns 410"""
-    print("\n=== TEST 12: AI Generation Disabled ===")
+        log_fail(f"Unknown email test failed: {e}")
     
-    cookies = admin_login()
-    if not cookies:
-        log_fail("AI generation: login failed")
-        return
+    # 6d: Legacy user without password
+    legacy_email = f"legacy-login-{uuid4()}@example.com"
+    test_emails.append(legacy_email)
+    legacy_id = create_legacy_user(legacy_email)
     
-    try:
-        r = requests.post(f"{API_URL}/admin/generate-course", json={}, cookies=cookies, timeout=10)
-        if r.status_code == 410:
-            log_pass("AI generation: POST /api/admin/generate-course returns 410")
-        else:
-            log_fail(f"AI generation: expected 410, got {r.status_code}")
-        
-    except Exception as e:
-        log_fail(f"AI generation exception: {e}")
-
-def cleanup_test_users():
-    """Delete all test users created during testing"""
-    print("\n=== CLEANUP: Deleting Test Users ===")
-    
-    cookies = admin_login()
-    if not cookies:
-        print("⚠️  Cleanup: admin login failed, cannot delete test users")
-        return
-    
-    for user_id in test_users:
+    if legacy_id:
         try:
-            r = requests.delete(f"{API_URL}/admin/users/{user_id}", cookies=cookies, timeout=10)
-            if r.status_code == 200:
-                print(f"✅ Deleted test user: {user_id}")
+            resp = requests.post(f"{API_BASE}/login", json={
+                'email': legacy_email,
+                'password': 'anypassword'
+            }, timeout=10)
+            
+            if resp.status_code == 428:
+                log_pass("Legacy user without password → 428")
+                data = resp.json()
+                
+                if data.get('needsPasswordSetup') == True:
+                    log_pass("Response contains needsPasswordSetup=true")
+                else:
+                    log_fail(f"Response missing needsPasswordSetup: {data}")
+                
+                if data.get('email') == legacy_email:
+                    log_pass("Response contains correct email")
+                else:
+                    log_fail(f"Response email mismatch: {data.get('email')}")
+                
+                if data.get('userId'):
+                    log_pass("Response contains userId")
+                else:
+                    log_fail("Response missing userId")
             else:
-                print(f"⚠️  Failed to delete test user {user_id}: {r.status_code}")
+                log_fail(f"Legacy user login returned {resp.status_code}, expected 428. Body: {resp.text}")
         except Exception as e:
-            print(f"⚠️  Exception deleting test user {user_id}: {e}")
+            log_fail(f"Legacy user login test failed: {e}")
+
+def test_set_password():
+    """Test 7: POST /api/set-password"""
+    log("\n=== TEST 7: Set-password endpoint ===")
+    
+    # 7a: Legacy user setting password
+    legacy_email = f"legacy-setpw-{uuid4()}@example.com"
+    test_emails.append(legacy_email)
+    legacy_id = create_legacy_user(legacy_email)
+    
+    if legacy_id:
+        try:
+            resp = requests.post(f"{API_BASE}/set-password", json={
+                'email': legacy_email,
+                'password': 'newpassword123',
+                'confirmPassword': 'newpassword123'
+            }, timeout=10)
+            
+            if resp.status_code == 200:
+                log_pass("Legacy user set-password → 200")
+                data = resp.json()
+                user = data.get('user')
+                
+                if user and user.get('email') == legacy_email:
+                    log_pass("Response contains correct user")
+                else:
+                    log_fail(f"Response user mismatch: {user}")
+                
+                if 'passwordHash' in user:
+                    log_fail("Set-password response contains passwordHash (SECURITY ISSUE)")
+                else:
+                    log_pass("Set-password response does NOT contain passwordHash")
+                
+                # Verify user can now log in
+                try:
+                    login_resp = requests.post(f"{API_BASE}/login", json={
+                        'email': legacy_email,
+                        'password': 'newpassword123'
+                    }, timeout=10)
+                    
+                    if login_resp.status_code == 200:
+                        log_pass("User can log in after set-password")
+                    else:
+                        log_fail(f"Login after set-password failed: {login_resp.status_code}")
+                except Exception as e:
+                    log_fail(f"Login after set-password test failed: {e}")
+            else:
+                log_fail(f"Legacy user set-password returned {resp.status_code}, expected 200. Body: {resp.text}")
+        except Exception as e:
+            log_fail(f"Legacy user set-password test failed: {e}")
+    
+    # 7b: User with existing password
+    email_with_pw = f"haspw-{uuid4()}@example.com"
+    test_emails.append(email_with_pw)
+    
+    try:
+        # Create user with password
+        resp = requests.post(f"{API_BASE}/register", json={
+            'email': email_with_pw,
+            'password': 'password123',
+            'confirmPassword': 'password123',
+            'country': 'USA',
+            'city': 'New York',
+            'role': 'Bartender'
+        }, timeout=10)
+        
+        if resp.status_code == 200:
+            data = resp.json()
+            test_users.append(data['user']['id'])
+            
+            # Try to set password again
+            resp2 = requests.post(f"{API_BASE}/set-password", json={
+                'email': email_with_pw,
+                'password': 'newpassword456',
+                'confirmPassword': 'newpassword456'
+            }, timeout=10)
+            
+            if resp2.status_code == 409:
+                log_pass("User with existing password → 409")
+                data2 = resp2.json()
+                if 'error' in data2 and ('already' in data2['error'].lower() or 'log in' in data2['error'].lower()):
+                    log_pass("Error message mentions already has password / log in")
+                else:
+                    log_fail(f"Error message unclear: {data2.get('error')}")
+            else:
+                log_fail(f"User with existing password returned {resp2.status_code}, expected 409")
+        else:
+            log_fail(f"Failed to create user with password: {resp.status_code}")
+    except Exception as e:
+        log_fail(f"User with existing password test failed: {e}")
+    
+    # 7c: Password validation
+    legacy_email2 = f"legacy-setpw2-{uuid4()}@example.com"
+    test_emails.append(legacy_email2)
+    legacy_id2 = create_legacy_user(legacy_email2)
+    
+    if legacy_id2:
+        # Password too short
+        try:
+            resp = requests.post(f"{API_BASE}/set-password", json={
+                'email': legacy_email2,
+                'password': 'short',
+                'confirmPassword': 'short'
+            }, timeout=10)
+            
+            if resp.status_code == 400:
+                log_pass("Password < 8 chars → 400")
+            else:
+                log_fail(f"Password < 8 chars returned {resp.status_code}, expected 400")
+        except Exception as e:
+            log_fail(f"Password < 8 chars test failed: {e}")
+        
+        # Password mismatch
+        try:
+            resp = requests.post(f"{API_BASE}/set-password", json={
+                'email': legacy_email2,
+                'password': 'password123',
+                'confirmPassword': 'password456'
+            }, timeout=10)
+            
+            if resp.status_code == 400:
+                log_pass("Password mismatch → 400")
+            else:
+                log_fail(f"Password mismatch returned {resp.status_code}, expected 400")
+        except Exception as e:
+            log_fail(f"Password mismatch test failed: {e}")
+
+def test_sanitization():
+    """Test 8: Verify passwordHash is never in responses"""
+    log("\n=== TEST 8: Universal sanitization check ===")
+    
+    email = f"sanitize-{uuid4()}@example.com"
+    test_emails.append(email)
+    
+    # Register
+    try:
+        resp = requests.post(f"{API_BASE}/register", json={
+            'email': email,
+            'password': 'password123',
+            'confirmPassword': 'password123',
+            'country': 'USA',
+            'city': 'New York',
+            'role': 'Bartender'
+        }, timeout=10)
+        
+        if resp.status_code == 200:
+            data = resp.json()
+            user = data.get('user')
+            test_users.append(user['id'])
+            
+            if 'passwordHash' not in user:
+                log_pass("POST /api/register response does NOT contain passwordHash")
+            else:
+                log_fail("POST /api/register response contains passwordHash (SECURITY ISSUE)")
+        else:
+            log_fail(f"Register failed: {resp.status_code}")
+            return
+    except Exception as e:
+        log_fail(f"Register test failed: {e}")
+        return
+    
+    # Login
+    try:
+        resp = requests.post(f"{API_BASE}/login", json={
+            'email': email,
+            'password': 'password123'
+        }, timeout=10)
+        
+        if resp.status_code == 200:
+            data = resp.json()
+            user = data.get('user')
+            
+            if 'passwordHash' not in user:
+                log_pass("POST /api/login response does NOT contain passwordHash")
+            else:
+                log_fail("POST /api/login response contains passwordHash (SECURITY ISSUE)")
+        else:
+            log_fail(f"Login failed: {resp.status_code}")
+    except Exception as e:
+        log_fail(f"Login test failed: {e}")
+    
+    # GET /api/me (if implemented)
+    try:
+        resp = requests.get(f"{API_BASE}/me?userId={test_users[-1]}", timeout=10)
+        
+        if resp.status_code == 200:
+            data = resp.json()
+            user = data.get('user')
+            
+            if user:
+                if 'passwordHash' not in user:
+                    log_pass("GET /api/me response does NOT contain passwordHash")
+                else:
+                    log_fail("GET /api/me response contains passwordHash (SECURITY ISSUE)")
+        else:
+            log(f"GET /api/me returned {resp.status_code} (may not be implemented)")
+    except Exception as e:
+        log(f"GET /api/me test skipped: {e}")
 
 def main():
     print("=" * 80)
-    print("BACKEND TEST: Online Spirits Club v1.2 Pre-Launch")
+    print("BACKEND REGRESSION TEST - SESSION 5")
+    print("Focus: Mandatory email+password authentication flow")
     print("=" * 80)
     
-    # Run all tests
-    test_ssr_beginner_stripping()
-    test_rawtitle_preservation()
-    test_findbylessonslug_fix()
-    test_all_lessons_load()
-    test_audience_signup()
-    test_admin_analytics()
-    test_admin_users()
-    test_version_endpoint()
-    test_slug_alias_redirect()
-    test_study_next()
-    test_pages_crud()
-    test_ai_generation_disabled()
-    
-    # Cleanup
-    cleanup_test_users()
-    
-    # Summary
-    print("\n" + "=" * 80)
-    print(f"TEST SUMMARY: {tests_passed} passed, {tests_failed} failed")
-    print("=" * 80)
-    
-    if tests_failed == 0:
-        print("🎉 ALL TESTS PASSED!")
-        return 0
-    else:
-        print(f"⚠️  {tests_failed} TEST(S) FAILED")
-        return 1
+    try:
+        # Run all tests
+        test_auth_deprecated()
+        test_register_validation()
+        test_register_success()
+        test_register_duplicate()
+        test_register_legacy_migration()
+        test_login()
+        test_set_password()
+        test_sanitization()
+        
+    finally:
+        # Cleanup
+        log("\n=== CLEANUP ===")
+        cleanup()
+        
+        # Summary
+        print("\n" + "=" * 80)
+        print(f"TEST SUMMARY: {passed} passed, {failed} failed")
+        print("=" * 80)
+        
+        if failed > 0:
+            sys.exit(1)
+        else:
+            print("\n✅ ALL TESTS PASSED")
+            sys.exit(0)
 
-if __name__ == "__main__":
-    exit(main())
+if __name__ == '__main__':
+    main()

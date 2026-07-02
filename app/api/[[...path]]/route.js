@@ -8,6 +8,24 @@ import { schedule } from '@/lib/sm2';
 import { checkPassword, isAdminEmail, makeSessionToken, getAdminSessionFromRequest, ADMIN_COOKIE } from '@/lib/admin-auth';
 import { uploadImage, uploadImageFromUrl, fetchImageBuffer, deleteImage, MAX_UPLOAD_BYTES, ALLOWED_MIME } from '@/lib/image-storage';
 import { sanitizeContentHtml, htmlToPlainText } from '@/lib/sanitize';
+import bcrypt from 'bcryptjs';
+
+const BCRYPT_ROUNDS = 10;
+const MIN_PASSWORD = 8;
+
+function validatePassword(pw) {
+  if (typeof pw !== 'string' || pw.length < MIN_PASSWORD) return `Password must be at least ${MIN_PASSWORD} characters.`;
+  if (pw.length > 200) return 'Password is too long.';
+  return null;
+}
+
+function sanitizeUserOut(u) {
+  if (!u) return u;
+  const c = { ...u };
+  delete c._id;
+  delete c.passwordHash;
+  return c;
+}
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -252,9 +270,10 @@ export async function GET(request, { params }) {
       const db = await getDb();
       const user = await db.collection('users').findOne({ id: userId });
       if (!user) return err('User not found', 404);
-      delete user._id;
-      user.isAdmin = isAdminEmail(user.email);
-      return json(user);
+      const out = sanitizeUserOut(user);
+      out.isAdmin = isAdminEmail(user.email);
+      out.hasPassword = !!user.passwordHash;
+      return json(out);
     }
 
     if (seg === 'progress') {
@@ -757,7 +776,107 @@ function sanitizeRole(v) {
   return ROLE_OPTIONS.has(t) ? t : 'Other';
 }
 
+function sanitizeUserOut2Remove() { /* removed — using module-level sanitizeUserOut */ }
+
+    if (seg === 'register') {
+      const email = (body.email || '').trim().toLowerCase();
+      const password = body.password;
+      const confirmPassword = body.confirmPassword;
+      const name = (body.name || '').trim() || email.split('@')[0];
+      const country = sanitizeProfileField(body.country, 60);
+      const city = sanitizeProfileField(body.city, 80);
+      const role = sanitizeRole(body.role);
+      const newsletter = !!body.newsletter;
+
+      if (!email || !email.includes('@')) return err('Valid email required');
+      if (!country) return err('Country is required');
+      if (!city) return err('City is required');
+      if (!role) return err('Role is required');
+      const pwErr = validatePassword(password);
+      if (pwErr) return err(pwErr);
+      if (password !== confirmPassword) return err('Passwords do not match');
+
+      const db = await getDb();
+      const existing = await db.collection('users').findOne({ email });
+      if (existing?.passwordHash) return err('An account with this email already exists. Please log in.', 409);
+
+      const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+      if (existing) {
+        // Migrate legacy email-only user in place — keep progress, newsletter, etc.
+        const patch = {
+          passwordHash, authMethod: 'password', verified: true, updatedAt: new Date(),
+          ...(existing.country ? {} : { country }),
+          ...(existing.city ? {} : { city }),
+          ...(existing.role ? {} : { role }),
+          ...(!existing.newsletter && newsletter ? { newsletter: true } : {}),
+        };
+        await db.collection('users').updateOne({ id: existing.id }, { $set: patch });
+        if (!existing.newsletter && newsletter) {
+          await db.collection('newsletter').insertOne({ id: uuid(), email, source: 'register', createdAt: new Date() });
+        }
+        const user = await db.collection('users').findOne({ id: existing.id });
+        return json({ user: sanitizeUserOut(user), migrated: true });
+      }
+
+      const user = {
+        id: uuid(), email, name, provider: 'email',
+        authMethod: 'password',
+        verified: true,
+        passwordHash,
+        newsletter, newsletterSyncedAt: null,
+        source: body.source || null,
+        country, city, role,
+        createdAt: new Date(), updatedAt: new Date(),
+      };
+      await db.collection('users').insertOne({ ...user });
+      if (newsletter) {
+        await db.collection('newsletter').insertOne({ id: uuid(), email, source: 'register', createdAt: new Date() });
+      }
+      return json({ user: sanitizeUserOut(user) });
+    }
+
+    if (seg === 'login') {
+      const email = (body.email || '').trim().toLowerCase();
+      const password = body.password;
+      if (!email || !password) return err('Email and password required', 400);
+      const db = await getDb();
+      const user = await db.collection('users').findOne({ email });
+      if (!user) return err('Invalid email or password', 401);
+      if (!user.passwordHash) {
+        // Legacy user without password — cannot log in until they set one.
+        return json({ needsPasswordSetup: true, userId: user.id, email: user.email }, { status: 428 });
+      }
+      const ok = await bcrypt.compare(password, user.passwordHash);
+      if (!ok) return err('Invalid email or password', 401);
+      return json({ user: sanitizeUserOut(user) });
+    }
+
+    if (seg === 'set-password') {
+      const email = (body.email || '').trim().toLowerCase();
+      const password = body.password;
+      const confirmPassword = body.confirmPassword;
+      const pwErr = validatePassword(password);
+      if (pwErr) return err(pwErr);
+      if (password !== confirmPassword) return err('Passwords do not match');
+      if (!email) return err('Email required');
+      const db = await getDb();
+      const user = await db.collection('users').findOne({ email });
+      if (!user) return err('User not found', 404);
+      if (user.passwordHash) return err('Account already has a password. Please log in.', 409);
+      const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+      await db.collection('users').updateOne({ id: user.id }, { $set: { passwordHash, authMethod: 'password', updatedAt: new Date() } });
+      const fresh = await db.collection('users').findOne({ id: user.id });
+      return json({ user: sanitizeUserOut(fresh) });
+    }
+
     if (seg === 'auth') {
+      // Legacy email-only auth has been deprecated. All new users must register with a password
+      // via /api/register, and existing users must log in via /api/login (which auto-prompts legacy
+      // email-only accounts to set a password on first login).
+      return err('This endpoint has been deprecated. Please use /api/register or /api/login.', 410);
+    }
+
+    if (seg === 'auth-legacy-disabled') {
       const email = (body.email || '').trim().toLowerCase();
       const name = (body.name || '').trim() || email.split('@')[0];
       if (!email || !email.includes('@')) return err('Valid email required');

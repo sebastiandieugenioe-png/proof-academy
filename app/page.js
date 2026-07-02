@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import {
-  GlassWater, Flame, Sparkles, ChevronRight, ChevronLeft, ChevronDown, Check, X,
+  GlassWater, Flame, Sparkles, ChevronRight, ChevronLeft, Check, X,
   BookOpen, Brain, Layers, Target, Loader2, LogOut, User as UserIcon,
   Home, Wrench, ArrowRight, PartyPopper, Repeat, TrendingUp,
   Zap, StopCircle, Timer, Award, Download, Smartphone, Share2,
@@ -58,8 +58,7 @@ function App() {
       <TopBar user={user} onNav={go} onLogout={logout} />
       <main className="mx-auto max-w-6xl px-4 pb-28 md:pb-24 pt-6 md:pt-10">
         <div className="fade-in">
-        {route.name === 'landing' && <Landing courses={courses} onCta={() => go({ name: 'signup' })} />}
-        {route.name === 'signup' && <Signup onLogin={login} onBack={() => go({ name: 'landing' })} />}
+        {route.name === 'landing' && <Landing courses={courses} onCta={() => { if (typeof window !== 'undefined') window.location.href = '/register' }} />}
         {route.name === 'dashboard' && <Dashboard user={user} courses={courses} onNav={go} />}
         {route.name === 'course' && <CourseView slug={route.slug} onNav={go} user={user} />}
         {route.name === 'lesson' && <LessonView courseSlug={route.courseSlug} lessonSlug={route.lessonSlug} user={user} onNav={go} />}
@@ -102,7 +101,10 @@ const TopBar = ({ user, onNav, onLogout }) => (
             <button onClick={onLogout} className="text-sm px-3 h-9 inline-flex items-center gap-1.5 rounded-md hover:bg-slate-100 text-slate-600"><LogOut className="h-4 w-4" /><span className="hidden sm:inline">Log out</span></button>
           </>
         ) : (
-          <button onClick={() => onNav({ name: 'signup' })} className="text-sm h-9 px-4 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm">Start learning</button>
+          <>
+          <button onClick={() => { if (typeof window !== 'undefined') window.location.href = '/login' }} className="hidden sm:inline-flex text-sm h-9 px-3 items-center rounded-md hover:bg-slate-100 text-slate-700 font-medium">Log in</button>
+          <button onClick={() => { if (typeof window !== 'undefined') window.location.href = '/register' }} className="text-sm h-9 px-4 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm">Start learning</button>
+          </>
         )}
       </nav>
     </div>
@@ -135,6 +137,10 @@ const BottomNav = ({ user, route, onNav }) => {
 
 const Landing = ({ courses, onCta }) => (
   <div className="space-y-16 pt-4 md:pt-10">
+    <nav className="flex items-center justify-end gap-2 -mt-2">
+      <a href="/login" className="h-9 px-3 rounded-md hover:bg-slate-100 text-sm text-slate-700 font-medium inline-flex items-center">Log in</a>
+      <a href="/register" className="h-9 px-3.5 rounded-md bg-blue-600 hover:bg-blue-700 text-sm text-white font-medium inline-flex items-center gap-1.5">Sign up <ArrowRight className="h-3.5 w-3.5" /></a>
+    </nav>
     <section className="text-center max-w-3xl mx-auto">
       <div className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-800 mb-6">
         <Sparkles className="h-3.5 w-3.5" /> 100% free · science-based · no ads
@@ -146,10 +152,10 @@ const Landing = ({ courses, onCta }) => (
         The free, science-based platform to learn behind-the-bar knowledge in 3–5 minute lessons. Active recall, flashcards, spaced repetition. No XP, no streaks — just real learning.
       </p>
       <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-        <button onClick={onCta} className="h-11 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm inline-flex items-center gap-2">Start free <ArrowRight className="h-4 w-4" /></button>
+        <a href="/register" className="h-11 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm inline-flex items-center gap-2">Start free <ArrowRight className="h-4 w-4" /></a>
         <a href="#courses" className="h-11 px-6 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-800 font-medium">See courses</a>
       </div>
-      <p className="mt-4 text-xs text-slate-400">Signup takes 15 seconds. Start learning within a minute.</p>
+      <p className="mt-4 text-xs text-slate-400">Signup takes 30 seconds. Start learning within a minute.</p>
     </section>
 
     <section className="grid gap-4 md:grid-cols-4">
@@ -181,7 +187,7 @@ const Landing = ({ courses, onCta }) => (
       <PartyPopper className="h-6 w-6 text-blue-600 mx-auto" />
       <h3 className="mt-3 text-2xl font-semibold text-slate-900">Ready to actually learn?</h3>
       <p className="mt-2 text-slate-600 max-w-md mx-auto">Create a free account and start your first lesson. Newsletter is optional.</p>
-      <button onClick={onCta} className="mt-5 h-11 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium">Get started free</button>
+      <a href="/register" className="mt-5 inline-flex h-11 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium items-center">Get started free</a>
     </section>
   </div>
 )
@@ -214,80 +220,6 @@ const CourseCard = ({ course, onClick, progressMap }) => {
 
 const ROLE_OPTIONS = ['Bartender','Barback','Waiter/Server','Hospitality student','Cocktail enthusiast','Spirits enthusiast','Beer enthusiast','Wine enthusiast','Bar manager','Other']
 
-const Signup = ({ onLogin, onBack }) => {
-  const [email, setEmail] = useState('')
-  const [name, setName] = useState('')
-  const [country, setCountry] = useState('')
-  const [city, setCity] = useState('')
-  const [role, setRole] = useState('')
-  const [showAbout, setShowAbout] = useState(false)
-  const [newsletter, setNewsletter] = useState(true)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const submit = async (e) => {
-    e.preventDefault(); setError(''); setLoading(true)
-    try {
-      const { user } = await api('/auth', { method: 'POST', body: { email, name, newsletter, country, city, role } })
-      onLogin(user)
-    } catch (e) { setError(e.message) } finally { setLoading(false) }
-  }
-  return (
-    <div className="max-w-md mx-auto pt-6 md:pt-16">
-      <button onClick={onBack} className="text-sm text-slate-500 hover:text-slate-800 inline-flex items-center gap-1 mb-4"><ChevronLeft className="h-4 w-4" /> Back</button>
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 md:p-8 shadow-sm">
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Start learning free</h1>
-        <p className="mt-1.5 text-sm text-slate-600">No password. Just your email — instant access.</p>
-        <form onSubmit={submit} className="mt-6 space-y-4">
-          <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1.5">Your name</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Alex" className="w-full h-11 rounded-lg border border-slate-200 px-3.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1.5">Email</label>
-            <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required placeholder="you@example.com" className="w-full h-11 rounded-lg border border-slate-200 px-3.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-
-          {/* Optional profile — collapsible to keep signup fast */}
-          <button type="button" onClick={() => setShowAbout((s) => !s)} className="w-full flex items-center justify-between text-left text-xs text-slate-500 hover:text-slate-700 py-1">
-            <span className="inline-flex items-center gap-1.5"><UserIcon className="h-3.5 w-3.5" /> Tell us a bit about you <span className="text-slate-400">(optional, helps us build content)</span></span>
-            {showAbout ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-          </button>
-          {showAbout && (
-            <div className="space-y-3 pl-1 border-l-2 border-slate-100">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-medium text-slate-600 mb-1">Country</label>
-                  <input value={country} onChange={(e) => setCountry(e.target.value)} placeholder="e.g. Italy" maxLength={60} className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-medium text-slate-600 mb-1">City</label>
-                  <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Milan" maxLength={80} className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-[11px] font-medium text-slate-600 mb-1">Your role</label>
-                <select value={role} onChange={(e) => setRole(e.target.value)} className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="">Select…</option>
-                  {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
-                </select>
-              </div>
-            </div>
-          )}
-
-          <label className="flex items-start gap-2.5 text-sm text-slate-700 cursor-pointer">
-            <input type="checkbox" checked={newsletter} onChange={(e) => setNewsletter(e.target.checked)} className="mt-0.5 h-4 w-4 rounded accent-blue-600" />
-            <span>Email me the free spirits newsletter (1× / week, unsubscribe anytime).</span>
-          </label>
-          {error && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md p-2">{error}</div>}
-          <button disabled={loading} className="w-full h-11 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium disabled:opacity-60 inline-flex items-center justify-center gap-2">
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Create account <ArrowRight className="h-4 w-4" /></>}
-          </button>
-          <p className="text-xs text-slate-400 text-center">Google login coming soon.</p>
-        </form>
-      </div>
-    </div>
-  )
-}
 
 const Dashboard = ({ user, courses, onNav }) => {
   const [stats, setStats] = useState(null)
@@ -335,9 +267,10 @@ const Dashboard = ({ user, courses, onNav }) => {
 }
 
 /* ============ PWA INSTALL BANNER ============ */
-// Shows only on mobile / tablet AND only when not already installed.
 // Priority: (a) beforeinstallprompt (Chrome/Edge/Android) → native prompt
-//           (b) iOS Safari → open a modal with "Share → Add to Home Screen" instructions.
+//           (b) iOS Safari → modal with "Share → Add to Home Screen"
+//           (c) Any other mobile browser without BIP → generic browser-menu instructions
+// Debugging via window.__oscInstall for testing.
 const InstallAppBanner = () => {
   const [deferredPrompt, setDeferredPrompt] = useState(null)
   const [isMobile, setIsMobile] = useState(false)
@@ -345,51 +278,62 @@ const InstallAppBanner = () => {
   const [isIOS, setIsIOS] = useState(false)
   const [dismissed, setDismissed] = useState(false)
   const [showIosSheet, setShowIosSheet] = useState(false)
+  const [showFallback, setShowFallback] = useState(false)
+  const [bipFired, setBipFired] = useState(false)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
-    // Small screens (<= 900px) OR touch-enabled small viewport => treat as mobile/tablet
+    const log = (...a) => console.log('[OSC install]', ...a)
     const mq = window.matchMedia('(max-width: 900px)')
     const update = () => setIsMobile(mq.matches)
     update()
     mq.addEventListener?.('change', update)
-    // Detect standalone (installed) mode
     const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true
     setIsStandalone(standalone)
-    // Detect iOS (no BIP support)
     const ua = window.navigator.userAgent || ''
-    setIsIOS(/iPad|iPhone|iPod/.test(ua) && !window.MSStream)
-    // Persisted dismissal
+    const ios = /iPad|iPhone|iPod/.test(ua) && !window.MSStream
+    setIsIOS(ios)
     setDismissed(localStorage.getItem('osc.install.dismissed') === '1')
-    // beforeinstallprompt
-    const onBIP = (e) => { e.preventDefault(); setDeferredPrompt(e) }
+    log('boot', { mobile: mq.matches, standalone, isIOS: ios, ua })
+    const onBIP = (e) => { e.preventDefault(); setDeferredPrompt(e); setBipFired(true); log('beforeinstallprompt captured') }
     window.addEventListener('beforeinstallprompt', onBIP)
-    const onInstalled = () => { setDeferredPrompt(null); setIsStandalone(true) }
+    const onInstalled = () => { setDeferredPrompt(null); setIsStandalone(true); log('appinstalled') }
     window.addEventListener('appinstalled', onInstalled)
+    // Expose debug hook
+    window.__oscInstall = () => ({
+      hasBIP: !!deferredPrompt || bipFired,
+      isMobile: mq.matches, isStandalone: standalone, isIOS: ios,
+      dismissed: localStorage.getItem('osc.install.dismissed') === '1',
+    })
     return () => {
       mq.removeEventListener?.('change', update)
       window.removeEventListener('beforeinstallprompt', onBIP)
       window.removeEventListener('appinstalled', onInstalled)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const dismiss = () => { setDismissed(true); localStorage.setItem('osc.install.dismissed', '1') }
 
   const trigger = async () => {
+    console.log('[OSC install] Install clicked', { hasBIP: !!deferredPrompt, isIOS })
     if (deferredPrompt) {
-      deferredPrompt.prompt()
       try {
+        deferredPrompt.prompt()
         const choice = await deferredPrompt.userChoice
+        console.log('[OSC install] userChoice:', choice)
         if (choice?.outcome === 'accepted') dismiss()
-      } catch (_) { /* prompt closed without a choice */ }
+      } catch (e) { console.warn('[OSC install] prompt error:', e); setShowFallback(true) }
       setDeferredPrompt(null)
     } else if (isIOS) {
       setShowIosSheet(true)
+    } else {
+      // Android/Chrome/Edge but BIP hasn't fired yet — show generic instructions
+      setShowFallback(true)
     }
   }
 
   if (isStandalone || dismissed || !isMobile) return null
-  if (!deferredPrompt && !isIOS) return null // No install path available
 
   return (
     <>
@@ -422,6 +366,29 @@ const InstallAppBanner = () => {
             </ol>
             <p className="text-[11px] text-slate-500">Works only in Safari — Chrome on iOS doesn&apos;t support Add to Home Screen yet.</p>
             <button onClick={() => setShowIosSheet(false)} className="w-full h-10 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium text-sm">Got it</button>
+          </div>
+        </div>
+      )}
+      {showFallback && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-4" onClick={() => setShowFallback(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-md p-6 space-y-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <div className="h-9 w-9 rounded-lg bg-blue-50 text-blue-600 grid place-items-center"><Smartphone className="h-5 w-5" /></div>
+                <div>
+                  <h3 className="font-semibold text-slate-900">Install from your browser menu</h3>
+                  <p className="text-xs text-slate-500">Your browser hasn&apos;t offered the native install prompt yet.</p>
+                </div>
+              </div>
+              <button onClick={() => setShowFallback(false)} className="text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
+            </div>
+            <ol className="space-y-3 text-sm text-slate-700">
+              <li className="flex gap-3"><span className="h-6 w-6 shrink-0 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold grid place-items-center">1</span><div>Open your browser&apos;s menu (⋮ or ⋯).</div></li>
+              <li className="flex gap-3"><span className="h-6 w-6 shrink-0 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold grid place-items-center">2</span><div>Tap <strong>Install app</strong> or <strong>Add to Home Screen</strong>.</div></li>
+              <li className="flex gap-3"><span className="h-6 w-6 shrink-0 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold grid place-items-center">3</span><div>Confirm to add the shortcut. Done!</div></li>
+            </ol>
+            <p className="text-[11px] text-slate-500">Tip: Chrome may require you to browse the site for a few seconds before enabling the install option.</p>
+            <button onClick={() => setShowFallback(false)} className="w-full h-10 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium text-sm">Got it</button>
           </div>
         </div>
       )}
