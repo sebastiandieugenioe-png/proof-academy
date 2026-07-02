@@ -7,6 +7,7 @@ import {
   Home, Wrench, ArrowRight, PartyPopper, Repeat, TrendingUp,
   Zap, StopCircle, Timer, Award, Smartphone,
 } from 'lucide-react'
+import PublicFooter from '@/components/PublicFooter'
 
 const ICONS = { Flame, GlassWater, Sparkles }
 
@@ -69,6 +70,7 @@ function App() {
         {route.name === 'profile' && <ProfileView user={user} setUser={setUser} onNav={go} />}
         </div>
       </main>
+      <PublicFooter />
       <BottomNav user={user} route={route} onNav={go} />
     </div>
   )

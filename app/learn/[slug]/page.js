@@ -5,6 +5,7 @@ import { AI_COURSES } from '@/lib/ai-content';
 import { getMedia } from '@/lib/media';
 import { getDb } from '@/lib/mongo';
 import SeoLessonBody from './seo-body';
+import PublicFooter from '@/components/PublicFooter';
 
 export const dynamic = 'force-dynamic';
 export const dynamicParams = true;
@@ -240,12 +241,7 @@ export default async function Page({ params }) {
         </article>
       </main>
 
-      <footer className="border-t border-slate-200 bg-slate-50">
-        <div className="mx-auto max-w-6xl px-4 py-8 text-sm text-slate-500 flex flex-wrap justify-between gap-4">
-          <div>© {new Date().getFullYear()} Online Spirits Club. Drink responsibly.</div>
-          <Link href="/register" className="text-blue-700 hover:underline">Start free →</Link>
-        </div>
-      </footer>
+      <PublicFooter />
     </div>
   );
 }

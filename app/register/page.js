@@ -53,7 +53,7 @@ export default function RegisterPage() {
   const [country, setCountry] = useState('')
   const [city, setCity] = useState('')
   const [role, setRole] = useState('')
-  const [newsletter, setNewsletter] = useState(true)
+  const [newsletter, setNewsletter] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [name, setName] = useState('')

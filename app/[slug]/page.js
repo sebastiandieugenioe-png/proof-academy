@@ -6,6 +6,7 @@ import { getDb } from '@/lib/mongo';
 import { htmlToPlainText } from '@/lib/sanitize';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import PublicFooter from '@/components/PublicFooter';
 
 export const dynamic = 'force-dynamic';
 
@@ -65,12 +66,7 @@ export default async function PublicPage({ params }) {
           <div className="mt-6 prose-cms text-slate-800" dangerouslySetInnerHTML={{ __html: p.contentHtml || '' }} />
         </article>
       </main>
-      <footer className="border-t border-slate-200 bg-slate-50">
-        <div className="mx-auto max-w-6xl px-4 py-8 text-sm text-slate-500 flex flex-wrap justify-between gap-4">
-          <div>© {new Date().getFullYear()} Online Spirits Club. Drink responsibly.</div>
-          <Link className="text-blue-700 hover:underline" href="/register">Start free →</Link>
-        </div>
-      </footer>
+      <PublicFooter />
     </div>
   );
 }
