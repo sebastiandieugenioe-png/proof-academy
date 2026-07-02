@@ -54,6 +54,28 @@ function tooMany(retryAfterMs) {
   return NextResponse.json(r.body, { status: r.status, headers: r.headers });
 }
 
+// Diagnose which env var is likely misconfigured, WITHOUT leaking values.
+// Returned as a machine-readable object so the ops person can see it in platform logs
+// AND in the response body of a 503 (safe — no secret content is exposed).
+function diagnoseAuthEnv() {
+  const PLACEHOLDER = /(change[-_ ]?in[-_ ]?prod|preview[-_ ]?(only|secret|session|user)|rotate[-_ ]?(in|to|before)|placeholder|example\.com|insecure|dev[-_ ]?only)/i;
+  const inspect = (name) => {
+    const v = process.env[name];
+    if (!v) return { name, set: false, reason: 'unset' };
+    if (v.length < 24) return { name, set: true, length: v.length, reason: `length ${v.length} < 24 required` };
+    if (process.env.NODE_ENV === 'production' && PLACEHOLDER.test(v)) return { name, set: true, reason: 'matches a placeholder pattern (contains e.g. "rotate", "preview", "change-in-prod", ...)' };
+    return { name, set: true, ok: true };
+  };
+  return {
+    nodeEnv: process.env.NODE_ENV || 'undefined',
+    baseUrl: process.env.NEXT_PUBLIC_BASE_URL || null,
+    adminEmails: (process.env.ADMIN_EMAILS || '').split(',').map((s) => s.trim()).filter(Boolean).length,
+    adminPassword: process.env.ADMIN_PASSWORD ? (process.env.NODE_ENV === 'production' && PLACEHOLDER.test(process.env.ADMIN_PASSWORD) ? 'set-but-placeholder' : 'set') : 'unset',
+    adminSessionSecret: inspect('ADMIN_SESSION_SECRET'),
+    userSessionSecret: inspect('USER_SESSION_SECRET'),
+  };
+}
+
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
@@ -800,24 +822,35 @@ export async function POST(request, { params }) {
 
   // Public admin-auth endpoints (do not need the cookie yet)
   if (seg === 'admin-auth') {
-    const ip = ipFromRequest(request);
-    const emailForLimit = String((body && body.email) || '').trim().toLowerCase().slice(0, 254);
-    // 8 attempts per 10 min per (ip+email); 30 per 10 min per ip.
-    const rl1 = rateLimit(`admin-auth:${ip}:${emailForLimit}`, { max: 8, windowMs: 10 * 60 * 1000 });
-    if (!rl1.allowed) return tooMany(rl1.retryAfterMs);
-    const rl2 = rateLimit(`admin-auth:${ip}`, { max: 30, windowMs: 10 * 60 * 1000 });
-    if (!rl2.allowed) return tooMany(rl2.retryAfterMs);
-    const { email, password } = body || {};
-    if (!isAdminEmail(email)) {
-      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
+    try {
+      const ip = ipFromRequest(request);
+      const emailForLimit = String((body && body.email) || '').trim().toLowerCase().slice(0, 254);
+      // 8 attempts per 10 min per (ip+email); 30 per 10 min per ip.
+      const rl1 = rateLimit(`admin-auth:${ip}:${emailForLimit}`, { max: 8, windowMs: 10 * 60 * 1000 });
+      if (!rl1.allowed) return tooMany(rl1.retryAfterMs);
+      const rl2 = rateLimit(`admin-auth:${ip}`, { max: 30, windowMs: 10 * 60 * 1000 });
+      if (!rl2.allowed) return tooMany(rl2.retryAfterMs);
+      const { email, password } = body || {};
+      if (!isAdminEmail(email)) {
+        return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
+      }
+      if (!checkPassword(password)) {
+        return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
+      }
+      // makeSessionToken can throw in production if ADMIN_SESSION_SECRET is missing,
+      // too short, or matches a placeholder pattern — catch and surface a diagnostic.
+      const token = makeSessionToken(email);
+      const res = NextResponse.json({ ok: true });
+      res.cookies.set({ ...ADMIN_COOKIE.options, name: ADMIN_COOKIE.name, value: token });
+      return res;
+    } catch (e) {
+      console.error('[admin-auth] Server misconfiguration:', e?.message || e);
+      console.error('[admin-auth] Env check:', diagnoseAuthEnv());
+      return NextResponse.json({
+        error: 'Server is not configured. Contact the site owner.',
+        hint: diagnoseAuthEnv(),
+      }, { status: 503 });
     }
-    if (!checkPassword(password)) {
-      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
-    }
-    const token = makeSessionToken(email);
-    const res = NextResponse.json({ ok: true });
-    res.cookies.set({ ...ADMIN_COOKIE.options, name: ADMIN_COOKIE.name, value: token });
-    return res;
   }
   if (seg === 'admin-auth/logout') {
     const res = NextResponse.json({ ok: true });
@@ -1240,6 +1273,15 @@ function sanitizeUserOut2Remove() { /* removed — using module-level sanitizeUs
   } catch (e) {
     if (e && e.status && e.status >= 400 && e.status < 500) {
       return err(e.message || 'Bad request', e.status);
+    }
+    // Env-misconfig errors from makeUserSessionToken / makeSessionToken
+    if (e && typeof e.message === 'string' && /must be a strong/i.test(e.message)) {
+      console.error('[POST] Session-secret misconfiguration:', e.message);
+      console.error('[POST] Env check:', diagnoseAuthEnv());
+      return NextResponse.json({
+        error: 'Server is not configured. Contact the site owner.',
+        hint: diagnoseAuthEnv(),
+      }, { status: 503 });
     }
     console.error('POST error', seg, e);
     return err('Server error', 500);
