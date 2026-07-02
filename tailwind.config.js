@@ -9,10 +9,21 @@ module.exports = {
     ],
     prefix: "",
     safelist: [
+      // Static course accents
       'from-blue-500', 'to-cyan-500',
       'from-amber-500', 'to-orange-600',
       'from-emerald-500', 'to-teal-600',
       'from-blue-600', 'to-indigo-700',
+      // AI course accents
+      'from-amber-400', 'to-yellow-600',
+      'from-yellow-500',
+      'from-orange-500', 'to-red-500',
+      'from-amber-600', 'to-orange-700',
+      'from-lime-500', 'to-emerald-600',
+      'from-slate-400', 'to-blue-500',
+      'from-pink-500', 'to-rose-600',
+      'from-fuchsia-500', 'to-purple-600',
+      'from-red-600', 'to-rose-700',
     ],
     theme: {
       container: {

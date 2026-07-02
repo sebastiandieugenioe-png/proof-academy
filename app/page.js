@@ -164,7 +164,7 @@ const Landing = ({ courses, onCta }) => (
     <section id="courses" className="space-y-4">
       <div className="flex items-end justify-between">
         <h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">Beginner learning paths</h2>
-        <p className="text-sm text-slate-500 hidden md:block">More coming: Rum, Tequila, Beer, Wine, Cocktails, Hospitality.</p>
+        <p className="text-sm text-slate-500 hidden md:block">More coming: Hospitality &amp; Intermediate levels.</p>
       </div>
       <div className="grid gap-4 md:grid-cols-3">
         {courses.map((c) => <CourseCard key={c.slug} course={c} onClick={onCta} />)}
