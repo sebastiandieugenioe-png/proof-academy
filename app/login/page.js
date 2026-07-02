@@ -1,6 +1,7 @@
 'use client'
+export const dynamic = 'force-dynamic';
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Loader2, ArrowRight, ArrowLeft, ShieldCheck } from 'lucide-react'
@@ -18,6 +19,14 @@ async function api(path, opts = {}) {
 }
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen grid place-items-center bg-slate-50"><Loader2 className="h-6 w-6 animate-spin text-slate-400" /></div>}>
+      <LoginInner />
+    </Suspense>
+  )
+}
+
+function LoginInner() {
   const router = useRouter()
   const sp = useSearchParams()
   const rawNext = sp?.get('next') || '/'
