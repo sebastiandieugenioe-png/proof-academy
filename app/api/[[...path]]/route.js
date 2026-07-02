@@ -7,6 +7,7 @@ import { getMedia } from '@/lib/media';
 import { schedule } from '@/lib/sm2';
 import { checkPassword, isAdminEmail, makeSessionToken, getAdminSessionFromRequest, ADMIN_COOKIE } from '@/lib/admin-auth';
 import { uploadImage, uploadImageFromUrl, fetchImageBuffer, deleteImage, MAX_UPLOAD_BYTES, ALLOWED_MIME } from '@/lib/image-storage';
+import { sanitizeContentHtml, htmlToPlainText } from '@/lib/sanitize';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -14,6 +15,30 @@ export const dynamic = 'force-dynamic';
 
 const json = (data, init = {}) => NextResponse.json(data, init);
 const err = (msg, code = 400) => NextResponse.json({ error: msg }, { status: code });
+
+// Slug rules for pages/courses: lowercase, alphanumeric + dashes, 1-80 chars.
+const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+// Reserved slugs (cannot be used for public pages or renamed courses).
+const RESERVED_SLUGS = new Set([
+  'admin', 'api', 'learn', 'about', 'privacy', 'terms', 'contact', 'newsletter', 'p',
+  'manifest.json', 'sitemap.xml', 'robots.txt', 'favicon.ico', 'placeholder-lesson.svg',
+  '_next', 'assets', 'static', 'images',
+]);
+// Reserved slugs specifically for PUBLIC PAGES (pages tab) — courses live under /learn/*,
+// so course slugs can be more flexible. But pages sit at site root, so we forbid clashes with the SPA.
+const RESERVED_PAGE_SLUGS = new Set([
+  'admin', 'api', 'learn', 'p',
+  'manifest.json', 'sitemap.xml', 'robots.txt', 'favicon.ico', 'placeholder-lesson.svg',
+  '_next', 'assets', 'static', 'images',
+]);
+
+async function resolveCourseSlugAlias(slug) {
+  try {
+    const db = await getDb();
+    const a = await db.collection('course_slug_aliases').findOne({ from: slug });
+    return a?.to || null;
+  } catch { return null; }
+}
 
 // Merge sources of truth for courses:
 //   1) Static content in /lib/content.js (bundled)
@@ -50,6 +75,12 @@ async function findCourseMerged(slug) {
   if (staticC) return staticC;
   const ai = AI_COURSES.find((c) => c.slug === slug);
   if (ai) return ai;
+  // Try slug alias — old slug renamed to a new one.
+  const target = await resolveCourseSlugAlias(slug);
+  if (target && target !== slug) {
+    const c = await findCourseMerged(target);
+    if (c) return c;
+  }
   return null;
 }
 async function findLessonMerged(courseSlug, lessonSlug) {
@@ -82,18 +113,46 @@ export async function GET(request, { params }) {
 
     if (seg === 'courses') {
       const merged = await allCoursesMerged();
-      return json(merged.map(({ slug, title, tagline, level, accent, icon, lessons }) => ({
-        slug, title, tagline, level, accent, icon,
+      return json(merged.map(({ slug, title, tagline, level, accent, icon, category, lessons }) => ({
+        slug, title, tagline, level, accent, icon, category: category || null,
         lessonCount: lessons.length,
         lessons: lessons.map((l) => ({ slug: l.slug, title: l.title, minutes: l.minutes, hasImage: !!(l.image && (typeof l.image === 'string' ? l.image : l.image.url)) })),
       })));
     }
 
+    // Build/version endpoint — used by footer to confirm what's deployed.
+    if (seg === 'version') {
+      return json({
+        version: process.env.APP_VERSION || 'v1.1-admin-changes',
+        builtAt: process.env.BUILT_AT || new Date().toISOString(),
+        env: process.env.NODE_ENV || 'development',
+      });
+    }
+
+    // Public pages: list all published pages (title + slug only, for navigation/sitemap).
+    if (seg === 'pages') {
+      const db = await getDb();
+      const rows = await db.collection('pages').find({ published: true })
+        .project({ _id: 0, id: 1, slug: 1, title: 1, seoTitle: 1, seoDescription: 1, updatedAt: 1 })
+        .sort({ updatedAt: -1 }).toArray();
+      return json(rows);
+    }
+    if (path[0] === 'pages' && path[1]) {
+      const db = await getDb();
+      const p = await db.collection('pages').findOne({ slug: path[1], published: true });
+      if (!p) return err('Page not found', 404);
+      delete p._id;
+      return json(p);
+    }
+
     if (path[0] === 'courses' && path[1]) {
+      // Check slug alias first: if this slug was renamed, tell the client to redirect.
+      const alias = await resolveCourseSlugAlias(path[1]);
+      if (alias) return json({ redirect: alias }, { status: 301, headers: { Location: `/api/courses/${alias}` } });
       const c = await findCourseMerged(path[1]);
       if (!c) return err('Course not found', 404);
       return json({
-        slug: c.slug, title: c.title, tagline: c.tagline, level: c.level, accent: c.accent, icon: c.icon,
+        slug: c.slug, title: c.title, tagline: c.tagline, level: c.level, accent: c.accent, icon: c.icon, category: c.category || null,
         lessons: c.lessons.map((l) => ({ slug: l.slug, title: l.title, minutes: l.minutes, objectives: l.objectives })),
       });
     }
@@ -202,6 +261,87 @@ export async function GET(request, { params }) {
       const now = new Date();
       const rows = await db.collection('reviews').find({ userId, dueAt: { $lte: now } }).sort({ dueAt: 1 }).limit(50).toArray();
       return json(rows.map((r) => ({ ...r, _id: undefined })));
+    }
+
+    // Continuous Study mode. Returns ONE next card by priority:
+    //   1) due SR cards         -> source='due'
+    //   2) weak cards (ease<2)  -> source='weak'
+    //   3) recently learned <7d -> source='recent'
+    //   4) random learned card  -> source='random'
+    //   5) unseeded from progressed lessons -> source='new'  (opt-in via ?includeNew=1)
+    // Client passes ?exclude=id1,id2 to avoid re-serving in the same session.
+    if (seg === 'study/next') {
+      if (!userId) return err('Not authenticated', 401);
+      const db = await getDb();
+      const excludeIds = (url.searchParams.get('exclude') || '').split(',').map((s) => s.trim()).filter(Boolean);
+      const includeNew = url.searchParams.get('includeNew') === '1' || url.searchParams.get('includeNew') === 'true';
+      const now = new Date();
+      const d7 = new Date(now - 7 * 86400e3);
+      const baseFilter = { userId, ...(excludeIds.length ? { id: { $nin: excludeIds } } : {}) };
+
+      // Aggregate stats for the response bar.
+      const [dueCount, weakCount, totalCount] = await Promise.all([
+        db.collection('reviews').countDocuments({ userId, dueAt: { $lte: now } }),
+        db.collection('reviews').countDocuments({ userId, ease: { $lt: 2.0 }, reps: { $gt: 0 } }),
+        db.collection('reviews').countDocuments({ userId }),
+      ]);
+      const remainingDue = Math.max(0, dueCount - excludeIds.filter(Boolean).length);
+      const stats = { due: dueCount, weak: weakCount, total: totalCount, remainingDue };
+
+      // 1) Due
+      let card = await db.collection('reviews').findOne({ ...baseFilter, dueAt: { $lte: now } }, { sort: { dueAt: 1 } });
+      let source = card ? 'due' : null;
+
+      // 2) Weak
+      if (!card) {
+        card = await db.collection('reviews').findOne({ ...baseFilter, ease: { $lt: 2.0 }, reps: { $gt: 0 } }, { sort: { ease: 1 } });
+        if (card) source = 'weak';
+      }
+      // 3) Recently learned
+      if (!card) {
+        card = await db.collection('reviews').findOne({ ...baseFilter, lastReviewedAt: { $gte: d7 } }, { sort: { lastReviewedAt: -1 } });
+        if (card) source = 'recent';
+      }
+      // 4) Random learned (any card the user already has)
+      if (!card) {
+        const anyCount = await db.collection('reviews').countDocuments(baseFilter);
+        if (anyCount > 0) {
+          const skip = Math.floor(Math.random() * anyCount);
+          const arr = await db.collection('reviews').find(baseFilter).skip(skip).limit(1).toArray();
+          card = arr[0] || null;
+          if (card) source = 'random';
+        }
+      }
+      // 5) New cards from completed lessons (opt-in)
+      if (!card && includeNew) {
+        const progressed = await db.collection('progress').find({ userId, completed: true }).toArray();
+        for (const p of progressed) {
+          const lp = await findLessonMerged(p.courseSlug, p.lessonSlug);
+          if (!lp?.lesson?.flashcards) continue;
+          // Any card index not yet in reviews?
+          const existing = await db.collection('reviews').find({ userId, courseSlug: p.courseSlug, lessonSlug: p.lessonSlug }).toArray();
+          const existingIdx = new Set(existing.map((c) => c.cardIndex));
+          const missing = lp.lesson.flashcards.map((f, i) => ({ f, i })).find(({ i }) => !existingIdx.has(i));
+          if (missing) {
+            const newCard = {
+              id: uuid(), userId, courseSlug: p.courseSlug, lessonSlug: p.lessonSlug,
+              cardIndex: missing.i, front: missing.f.front, back: missing.f.back,
+              interval: 0, ease: 2.5, reps: 0,
+              dueAt: new Date(), createdAt: new Date(), lastReviewedAt: null,
+            };
+            await db.collection('reviews').insertOne({ ...newCard });
+            card = newCard; source = 'new'; break;
+          }
+        }
+      }
+
+      if (!card) return json({ done: true, stats });
+      delete card._id;
+      // Attach lightweight course/lesson labels
+      const courseMerged = await findCourseMerged(card.courseSlug);
+      const courseTitle = courseMerged?.title || card.courseSlug;
+      const lessonTitle = courseMerged?.lessons?.find((l) => l.slug === card.lessonSlug)?.title || card.lessonSlug;
+      return json({ done: false, card: { ...card, courseTitle, lessonTitle }, source, stats });
     }
 
     if (path[0] === 'comments' && path[1] && path[2]) {
@@ -332,6 +472,27 @@ export async function GET(request, { params }) {
       return json(rows.map((r) => ({ ...r, _id: undefined })));
     }
 
+    // Admin: pages CMS
+    if (seg === 'admin/pages') {
+      const db = await getDb();
+      const rows = await db.collection('pages').find({}).sort({ updatedAt: -1 }).toArray();
+      return json(rows.map((r) => ({ ...r, _id: undefined })));
+    }
+    if (path[0] === 'admin' && path[1] === 'pages' && path[2]) {
+      const db = await getDb();
+      const p = await db.collection('pages').findOne({ id: path[2] });
+      if (!p) return err('Page not found', 404);
+      delete p._id;
+      return json(p);
+    }
+
+    // Admin: slug alias list (for course editor UI)
+    if (seg === 'admin/course-aliases') {
+      const db = await getDb();
+      const rows = await db.collection('course_slug_aliases').find({}).sort({ createdAt: -1 }).toArray();
+      return json(rows.map((r) => ({ ...r, _id: undefined })));
+    }
+
     // Removed: /admin/drafts, /admin/generations, /admin/templates — AI generation disabled.
     if (seg === 'admin/drafts' || seg === 'admin/generations' || seg === 'admin/templates' || (path[0] === 'admin' && path[1] === 'drafts')) {
       return err('AI generation is disabled', 410);
@@ -376,6 +537,32 @@ export async function PATCH(request, { params }) {
       if (row) delete row._id;
       return NextResponse.json({ ok: true, comment: row });
     }
+
+    // Pages CMS — update
+    if (path[0] === 'admin' && path[1] === 'pages' && path[2]) {
+      const db = await getDb();
+      const set = { updatedAt: new Date() };
+      if (typeof body.title === 'string') set.title = body.title.trim().slice(0, 200);
+      if (typeof body.seoTitle === 'string') set.seoTitle = body.seoTitle.trim().slice(0, 200);
+      if (typeof body.seoDescription === 'string') set.seoDescription = body.seoDescription.trim().slice(0, 400);
+      if (typeof body.contentHtml === 'string') set.contentHtml = sanitizeContentHtml(body.contentHtml);
+      if (typeof body.published === 'boolean') set.published = body.published;
+      // slug change with reserved-word + clash guard
+      if (typeof body.slug === 'string') {
+        const s = body.slug.trim().toLowerCase();
+        if (!SLUG_RE.test(s)) return NextResponse.json({ error: 'Invalid slug. Lowercase letters, numbers and dashes only.' }, { status: 400 });
+        if (RESERVED_PAGE_SLUGS.has(s)) return NextResponse.json({ error: `Slug "${s}" is reserved.` }, { status: 400 });
+        const clash = await db.collection('pages').findOne({ slug: s, id: { $ne: path[2] } });
+        if (clash) return NextResponse.json({ error: 'A page with that slug already exists.' }, { status: 400 });
+        const clashCourse = (await allCoursesMerged()).some((c) => c.slug === s);
+        if (clashCourse) return NextResponse.json({ error: 'That slug is already used by a course.' }, { status: 400 });
+        set.slug = s;
+      }
+      await db.collection('pages').updateOne({ id: path[2] }, { $set: set });
+      const row = await db.collection('pages').findOne({ id: path[2] });
+      if (row) delete row._id;
+      return NextResponse.json({ ok: true, page: row });
+    }
     // Legacy draft edits (AI) - disabled
     if (path[0] === 'admin' && path[1] === 'drafts') {
       return NextResponse.json({ error: 'AI generation is disabled' }, { status: 410 });
@@ -415,6 +602,11 @@ export async function DELETE(request, { params }) {
     if (path[0] === 'admin' && path[1] === 'images' && path[2]) {
       const ok = await deleteImage(path[2]);
       return NextResponse.json({ ok });
+    }
+    if (path[0] === 'admin' && path[1] === 'pages' && path[2]) {
+      const db = await getDb();
+      const res = await db.collection('pages').deleteOne({ id: path[2] });
+      return NextResponse.json({ ok: res.deletedCount > 0 });
     }
     if (path[0] === 'admin' && path[1] === 'drafts') {
       return NextResponse.json({ error: 'AI generation is disabled' }, { status: 410 });
@@ -678,6 +870,98 @@ export async function POST(request, { params }) {
         await db.collection('courses_published').updateOne({ slug }, { $set: { hidden: false, updatedAt: new Date() } });
       }
       return json({ ok: true });
+    }
+
+    // Update course metadata (title, slug, tagline/description, category, level).
+    // Slug renames create a 301 alias and migrate all progress/reviews.
+    if (seg === 'admin/course-meta') {
+      const { originalSlug, title, slug: newSlug, tagline, category, level } = body || {};
+      if (!originalSlug) return err('originalSlug required');
+      const current = await findCourseMerged(originalSlug);
+      if (!current) return err('Course not found', 404);
+      const db = await getDb();
+      const set = { updatedAt: new Date() };
+      if (typeof title === 'string' && title.trim()) set.title = title.trim().slice(0, 120);
+      if (typeof tagline === 'string') set.tagline = tagline.trim().slice(0, 400);
+      if (typeof category === 'string') set.category = category.trim().slice(0, 60);
+      if (typeof level === 'string') set.level = level.trim().slice(0, 40);
+
+      // Handle slug rename
+      let finalSlug = originalSlug;
+      if (typeof newSlug === 'string' && newSlug.trim() && newSlug.trim() !== originalSlug) {
+        const s = newSlug.trim().toLowerCase();
+        if (!SLUG_RE.test(s)) return err('Invalid slug format. Use lowercase letters, numbers and dashes.');
+        if (RESERVED_SLUGS.has(s)) return err(`Slug "${s}" is reserved.`);
+        // Check clash with existing courses (other than the original)
+        const merged = await allCoursesMerged();
+        if (merged.some((c) => c.slug === s && c.slug !== originalSlug)) return err('Another course already uses that slug.');
+        finalSlug = s;
+      }
+
+      // Ensure a courses_published record exists (materialize static/AI to DB first).
+      const existing = await db.collection('courses_published').findOne({ slug: originalSlug });
+      const base = existing ? { ...existing } : { ...current };
+      delete base._id;
+      Object.assign(base, set);
+
+      if (finalSlug !== originalSlug) {
+        base.slug = finalSlug;
+        // Remove old, insert new
+        await db.collection('courses_published').deleteOne({ slug: originalSlug });
+        await db.collection('courses_published').updateOne(
+          { slug: finalSlug },
+          { $set: base },
+          { upsert: true }
+        );
+        // Alias: originalSlug -> finalSlug (transitively fold any prior aliases too)
+        const priorAliases = await db.collection('course_slug_aliases').find({ to: originalSlug }).toArray();
+        const bulk = [{ updateOne: { filter: { from: originalSlug }, update: { $set: { from: originalSlug, to: finalSlug, createdAt: new Date() } }, upsert: true } }];
+        for (const pa of priorAliases) bulk.push({ updateOne: { filter: { from: pa.from }, update: { $set: { to: finalSlug, createdAt: new Date() } } } });
+        await db.collection('course_slug_aliases').bulkWrite(bulk);
+        // Migrate progress + reviews
+        await Promise.all([
+          db.collection('progress').updateMany({ courseSlug: originalSlug }, { $set: { courseSlug: finalSlug } }),
+          db.collection('reviews').updateMany({ courseSlug: originalSlug }, { $set: { courseSlug: finalSlug } }),
+          db.collection('comments').updateMany({ courseSlug: originalSlug }, { $set: { courseSlug: finalSlug } }),
+        ]);
+      } else {
+        await db.collection('courses_published').updateOne(
+          { slug: originalSlug },
+          { $set: base },
+          { upsert: true }
+        );
+      }
+
+      const saved = await db.collection('courses_published').findOne({ slug: finalSlug });
+      if (saved) delete saved._id;
+      return json({ ok: true, course: saved, renamed: finalSlug !== originalSlug ? { from: originalSlug, to: finalSlug } : null });
+    }
+
+    // Pages CMS — create
+    if (seg === 'admin/pages') {
+      const { title, slug: rawSlug, seoTitle, seoDescription, contentHtml, published } = body || {};
+      if (!title?.trim() || !rawSlug?.trim()) return err('title and slug are required');
+      const slug = String(rawSlug).trim().toLowerCase();
+      if (!SLUG_RE.test(slug)) return err('Invalid slug. Use lowercase letters, numbers and dashes.');
+      if (RESERVED_PAGE_SLUGS.has(slug)) return err(`Slug "${slug}" is reserved.`);
+      const db = await getDb();
+      const clash = await db.collection('pages').findOne({ slug });
+      if (clash) return err('A page with that slug already exists.');
+      const clashesCourse = (await allCoursesMerged()).some((c) => c.slug === slug);
+      if (clashesCourse) return err('That slug is already used by a course.');
+      const doc = {
+        id: uuid(),
+        title: title.trim().slice(0, 200),
+        slug,
+        seoTitle: (seoTitle || '').trim().slice(0, 200),
+        seoDescription: (seoDescription || '').trim().slice(0, 400),
+        contentHtml: sanitizeContentHtml(contentHtml || ''),
+        published: !!published,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      await db.collection('pages').insertOne({ ...doc });
+      return json({ ok: true, page: doc });
     }
 
     // AI generation endpoints removed. Kept path to return a clean 410.

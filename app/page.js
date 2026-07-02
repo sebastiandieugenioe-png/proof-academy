@@ -1,12 +1,14 @@
 'use client'
 
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import {
   GlassWater, Flame, Sparkles, ChevronRight, ChevronLeft, Check, X,
   BookOpen, Brain, Layers, Target, Loader2, LogOut, User as UserIcon,
   Home, Wrench, ArrowRight, PartyPopper, Repeat, TrendingUp,
+  Zap, StopCircle, Timer, Award,
 } from 'lucide-react'
 
+const APP_BUILD = 'Admin Changes v1.1'
 const ICONS = { Flame, GlassWater, Sparkles }
 
 const api = async (path, opts = {}) => {
@@ -61,14 +63,21 @@ function App() {
         {route.name === 'dashboard' && <Dashboard user={user} courses={courses} onNav={go} />}
         {route.name === 'course' && <CourseView slug={route.slug} onNav={go} user={user} />}
         {route.name === 'lesson' && <LessonView courseSlug={route.courseSlug} lessonSlug={route.lessonSlug} user={user} onNav={go} />}
-        {route.name === 'reviews' && <ReviewsView user={user} onNav={go} />}
+        {route.name === 'study' && <StudyView user={user} onNav={go} />}
         {route.name === 'profile' && <ProfileView user={user} setUser={setUser} onNav={go} />}
         </div>
       </main>
       <BottomNav user={user} route={route} onNav={go} />
+      <SiteFooter />
     </div>
   )
 }
+
+const SiteFooter = () => (
+  <div className="pointer-events-none fixed bottom-1 right-2 z-40 md:bottom-2 md:right-3 text-[10px] text-slate-400/70 font-mono tracking-tight select-none">
+    Build: {APP_BUILD}
+  </div>
+)
 
 const FullPageLoader = () => (
   <div className="min-h-screen grid place-items-center text-slate-500"><Loader2 className="h-6 w-6 animate-spin" /></div>
@@ -88,7 +97,7 @@ const TopBar = ({ user, onNav, onLogout }) => (
       <nav className="flex items-center gap-1">
         {user ? (
           <>
-            <button onClick={() => onNav({ name: 'reviews' })} className="hidden md:inline-flex text-sm px-3 h-9 items-center rounded-md hover:bg-slate-100 text-slate-700">Reviews</button>
+            <button onClick={() => onNav({ name: 'study' })} className="hidden md:inline-flex text-sm px-3 h-9 items-center rounded-md hover:bg-slate-100 text-slate-700">Study</button>
             <button onClick={() => onNav({ name: 'profile' })} className="hidden md:inline-flex text-sm px-3 h-9 items-center rounded-md hover:bg-slate-100 text-slate-700">Profile</button>
             <button onClick={onLogout} className="text-sm px-3 h-9 inline-flex items-center gap-1.5 rounded-md hover:bg-slate-100 text-slate-600"><LogOut className="h-4 w-4" /><span className="hidden sm:inline">Log out</span></button>
           </>
@@ -104,7 +113,7 @@ const BottomNav = ({ user, route, onNav }) => {
   if (!user) return null
   const items = [
     { key: 'dashboard', icon: Home, label: 'Home' },
-    { key: 'reviews', icon: Repeat, label: 'Reviews' },
+    { key: 'study', icon: Brain, label: 'Study' },
     { key: 'profile', icon: UserIcon, label: 'Profile' },
   ]
   return (
@@ -146,7 +155,7 @@ const Landing = ({ courses, onCta }) => (
     <section className="grid gap-4 md:grid-cols-4">
       {[
         { icon: Brain, title: 'Active recall', body: 'Embedded questions and quizzes proven to strengthen memory.' },
-        { icon: Repeat, title: 'Spaced repetition', body: 'Anki-inspired reviews that surface cards right before you forget.' },
+        { icon: Repeat, title: 'Spaced repetition', body: 'Anki-inspired study sessions that surface cards right before you forget.' },
         { icon: Layers, title: 'Microlearning', body: '3–5 minute lessons that fit between shifts, classes, or coffees.' },
         { icon: Target, title: 'For real bartenders', body: 'Built for barbacks, waiters, students — the pros of tomorrow.' },
       ].map((f, i) => (
@@ -265,7 +274,7 @@ const Dashboard = ({ user, courses, onNav }) => {
       <div className="grid gap-4 md:grid-cols-3">
         <StatCard label="Lessons completed" value={stats?.lessonsCompleted ?? 0} icon={BookOpen} />
         <StatCard label="Flashcards learned" value={stats?.flashcardsLearned ?? 0} icon={Layers} />
-        <StatCard label="Reviews due today" value={stats?.reviewsDue ?? 0} icon={Repeat} highlight={stats?.reviewsDue > 0} onClick={stats?.reviewsDue ? () => onNav({ name: 'reviews' }) : undefined} />
+        <StatCard label="Cards to study" value={stats?.reviewsDue ?? 0} icon={Brain} highlight={stats?.reviewsDue > 0} onClick={() => onNav({ name: 'study' })} />
       </div>
       {continueLesson && (
         <div className="rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-5 md:p-6 flex flex-wrap items-center justify-between gap-4">
@@ -505,7 +514,7 @@ const StepFlashcards = ({ lesson, onNext }) => {
       <section className="rounded-2xl border border-slate-200 bg-white p-6 md:p-8 text-center">
         <Layers className="h-6 w-6 text-blue-600 mx-auto" />
         <h3 className="mt-3 text-lg font-semibold text-slate-900">All flashcards reviewed</h3>
-        <p className="mt-1 text-sm text-slate-600">They will now enter your spaced-repetition queue for daily reviews.</p>
+        <p className="mt-1 text-sm text-slate-600">They will now enter your spaced-repetition queue for daily study.</p>
         <button onClick={onNext} className="mt-6 h-11 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium inline-flex items-center gap-2">Take the quiz <ArrowRight className="h-4 w-4" /></button>
       </section>
     )
@@ -608,7 +617,7 @@ const StepDone = ({ lesson, next, courseSlug, onNav, user }) => {
       <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 md:p-8 text-center">
         <PartyPopper className="h-6 w-6 text-emerald-600 mx-auto" />
         <h3 className="mt-3 text-2xl font-semibold text-slate-900">Lesson complete</h3>
-        <p className="mt-1 text-sm text-slate-700">Your flashcards are now in the review queue. Come back tomorrow to keep them fresh.</p>
+        <p className="mt-1 text-sm text-slate-700">Your flashcards are now in the study queue. Come back tomorrow to keep them fresh.</p>
         <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
           {next && (
             <button onClick={() => onNav({ name: 'lesson', courseSlug, lessonSlug: next.slug })} className="h-11 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium inline-flex items-center gap-2">Next: {next.title} <ArrowRight className="h-4 w-4" /></button>
@@ -637,67 +646,154 @@ const StepDone = ({ lesson, next, courseSlug, onNav, user }) => {
   )
 }
 
-const ReviewsView = ({ user, onNav }) => {
-  const [cards, setCards] = useState([])
-  const [i, setI] = useState(0)
+const StudyView = ({ user, onNav }) => {
+  const [card, setCard] = useState(null)
+  const [source, setSource] = useState(null)
+  const [stats, setStats] = useState({ due: 0, weak: 0, total: 0, remainingDue: 0 })
   const [flipped, setFlipped] = useState(false)
   const [loading, setLoading] = useState(true)
-  useEffect(() => {
+  const [done, setDone] = useState(false)
+  const [ended, setEnded] = useState(false)
+  const [includeNew, setIncludeNew] = useState(true)
+  const [session, setSession] = useState({ studied: 0, correct: 0, again: 0, hard: 0, startedAt: Date.now(), estimatedNextReviews: [] })
+  const seenIds = useRef(new Set())
+
+  const load = useCallback(async (opts = {}) => {
     if (!user) return
     setLoading(true)
-    api('/reviews/due', { userId: user.id }).then((r) => { setCards(r); setLoading(false) })
-  }, [user])
+    try {
+      const exclude = [...seenIds.current].join(',')
+      const qs = new URLSearchParams()
+      if (exclude) qs.set('exclude', exclude)
+      if (opts.includeNew ?? includeNew) qs.set('includeNew', '1')
+      const r = await api(`/study/next?${qs}`, { userId: user.id })
+      if (r.done) {
+        setDone(true); setCard(null); setSource(null)
+        setStats(r.stats || stats)
+      } else {
+        setCard(r.card); setSource(r.source); setStats(r.stats); setDone(false)
+        setFlipped(false)
+      }
+    } catch (e) { console.error(e) } finally { setLoading(false) }
+  }, [user, includeNew])
+
+  useEffect(() => { if (user) load() }, [user, load])
+
   const answer = async (grade) => {
-    const card = cards[i]
-    try { await api('/reviews/answer', { method: 'POST', body: { userId: user.id, reviewId: card.id, grade } }) } catch (e) { console.error(e) }
-    setFlipped(false); setI(i + 1)
+    if (!card) return
+    seenIds.current.add(card.id)
+    try {
+      const r = await api('/reviews/answer', { method: 'POST', body: { userId: user.id, reviewId: card.id, grade } })
+      const nextReview = r?.card?.dueAt ? new Date(r.card.dueAt) : null
+      setSession((s) => ({
+        ...s,
+        studied: s.studied + 1,
+        correct: s.correct + (grade === 'easy' ? 1 : 0),
+        hard: s.hard + (grade === 'hard' ? 1 : 0),
+        again: s.again + (grade === 'again' ? 1 : 0),
+        estimatedNextReviews: nextReview ? [...s.estimatedNextReviews.slice(-9), nextReview] : s.estimatedNextReviews,
+      }))
+    } catch (e) { console.error(e) }
+    await load()
   }
-  if (loading) return <FullPageLoader />
-  if (cards.length === 0) {
+
+  const endSession = () => setEnded(true)
+
+  const minutes = Math.max(1, Math.round((Date.now() - session.startedAt) / 60000))
+
+  // Session summary after user ends OR when everything is exhausted
+  if (ended || (done && session.studied > 0)) {
+    const avgAcc = session.studied ? Math.round(((session.correct + session.hard) / session.studied) * 100) : 0
+    return (
+      <div className="max-w-lg mx-auto text-center pt-8 md:pt-16 space-y-5">
+        <Award className="h-9 w-9 text-blue-600 mx-auto" />
+        <h1 className="text-2xl md:text-3xl font-semibold text-slate-900">Great study session</h1>
+        <p className="text-slate-600">You studied {session.studied} card{session.studied === 1 ? '' : 's'} in {minutes} minute{minutes === 1 ? '' : 's'}.</p>
+        <div className="grid grid-cols-3 gap-3 text-center max-w-md mx-auto">
+          <div className="rounded-xl border border-slate-200 bg-white p-4"><div className="text-2xl font-semibold text-emerald-600">{session.correct}</div><div className="text-xs uppercase tracking-wide text-slate-500 mt-1">Easy</div></div>
+          <div className="rounded-xl border border-slate-200 bg-white p-4"><div className="text-2xl font-semibold text-amber-600">{session.hard}</div><div className="text-xs uppercase tracking-wide text-slate-500 mt-1">Hard</div></div>
+          <div className="rounded-xl border border-slate-200 bg-white p-4"><div className="text-2xl font-semibold text-red-500">{session.again}</div><div className="text-xs uppercase tracking-wide text-slate-500 mt-1">Again</div></div>
+        </div>
+        <div className="text-sm text-slate-600">Recall accuracy: <strong>{avgAcc}%</strong></div>
+        {session.estimatedNextReviews.length > 0 && (
+          <div className="text-xs text-slate-500">Next reviews scheduled from <strong>{new Date(Math.min(...session.estimatedNextReviews.map((d) => new Date(d).getTime()))).toLocaleDateString()}</strong> onwards.</div>
+        )}
+        <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+          <button onClick={() => { seenIds.current.clear(); setSession({ studied: 0, correct: 0, again: 0, hard: 0, startedAt: Date.now(), estimatedNextReviews: [] }); setEnded(false); setDone(false); load() }} className="h-11 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium inline-flex items-center gap-2">Keep studying <ArrowRight className="h-4 w-4" /></button>
+          <button onClick={() => onNav({ name: 'dashboard' })} className="h-11 px-6 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-medium">Back to dashboard</button>
+        </div>
+      </div>
+    )
+  }
+
+  if (loading && !card) return <FullPageLoader />
+
+  if (done && session.studied === 0) {
     return (
       <div className="max-w-lg mx-auto text-center pt-8 md:pt-16">
         <TrendingUp className="h-8 w-8 text-blue-600 mx-auto" />
-        <h1 className="mt-3 text-2xl font-semibold text-slate-900">You’re all caught up.</h1>
-        <p className="mt-2 text-slate-600">No reviews due right now. Complete a lesson to add new flashcards.</p>
+        <h1 className="mt-3 text-2xl font-semibold text-slate-900">Nothing to study right now.</h1>
+        <p className="mt-2 text-slate-600">Complete a lesson to add new flashcards. Your due cards will show up here.</p>
         <button onClick={() => onNav({ name: 'dashboard' })} className="mt-6 h-11 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium">Back to dashboard</button>
       </div>
     )
   }
-  if (i >= cards.length) {
-    return (
-      <div className="max-w-lg mx-auto text-center pt-8 md:pt-16">
-        <PartyPopper className="h-8 w-8 text-emerald-600 mx-auto" />
-        <h1 className="mt-3 text-2xl font-semibold text-slate-900">Reviews done for today.</h1>
-        <p className="mt-2 text-slate-600">Consistency beats intensity. See you tomorrow.</p>
-        <button onClick={() => onNav({ name: 'dashboard' })} className="mt-6 h-11 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium">Back to dashboard</button>
-      </div>
-    )
-  }
-  const c = cards[i]
+
+  if (!card) return <FullPageLoader />
+
+  const sourceBadge = ({
+    due: { label: 'Due today', className: 'bg-blue-50 text-blue-700 border-blue-200' },
+    weak: { label: 'Weak card', className: 'bg-amber-50 text-amber-700 border-amber-200' },
+    recent: { label: 'Recently learned', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+    random: { label: 'Refresh', className: 'bg-slate-50 text-slate-600 border-slate-200' },
+    new: { label: 'New card', className: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+  })[source] || { label: source || 'Card', className: 'bg-slate-50 text-slate-600 border-slate-200' }
+
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      <div className="flex items-center justify-between text-xs font-medium uppercase tracking-wide text-blue-700">
-        <div>Today’s reviews</div>
-        <div className="text-slate-500">{i + 1} / {cards.length}</div>
+    <div className="max-w-2xl mx-auto space-y-5">
+      {/* Session header */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="text-xs font-medium uppercase tracking-wide text-blue-700 flex items-center gap-1.5"><Brain className="h-3.5 w-3.5" /> Study session</div>
+          <div className="mt-0.5 text-xs text-slate-500">
+            {session.studied} studied · <span className="text-emerald-600">{session.correct} easy</span> · <span className="text-amber-600">{session.hard} hard</span> · <span className="text-red-500">{session.again} again</span> · <Timer className="inline h-3 w-3 -mt-0.5" /> {minutes}m
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="hidden sm:inline-flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer select-none">
+            <input type="checkbox" checked={includeNew} onChange={(e) => setIncludeNew(e.target.checked)} className="h-3.5 w-3.5 accent-blue-600" />
+            Include new cards
+          </label>
+          <button onClick={endSession} className="h-9 px-3 rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs inline-flex items-center gap-1.5"><StopCircle className="h-3.5 w-3.5" /> End study session</button>
+        </div>
       </div>
-      <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
-        <div className="h-full bg-blue-600 transition-all" style={{ width: `${((i) / cards.length) * 100}%` }} />
+
+      {/* Priority indicator */}
+      <div className="flex flex-wrap items-center gap-2 text-[11px]">
+        <span className={`px-2 py-0.5 rounded-full border ${sourceBadge.className}`}>{sourceBadge.label}</span>
+        {stats.due > 0 && <span className="text-slate-500">· {stats.due} due today</span>}
+        {stats.weak > 0 && <span className="text-slate-500">· {stats.weak} weak</span>}
+        {stats.total > 0 && <span className="text-slate-400">· {stats.total} in queue</span>}
+        {card.courseTitle && <span className="ml-auto text-slate-400 truncate max-w-[45%]">{card.courseTitle} · {card.lessonTitle}</span>}
       </div>
+
+      {/* Card */}
       <button onClick={() => setFlipped((f) => !f)} className="w-full min-h-[260px] rounded-2xl border border-slate-200 bg-white p-8 grid place-items-center text-center shadow-sm">
         <div>
           {!flipped ? (
             <>
               <div className="text-xs uppercase tracking-wide text-slate-500 mb-3">Question · tap to reveal</div>
-              <div className="text-xl font-medium text-slate-900 leading-snug">{c.front}</div>
+              <div className="text-xl font-medium text-slate-900 leading-snug">{card.front}</div>
             </>
           ) : (
             <>
               <div className="text-xs uppercase tracking-wide text-blue-700 mb-3">Answer</div>
-              <div className="text-xl font-medium text-slate-900 leading-snug">{c.back}</div>
+              <div className="text-xl font-medium text-slate-900 leading-snug">{card.back}</div>
             </>
           )}
         </div>
       </button>
+
       {flipped ? (
         <div className="grid grid-cols-3 gap-2 md:gap-3">
           <button onClick={() => answer('again')} className="h-14 rounded-xl bg-red-500 hover:bg-red-600 text-white font-medium">Again</button>

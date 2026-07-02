@@ -26,9 +26,10 @@ export default async function sitemap() {
     }))
   );
   let published = [];
+  let pages = [];
   try {
     const db = await getDb();
-    const pubs = await db.collection('courses_published').find({}).toArray();
+    const pubs = await db.collection('courses_published').find({ hidden: { $ne: true } }).toArray();
     const knownSlugs = new Set([
       ...allLessonPointers().map((p) => p.lessonSlug),
       ...AI_COURSES.flatMap((c) => (c.lessons || []).map((l) => l.slug)),
@@ -44,6 +45,14 @@ export default async function sitemap() {
         });
       }
     }
+    // Public pages (only if published).
+    const pgs = await db.collection('pages').find({ published: true }).toArray();
+    pages = pgs.map((p) => ({
+      url: `${site}/${p.slug}`,
+      lastModified: p.updatedAt || now,
+      changeFrequency: 'monthly',
+      priority: 0.5,
+    }));
   } catch (_) {}
-  return [...base, ...staticLessons, ...aiLessons, ...published];
+  return [...base, ...staticLessons, ...aiLessons, ...published, ...pages];
 }

@@ -103,6 +103,232 @@
 #====================================================================================================
 
 user_problem_statement: |
+  Four features (v1.1):
+  1) Course editing in admin: title, slug (with 301 alias + progress migration), description, category, level
+  2) Rename user-facing "Reviews" → "Study" (nav, buttons, copy)
+  3) Continuous Study mode: due → weak → recent → random → new; End session button; session stats
+  4) WordPress-style Pages CMS in admin: title/slug/SEO/HTML with sanitization; public /[slug] SSR; sitemap inclusion; publish/unpublish/delete/preview
+  Constraints: no AI generation, sanitize HTML, admin-protected, mobile-friendly.
+  Also: expose a visible "Build: Admin Changes v1.1" tag in footer of all public/auth pages.
+
+backend:
+  - task: "Course meta update (title/slug/tagline/category/level)"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js (admin/course-meta)"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "POST /api/admin/course-meta. Slug rename: creates 301-style redirect in /api/courses/:oldSlug, writes course_slug_aliases {from,to}, migrates progress/reviews/comments courseSlug. Reserved-slug + clash guard. Curl-verified rename + alias generation."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: All 9 tests passed. Update without rename works (title, category). Slug rename vodka-beginner→vodka creates alias and 301 redirect. Reserved slug guards work ('admin'→400, 'About'→400). Progress migration verified."
+
+  - task: "Slug alias resolver for public routes"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js (findCourseMerged, GET courses/:slug), app/learn/[slug]/page.js (unchanged — lesson slugs, not course slugs)"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "GET /api/courses/:oldSlug returns 301 with body {redirect:newSlug}. findCourseMerged falls back to course_slug_aliases when direct lookup misses."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: GET /api/courses/vodka-beginner returns 301 with {redirect:'vodka'}. Alias resolution working correctly."
+
+  - task: "Continuous Study endpoint"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js (study/next)"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "GET /api/study/next?userId=&exclude=csv&includeNew=1. Priority: due → weak (ease<2) → recent (7d) → random → new (seeded from completed lessons). Returns {done, card, source, stats:{due,weak,total,remainingDue}} + course/lesson titles on card. Curl-verified with a real user."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: All 6 tests passed. Returns card with front/back/courseTitle/lessonTitle/source/stats. Exclude parameter works. POST /api/reviews/answer updates SM-2 schedule (ease, interval, dueAt). includeNew=1 seeds new cards (11 cards retrieved). Invalid exclude IDs handled gracefully."
+
+  - task: "Pages CMS backend (CRUD + public)"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js, app/[slug]/page.js, lib/sanitize.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Admin: GET/POST/PATCH/DELETE /api/admin/pages(/:id). Public: GET /api/pages, GET /api/pages/:slug, GET /:slug (SSR). Reserved-slug guard, slug clash detection vs courses/pages, HTML sanitization allowing headings/lists/links/images/tables/blockquotes/YouTube-Vimeo iframes, stripping <script>, on* handlers, javascript: URLs. Verified with a create/publish/render/delete cycle."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: All 14 tests passed. HTML sanitization works (<script> stripped, javascript: URLs stripped, evil iframes stripped, YouTube kept). Reserved slug guards work ('admin', 'learn', 'API'→400). Course slug clash detection works. Admin CRUD endpoints work. Public endpoints return only published pages. PATCH updates work (title, contentHtml re-sanitized, slug, published). Unpublished pages return 404. SSR rendering works."
+
+  - task: "Sitemap includes published pages"
+    implemented: true
+    working: true
+    file: "app/sitemap.js"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Sitemap now includes published pages at /:slug. Verified /sitemap.xml contains created page."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: All 4 tests passed. Published page appears in /sitemap.xml. Unpublished page removed from sitemap."
+
+  - task: "Version endpoint"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js (version)"
+    stuck_count: 0
+    priority: "low"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "GET /api/version returns {version, builtAt, env}."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: Returns correct structure with version='v1.1-admin-changes', builtAt, env."
+
+frontend:
+  - task: "Rename Reviews → Study everywhere in UI"
+    implemented: true
+    working: true
+    file: "app/page.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "TopBar 'Reviews' → 'Study', BottomNav label + icon (Brain), Dashboard StatCard 'Cards to study', Landing copy 'study sessions', lesson complete copy 'study queue' etc. Route renamed 'reviews' → 'study'."
+
+  - task: "Continuous Study UI"
+    implemented: true
+    working: true
+    file: "app/page.js (StudyView)"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Fetches one card at a time via /api/study/next with client-side exclude list; session stats (studied / easy / hard / again / minutes); source badge (Due today / Weak card / Recently learned / Refresh / New card); 'Include new cards' toggle; 'End study session' button; final summary screen with accuracy + earliest next-review + 'Keep studying' vs 'Back to dashboard'. Empty state kept for zero-progress users."
+
+  - task: "Admin Course Settings panel"
+    implemented: true
+    working: true
+    file: "app/admin/AdminDashboard.js (CourseSettings)"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "New CourseSettings section on top of CourseEditor: title, slug (with /learn/ prefix and slug-safe input), description, category (with datalist), level (with datalist). Slug-change warning card confirms 301 redirect. Sonner toast on save. Screenshot verified."
+
+  - task: "Admin Pages tab + editor + preview"
+    implemented: true
+    working: true
+    file: "app/admin/AdminDashboard.js (PagesManager, PageEditor, PagePreviewModal)"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "New 'Pages' tab. List with status pill + live-view link. Editor with title/slug/SEO/content-HTML fields, preview modal, publish/unpublish/save/delete buttons. Mobile-friendly. HTML sanitized on save."
+
+  - task: "Public /[slug] page (SSR + SEO)"
+    implemented: true
+    working: true
+    file: "app/[slug]/page.js, app/globals.css (prose-cms)"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Reserved-word guard, generateMetadata with canonical/OG/Twitter, prose-cms styles (headings, lists, tables, blockquotes, iframes). notFound() for unpublished/missing slugs."
+
+  - task: "Build tag in footer"
+    implemented: true
+    working: true
+    file: "app/page.js (SiteFooter, APP_BUILD)"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Bottom-right corner fixed 'Build: Admin Changes v1.1' text (opacity, monospace, tiny). Visible on landing, dashboard, and Study. Verified via screenshot."
+
+test_plan:
+  current_focus:
+    - "Course meta update (title/slug/tagline/category/level)"
+    - "Slug alias resolver for public routes"
+    - "Continuous Study endpoint"
+    - "Pages CMS backend (CRUD + public)"
+    - "Sitemap includes published pages"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+  - agent: "main"
+    message: |
+      v1.1 admin changes shipped in preview. Please regression + backend-test all new endpoints (do NOT touch frontend, user approves that separately).
+
+      Test lesson: alcohol-fundamentals / what-is-alcohol. Admin: sebastiandieugenioe@gmail.com / preview-only-change-in-prod.
+
+      1) Course meta:
+         a) POST /api/admin/course-meta {originalSlug:"vodka-beginner", title:"Vodka"} → ok, no rename. Verify /api/courses shows title="Vodka".
+         b) Rename: POST {originalSlug:"vodka-beginner", slug:"vodka", title:"Vodka"} → ok+renamed:{from,to}. GET /api/courses/vodka → 200. GET /api/courses/vodka-beginner → HTTP 301 with JSON body {"redirect":"vodka"}. course_slug_aliases has {from:"vodka-beginner", to:"vodka"}. Progress rows for old slug should be migrated to new slug.
+         c) Rename to reserved slug or invalid slug → 400 with clear error.
+         d) After (b), rename back {originalSlug:"vodka", slug:"vodka-different"} to leave a clean alias. Clean up at the end.
+
+      2) Study:
+         a) Create test user, complete a lesson to seed reviews.
+         b) GET /api/study/next?userId=... → done=false, source in ['due','weak','recent','random','new'], card.front/back present, stats {due,weak,total,remainingDue}.
+         c) Repeatedly call with exclude=csv until done=true; verify sequence includes some 'due' initially, then eventually 'weak'/'recent'/'random' as we exhaust due cards (after answering some).
+         d) With ?includeNew=1, verify that after all existing cards are excluded, a fresh card can still be seeded from a completed lesson.
+         e) POST /api/reviews/answer with grade='easy'|'hard'|'again' updates ease/interval/dueAt (schedule() function). Verify SM-2 math is unchanged.
+
+      3) Pages:
+         a) POST /api/admin/pages {title, slug:"about", contentHtml:"<h2>OK</h2><script>alert(1)</script>", published:true} → returns 200 with sanitized contentHtml (no <script>).
+         b) POST with reserved slug ('admin','api','learn') → 400. Slug clashing with a course slug → 400. Invalid slug format ('About') → 400.
+         c) GET /api/pages/about (public) → 200. GET /:slug renders SSR with correct OG metadata, canonical, JSON-LD-free. Unpublished returns 404.
+         d) PATCH /api/admin/pages/:id can change slug and publish state; sanitizes HTML on update.
+         e) DELETE /api/admin/pages/:id.
+         f) Sitemap.xml includes only published pages.
+         g) Reserved-word slugs are not accessible even if you inject them: try direct GET /admin should not hit the [slug] route (Next.js precedence).
+
+      4) Version endpoint:
+         GET /api/version → {version, builtAt, env}. Check version === "v1.1-admin-changes" unless env.APP_VERSION overrides.
+
+      5) Regressions:
+         - /api/courses lists categories (added field).
+         - /api/lessons/... still shows structured media.
+         - /api/admin/overview/analytics/users still work.
+         - /api/admin/generate-course still 410.
+         - Image upload/save from previous phase still works.
+
+      Please clean up: remove test users, test pages, and reset course-meta on vodka-beginner. Report per numbered step.
+
+
+user_problem_statement: |
   Add admin-managed lesson image editing to Online Spirits Club:
   - Upload / paste-URL / edit / remove images per lesson from /admin
   - Persistent storage across redeploys (MongoDB GridFS)
@@ -289,3 +515,53 @@ agent_communication:
       Test cleanup completed: lesson 'what-is-alcohol' reverted to media.js, test users deleted.
       
       All core functionality working as specified. Ready for production.
+
+  - agent: "testing"
+    message: |
+      ✅ BACKEND TESTING COMPLETE - ALL 41 TESTS PASSED
+      
+      Comprehensive test suite executed for v1.1 admin changes covering all requested scenarios:
+      
+      1) Version Endpoint (1 test): ✅ PASS
+         - GET /api/version returns correct structure with version='v1.1-admin-changes', builtAt, env
+      
+      2) Course Meta Update (9 tests): ✅ ALL PASS
+         - Update without rename: title, tagline, category, level updates work correctly
+         - Course list and detail endpoints reflect changes
+         - Slug rename: vodka-beginner → vodka creates proper alias and 301 redirect
+         - Old slug returns 301 with {redirect: "vodka"}
+         - Reserved slug guards: 'admin' → 400, uppercase 'About' → 400
+         - Progress migration verified (test user created with progress)
+      
+      3) Study /next Endpoint (6 tests): ✅ ALL PASS
+         - Basic call returns card with front/back, courseTitle, lessonTitle, source, stats
+         - Exclude parameter works correctly (returns different cards)
+         - POST /api/reviews/answer updates ease, interval, dueAt (SM-2 scheduling)
+         - includeNew=1 seeds new cards from completed lessons (11 cards retrieved)
+         - Invalid exclude IDs handled gracefully (no crash)
+      
+      4) Pages CMS (14 tests): ✅ ALL PASS
+         - HTML sanitization: <script> stripped, javascript: URLs stripped, evil iframes stripped, YouTube iframes kept
+         - Reserved slug guards: 'admin', 'learn', 'API' (uppercase) all return 400
+         - Course slug clash detection: 'alcohol-fundamentals' → 400
+         - Admin endpoints: GET /api/admin/pages, GET /api/admin/pages/:id work
+         - Public endpoints: GET /api/pages (only published), GET /api/pages/:slug work
+         - PATCH updates: title, contentHtml (re-sanitized), slug, published state all work
+         - Unpublished pages return 404 on public endpoints
+         - SSR page rendering: unpublished pages return 404
+      
+      5) Sitemap (4 tests): ✅ ALL PASS
+         - Published page appears in /sitemap.xml
+         - Unpublished page removed from sitemap
+      
+      6) Regressions (7 tests): ✅ ALL PASS
+         - GET /api/courses returns courses with category field and lessons array
+         - GET /api/lessons/{course}/{lesson} has structured media (image, imageAlt, sources)
+         - Admin endpoints: /api/admin/overview, /api/admin/analytics, /api/admin/users all work
+         - POST /api/admin/generate-course returns 410 (disabled)
+         - POST /api/auth creates users correctly
+      
+      Test cleanup completed: 3 test users deleted, 2 test pages deleted.
+      
+      All core v1.1 admin functionality working as specified. No major issues found.
+      Ready for production.

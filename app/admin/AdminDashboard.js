@@ -6,7 +6,7 @@ import {
   ArrowLeft, ChevronDown, ChevronRight, Check, X, Trash2, Send, Undo2, Eye,
   Loader2, LogOut, MessageSquare, Users as UsersIcon, Mail, BookOpen, Plus,
   BarChart3, TrendingUp, Search, Download, Save, AlertCircle, Filter,
-  ImageIcon, Upload, Link2, RefreshCcw,
+  ImageIcon, Upload, Link2, RefreshCcw, FileText, Globe, Settings, Copy,
 } from 'lucide-react'
 
 const api = async (path, opts = {}) => {
@@ -25,6 +25,7 @@ const TABS = [
   { key: 'overview', label: 'Overview', icon: BarChart3 },
   { key: 'learning', label: 'Learning', icon: TrendingUp },
   { key: 'courses', label: 'Courses', icon: BookOpen },
+  { key: 'pages', label: 'Pages', icon: FileText },
   { key: 'comments', label: 'Comments', icon: MessageSquare },
   { key: 'users', label: 'Users', icon: UsersIcon },
   { key: 'newsletter', label: 'Newsletter', icon: Mail },
@@ -71,7 +72,8 @@ export default function AdminDashboard({ adminEmail }) {
       <main className="mx-auto max-w-6xl px-4 py-6">
         {tab === 'overview' && <Overview />}
         {tab === 'learning' && <LearningAnalytics />}
-        {tab === 'courses' && (openCourse ? <CourseEditor slug={openCourse} onBack={() => setOpenCourse(null)} /> : <CoursesList onOpen={setOpenCourse} />)}
+        {tab === 'courses' && (openCourse ? <CourseEditor slug={openCourse} onBack={() => setOpenCourse(null)} onSlugChanged={(next) => setOpenCourse(next)} /> : <CoursesList onOpen={setOpenCourse} />)}
+        {tab === 'pages' && <PagesManager />}
         {tab === 'comments' && <CommentsView />}
         {tab === 'users' && (openUser ? <UserDetail id={openUser} onBack={() => setOpenUser(null)} /> : <UsersView onOpen={setOpenUser} />)}
         {tab === 'newsletter' && <NewsletterView />}
@@ -264,7 +266,7 @@ function CoursesList({ onOpen }) {
   )
 }
 
-function CourseEditor({ slug, onBack }) {
+function CourseEditor({ slug, onBack, onSlugChanged }) {
   const [course, setCourse] = useState(null)
   const [lessons, setLessons] = useState({})
   const [openIdx, setOpenIdx] = useState(-1)
@@ -289,7 +291,7 @@ function CourseEditor({ slug, onBack }) {
     } catch (e) { alert(e.message) } finally { setSaving(false) }
   }
   const publishToggle = async (published) => {
-    try { await api('/admin/course-publish', { method: 'POST', body: { slug, published } }); alert(published ? 'Published' : 'Unpublished') } catch (e) { alert(e.message) }
+    try { await api('/admin/course-publish', { method: 'POST', body: { slug, published } }); toast.success(published ? 'Course published' : 'Course hidden') } catch (e) { toast.error(e.message) }
   }
   if (!course) return <Spinner />
   return (
@@ -299,13 +301,22 @@ function CourseEditor({ slug, onBack }) {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{course.title}</h1>
           <p className="text-sm text-slate-500">{course.tagline}</p>
-          <p className="text-xs text-slate-400 mt-1">{course.lessons.length} lessons · {course.level}</p>
+          <p className="text-xs text-slate-400 mt-1">{course.lessons.length} lessons · {course.level}{course.category ? ` · ${course.category}` : ''}</p>
         </div>
         <div className="flex gap-2 items-center">
           {saving && <span className="text-xs text-slate-400 inline-flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> saving</span>}
           <button onClick={() => publishToggle(false)} className="h-9 px-3 rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-sm text-slate-700 inline-flex items-center gap-1.5"><Undo2 className="h-3.5 w-3.5" /> Hide</button>
           <button onClick={() => publishToggle(true)} className="h-9 px-3 rounded-md bg-purple-600 hover:bg-purple-700 text-white text-sm inline-flex items-center gap-1.5"><Send className="h-3.5 w-3.5" /> Publish</button>
         </div>
+      </div>
+
+      <CourseSettings course={course} onSaved={(updated, renamed) => {
+        setCourse((c) => ({ ...c, ...updated }))
+        if (renamed?.to && onSlugChanged) onSlugChanged(renamed.to)
+      }} />
+
+      <div className="pt-2">
+        <h2 className="text-sm font-medium text-slate-600 uppercase tracking-wide mb-2">Lessons</h2>
       </div>
       <ol className="space-y-2">
         {course.lessons.map((l, i) => (
@@ -320,11 +331,96 @@ function CourseEditor({ slug, onBack }) {
               {openIdx === i ? <ChevronDown className="h-4 w-4 text-slate-400" /> : <ChevronRight className="h-4 w-4 text-slate-400" />}
             </button>
             {openIdx === i && lessons[l.slug] && (
-              <LessonEditor courseSlug={slug} lesson={lessons[l.slug]} onSave={(next) => patchLesson(l.slug, next)} onImageUpdated={(img) => setLessons((m) => ({ ...m, [l.slug]: { ...(m[l.slug] || {}), image: img } }))} />
+              <LessonEditor courseSlug={course.slug} lesson={lessons[l.slug]} onSave={(next) => patchLesson(l.slug, next)} onImageUpdated={(img) => setLessons((m) => ({ ...m, [l.slug]: { ...(m[l.slug] || {}), image: img } }))} />
             )}
           </li>
         ))}
       </ol>
+    </div>
+  )
+}
+
+/* ================ COURSE SETTINGS PANEL ================ */
+function CourseSettings({ course, onSaved }) {
+  const [title, setTitle] = useState(course.title || '')
+  const [slug, setSlug] = useState(course.slug || '')
+  const [tagline, setTagline] = useState(course.tagline || '')
+  const [category, setCategory] = useState(course.category || '')
+  const [level, setLevel] = useState(course.level || 'Beginner')
+  const [saving, setSaving] = useState(false)
+  const [showRenameWarn, setShowRenameWarn] = useState(false)
+
+  useEffect(() => {
+    setTitle(course.title || ''); setSlug(course.slug || ''); setTagline(course.tagline || '')
+    setCategory(course.category || ''); setLevel(course.level || 'Beginner')
+  }, [course])
+
+  const dirty = title !== (course.title || '') || slug !== (course.slug || '') || tagline !== (course.tagline || '') || category !== (course.category || '') || level !== (course.level || 'Beginner')
+  const slugChanged = slug !== (course.slug || '')
+
+  const save = async () => {
+    if (slugChanged && !showRenameWarn) { setShowRenameWarn(true); return }
+    setSaving(true)
+    try {
+      const r = await api('/admin/course-meta', {
+        method: 'POST',
+        body: { originalSlug: course.slug, title, slug, tagline, category, level },
+      })
+      toast.success(r.renamed ? `Course renamed. Old URL redirects to /learn/${r.renamed.to} (301).` : 'Course settings saved.')
+      onSaved?.({ title, slug: r.renamed?.to || slug, tagline, category, level }, r.renamed)
+      setShowRenameWarn(false)
+    } catch (e) { toast.error(e.message) } finally { setSaving(false) }
+  }
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4 md:p-5">
+      <div className="flex items-center gap-2 mb-3">
+        <div className="h-9 w-9 rounded-lg bg-blue-50 text-blue-700 grid place-items-center"><Settings className="h-4.5 w-4.5" /></div>
+        <div>
+          <div className="font-semibold text-slate-900 text-sm">Course settings</div>
+          <div className="text-[11px] text-slate-500">These changes propagate to landing, dashboard, SEO pages and sitemap.</div>
+        </div>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <F label="Title"><input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm bg-white" /></F>
+        <F label={<>Slug <span className="text-slate-400 font-normal">(URL path)</span></>}>
+          <div className="flex items-center gap-1">
+            <div className="h-10 rounded-l-lg border border-r-0 border-slate-200 bg-slate-50 px-2 text-xs text-slate-500 inline-flex items-center">/learn/</div>
+            <input value={slug} onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-'))} maxLength={80} className="flex-1 h-10 rounded-r-lg border border-slate-200 px-3 text-sm font-mono bg-white" />
+          </div>
+        </F>
+        <F label="Description / tagline" className="md:col-span-2">
+          <textarea value={tagline} onChange={(e) => setTagline(e.target.value)} rows={2} maxLength={400} className="w-full rounded-lg border border-slate-200 p-2.5 text-sm bg-white" />
+        </F>
+        <F label="Category">
+          <input list="osc-cat-list" value={category} onChange={(e) => setCategory(e.target.value)} maxLength={60} placeholder="e.g. Whiskey, Cocktails, Hospitality" className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm bg-white" />
+          <datalist id="osc-cat-list">
+            {['Whiskey','Gin','Vodka','Rum','Tequila','Liqueurs','Cocktails','Beer','Wine','Hospitality','Fundamentals'].map((c) => <option key={c} value={c} />)}
+          </datalist>
+        </F>
+        <F label="Level label">
+          <input list="osc-lvl-list" value={level} onChange={(e) => setLevel(e.target.value)} maxLength={40} placeholder="Beginner / Intermediate / Advanced" className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm bg-white" />
+          <datalist id="osc-lvl-list">
+            {['Beginner','Intermediate','Advanced','All levels'].map((c) => <option key={c} value={c} />)}
+          </datalist>
+        </F>
+      </div>
+
+      {slugChanged && showRenameWarn && (
+        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 flex gap-2 items-start">
+          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+          <div>
+            <strong>Renaming a slug is permanent.</strong> The old URL <code className="px-1 py-0.5 rounded bg-white/70">/learn/{course.slug}</code> will 301-redirect to <code className="px-1 py-0.5 rounded bg-white/70">/learn/{slug}</code>. Existing user progress will be migrated. Click Save again to confirm.
+          </div>
+        </div>
+      )}
+
+      <div className="mt-4 flex items-center justify-end gap-2">
+        {dirty && <span className="text-[11px] text-amber-700">Unsaved changes</span>}
+        <button onClick={save} disabled={saving || !dirty || !title.trim() || !slug.trim()} className="h-10 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium disabled:opacity-60 inline-flex items-center gap-1.5">
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Save className="h-4 w-4" /> {slugChanged && !showRenameWarn ? 'Save (will rename)' : 'Save settings'}</>}
+        </button>
+      </div>
     </div>
   )
 }
@@ -622,7 +718,7 @@ function LessonImageEditor({ courseSlug, lessonSlug, image, onChange }) {
   )
 }
 
-const F = ({ label, children }) => <div><div className="text-xs font-medium text-slate-700 mb-1.5">{label}</div>{children}</div>
+const F = ({ label, children, className }) => <div className={className}><div className="text-xs font-medium text-slate-700 mb-1.5">{label}</div>{children}</div>
 function ArrEditor({ label, items, onChange, onCommit, makeNew, render: Item }) {
   return (
     <div>
@@ -861,3 +957,183 @@ const Stat = ({ label, value, accent }) => (
   </div>
 )
 const Spinner = () => <div className="grid place-items-center py-16 text-slate-400"><Loader2 className="h-6 w-6 animate-spin" /></div>
+
+/* ==================== PAGES MANAGER (WordPress-style) ==================== */
+function PagesManager() {
+  const [pages, setPages] = useState(null)
+  const [openId, setOpenId] = useState(null)
+  const [creating, setCreating] = useState(false)
+  const load = useCallback(async () => { try { setPages(await api('/admin/pages')) } catch (e) { toast.error(e.message) } }, [])
+  useEffect(() => { load() }, [load])
+  if (openId) return <PageEditor id={openId} onBack={() => { setOpenId(null); load() }} onDeleted={() => { setOpenId(null); load() }} />
+  if (creating) return <PageEditor id={null} onBack={() => { setCreating(false); load() }} />
+  if (!pages) return <Spinner />
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Pages</h1>
+          <p className="text-sm text-slate-500">Public HTML pages (About, Privacy, Terms, custom landing pages, etc.).</p>
+        </div>
+        <button onClick={() => setCreating(true)} className="h-10 px-4 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm inline-flex items-center gap-1.5"><Plus className="h-4 w-4" /> New page</button>
+      </div>
+      {pages.length === 0 ? (
+        <Empty>No pages yet. Create your first one.</Empty>
+      ) : (
+        <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
+              <tr><th className="text-left px-4 py-2">Title</th><th className="text-left px-4 py-2">Slug</th><th className="text-left px-4 py-2">Status</th><th className="text-left px-4 py-2">Updated</th><th></th></tr>
+            </thead>
+            <tbody>
+              {pages.map((p) => (
+                <tr key={p.id} className="border-t border-slate-100 hover:bg-slate-50 cursor-pointer" onClick={() => setOpenId(p.id)}>
+                  <td className="px-4 py-2 text-slate-900 font-medium">{p.title}</td>
+                  <td className="px-4 py-2 text-slate-500 font-mono text-xs">/{p.slug}</td>
+                  <td className="px-4 py-2">
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${p.published ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
+                      {p.published ? 'Published' : 'Draft'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2 text-slate-500 text-xs">{new Date(p.updatedAt).toLocaleString()}</td>
+                  <td className="px-4 py-2 text-right">
+                    {p.published && <a href={`/${p.slug}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-blue-700 mr-2"><Globe className="h-3.5 w-3.5" /> Live</a>}
+                    <ChevronRight className="h-4 w-4 text-slate-400 inline" />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PageEditor({ id, onBack, onDeleted }) {
+  const [loading, setLoading] = useState(!!id)
+  const [saving, setSaving] = useState(false)
+  const [title, setTitle] = useState('')
+  const [slug, setSlug] = useState('')
+  const [seoTitle, setSeoTitle] = useState('')
+  const [seoDescription, setSeoDescription] = useState('')
+  const [contentHtml, setContentHtml] = useState('<h2>New page</h2>\n<p>Start writing…</p>')
+  const [published, setPublished] = useState(false)
+  const [pageId, setPageId] = useState(id)
+  const [showPreview, setShowPreview] = useState(false)
+  const [pristineHtml, setPristineHtml] = useState('')
+
+  useEffect(() => {
+    if (!id) { setLoading(false); return }
+    (async () => {
+      try {
+        const p = await api(`/admin/pages/${id}`)
+        setTitle(p.title || ''); setSlug(p.slug || ''); setSeoTitle(p.seoTitle || '')
+        setSeoDescription(p.seoDescription || ''); setContentHtml(p.contentHtml || '')
+        setPristineHtml(p.contentHtml || ''); setPublished(!!p.published); setPageId(p.id)
+      } catch (e) { toast.error(e.message) } finally { setLoading(false) }
+    })()
+  }, [id])
+
+  const dirty = true // simple UX — always allow save button
+
+  const save = async ({ publishToo } = {}) => {
+    if (!title.trim() || !slug.trim()) { toast.error('Title and slug are required.'); return }
+    setSaving(true)
+    try {
+      if (pageId) {
+        const r = await api(`/admin/pages/${pageId}`, { method: 'PATCH', body: { title, slug, seoTitle, seoDescription, contentHtml, ...(publishToo !== undefined ? { published: publishToo } : {}) } })
+        if (publishToo !== undefined) setPublished(!!r.page.published)
+        setPristineHtml(r?.page?.contentHtml || contentHtml)
+        toast.success('Page saved.')
+      } else {
+        const r = await api('/admin/pages', { method: 'POST', body: { title, slug, seoTitle, seoDescription, contentHtml, published: publishToo ?? false } })
+        setPageId(r.page.id); setPublished(!!r.page.published); setPristineHtml(r.page.contentHtml || contentHtml)
+        toast.success('Page created.')
+      }
+    } catch (e) { toast.error(e.message) } finally { setSaving(false) }
+  }
+
+  const togglePublish = async () => save({ publishToo: !published })
+  const del = async () => {
+    if (!pageId) { onBack(); return }
+    if (!confirm('Delete this page? This cannot be undone.')) return
+    try { await api(`/admin/pages/${pageId}`, { method: 'DELETE' }); toast.success('Page deleted.'); onDeleted?.() } catch (e) { toast.error(e.message) }
+  }
+
+  if (loading) return <Spinner />
+
+  return (
+    <div className="space-y-4">
+      <button onClick={onBack} className="text-sm text-slate-500 hover:text-slate-800 inline-flex items-center gap-1"><ArrowLeft className="h-4 w-4" /> All pages</button>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{pageId ? 'Edit page' : 'New page'}</h1>
+          <p className="text-sm text-slate-500">Public URL: <code className="px-1 py-0.5 rounded bg-slate-100 text-slate-700">/{slug || 'slug'}</code></p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className={`text-xs font-medium px-2 py-1 rounded-full ${published ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>{published ? 'Published' : 'Draft'}</span>
+          {pageId && published && <a href={`/${slug}`} target="_blank" rel="noreferrer" className="h-9 px-3 rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm inline-flex items-center gap-1.5"><Globe className="h-3.5 w-3.5" /> View live</a>}
+          <button onClick={() => setShowPreview(true)} className="h-9 px-3 rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm inline-flex items-center gap-1.5"><Eye className="h-3.5 w-3.5" /> Preview</button>
+          <button onClick={togglePublish} disabled={saving} className={`h-9 px-3 rounded-md text-sm inline-flex items-center gap-1.5 ${published ? 'border border-slate-200 bg-white hover:bg-slate-50 text-slate-700' : 'bg-purple-600 hover:bg-purple-700 text-white'} disabled:opacity-60`}>
+            {published ? <><Undo2 className="h-3.5 w-3.5" /> Unpublish</> : <><Send className="h-3.5 w-3.5" /> Publish</>}
+          </button>
+          <button onClick={() => save()} disabled={saving} className="h-9 px-4 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm inline-flex items-center gap-1.5 disabled:opacity-60">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Save className="h-4 w-4" /> Save</>}</button>
+          {pageId && <button onClick={del} className="h-9 px-3 rounded-md border border-red-200 bg-white hover:bg-red-50 text-red-600 text-sm inline-flex items-center gap-1.5"><Trash2 className="h-3.5 w-3.5" /> Delete</button>}
+        </div>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <F label="Page title"><input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm bg-white" /></F>
+        <F label={<>Slug <span className="text-slate-400 font-normal">(URL)</span></>}>
+          <div className="flex items-center gap-1">
+            <div className="h-10 rounded-l-lg border border-r-0 border-slate-200 bg-slate-50 px-2 text-xs text-slate-500 inline-flex items-center">/</div>
+            <input value={slug} onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-'))} maxLength={80} placeholder="about" className="flex-1 h-10 rounded-r-lg border border-slate-200 px-3 text-sm font-mono bg-white" />
+          </div>
+        </F>
+        <F label="SEO title" className="md:col-span-2"><input value={seoTitle} onChange={(e) => setSeoTitle(e.target.value)} maxLength={200} placeholder="Leave blank to auto-generate from title" className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm bg-white" /></F>
+        <F label="SEO description" className="md:col-span-2"><textarea value={seoDescription} onChange={(e) => setSeoDescription(e.target.value)} maxLength={400} rows={2} placeholder="~160 characters. Shown in search results and social shares." className="w-full rounded-lg border border-slate-200 p-2.5 text-sm bg-white" /></F>
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium text-slate-700 mb-1.5">Content (HTML) <span className="text-slate-400 font-normal">— dangerous tags are stripped on save (script, style, unsafe attrs)</span></label>
+        <textarea
+          value={contentHtml}
+          onChange={(e) => setContentHtml(e.target.value)}
+          rows={20}
+          spellCheck={false}
+          className="w-full rounded-lg border border-slate-200 p-3 text-xs bg-white font-mono leading-relaxed"
+          placeholder="<h2>Section title</h2>\n<p>Paragraph text with <a href=&quot;/learn/what-is-alcohol&quot;>a link</a>.</p>\n<ul>\n  <li>Bullet one</li>\n  <li>Bullet two</li>\n</ul>"
+        />
+        <p className="mt-1.5 text-[11px] text-slate-500">Supported: headings, paragraphs, lists, links, images, tables, blockquotes, code blocks, YouTube/Vimeo iframes. Scripts and event handlers are always stripped.</p>
+      </div>
+
+      {showPreview && (
+        <PagePreviewModal title={title} slug={slug} html={contentHtml} onClose={() => setShowPreview(false)} />
+      )}
+    </div>
+  )
+}
+
+function PagePreviewModal({ title, slug, html, onClose }) {
+  return (
+    <div className="fixed inset-0 z-40 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl max-w-3xl w-full max-h-[85vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+          <div className="min-w-0">
+            <div className="font-semibold text-slate-900 truncate">Preview · {title || 'Untitled'}</div>
+            <div className="text-xs text-slate-500 truncate">/{slug || 'slug'}</div>
+          </div>
+          <button onClick={onClose} className="h-9 w-9 rounded-md hover:bg-slate-100 grid place-items-center text-slate-500"><X className="h-4 w-4" /></button>
+        </div>
+        <div className="overflow-y-auto p-6">
+          <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-slate-900">{title || 'Untitled'}</h1>
+          <div className="mt-6 prose-cms text-slate-800" dangerouslySetInnerHTML={{ __html: html || '' }} />
+        </div>
+        <div className="border-t border-slate-200 px-4 py-3 bg-slate-50 text-xs text-slate-500 flex items-center gap-2">
+          <AlertCircle className="h-3.5 w-3.5" /> Preview shows content <em>before</em> server-side sanitization. Save the page to apply sanitization.
+        </div>
+      </div>
+    </div>
+  )
+}
