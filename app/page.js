@@ -97,10 +97,7 @@ const TopBar = ({ user, onNav, onLogout }) => (
             <button onClick={onLogout} className="text-sm px-3 h-9 inline-flex items-center gap-1.5 rounded-md hover:bg-slate-100 text-slate-600"><LogOut className="h-4 w-4" /><span className="hidden sm:inline">Log out</span></button>
           </>
         ) : (
-          <>
-          <button onClick={() => { if (typeof window !== 'undefined') window.location.href = '/login' }} className="hidden sm:inline-flex text-sm h-9 px-3 items-center rounded-md hover:bg-slate-100 text-slate-700 font-medium">Log in</button>
-          <button onClick={() => { if (typeof window !== 'undefined') window.location.href = '/register' }} className="text-sm h-9 px-4 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm">Start free</button>
-          </>
+          <button onClick={() => { if (typeof window !== 'undefined') window.location.href = '/login' }} className="text-sm h-9 px-3 inline-flex items-center rounded-md hover:bg-slate-100 text-slate-700 font-medium">Log in</button>
         )}
       </nav>
     </div>
@@ -133,10 +130,6 @@ const BottomNav = ({ user, route, onNav }) => {
 
 const Landing = ({ courses, onCta }) => (
   <div className="space-y-16 pt-4 md:pt-10">
-    <nav className="flex items-center justify-end gap-2 -mt-2">
-      <a href="/login" className="h-9 px-3 rounded-md hover:bg-slate-100 text-sm text-slate-700 font-medium inline-flex items-center">Log in</a>
-      <a href="/register" className="h-9 px-3.5 rounded-md bg-blue-600 hover:bg-blue-700 text-sm text-white font-medium inline-flex items-center gap-1.5">Start free <ArrowRight className="h-3.5 w-3.5" /></a>
-    </nav>
     <section className="text-center max-w-3xl mx-auto">
       <div className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-800 mb-6">
         <Sparkles className="h-3.5 w-3.5" /> Free forever · evidence-based · no ads

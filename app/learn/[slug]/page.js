@@ -173,7 +173,6 @@ export default async function Page({ params }) {
             <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-700 grid place-items-center text-white text-sm font-bold shadow-sm">OS</div>
             <span className="font-semibold tracking-tight text-slate-900 hidden sm:inline">Online Spirits Club</span>
           </Link>
-          <Link href="/register" className="text-sm h-9 px-4 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm inline-flex items-center">Start free</Link>
         </div>
       </header>
 
