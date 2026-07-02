@@ -1,5 +1,6 @@
 'use client'
 
+import AdminPanel from '@/components/admin/AdminPanel'
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import {
   GlassWater, Flame, Sparkles, ChevronRight, ChevronLeft, Check, X,
@@ -63,7 +64,7 @@ function App() {
         {route.name === 'lesson' && <LessonView courseSlug={route.courseSlug} lessonSlug={route.lessonSlug} user={user} onNav={go} />}
         {route.name === 'reviews' && <ReviewsView user={user} onNav={go} />}
         {route.name === 'profile' && <ProfileView user={user} setUser={setUser} onNav={go} />}
-        {route.name === 'admin' && <AdminView />}
+        {route.name === 'admin' && <AdminPanel />}
         </div>
       </main>
       <BottomNav user={user} route={route} onNav={go} />

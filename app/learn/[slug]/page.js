@@ -1,21 +1,39 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { COURSES, allLessonPointers, getLesson } from '@/lib/content';
+import { COURSES, allLessonPointers } from '@/lib/content';
 import { getMedia } from '@/lib/media';
+import { getDb } from '@/lib/mongo';
 import SeoLessonBody from './seo-body';
 
-export const dynamic = 'force-static';
-export const revalidate = 3600;
+export const dynamic = 'force-dynamic';
+export const dynamicParams = true;
+export const revalidate = 60;
 
 export async function generateStaticParams() {
   return allLessonPointers().map((p) => ({ slug: p.lessonSlug }));
 }
 
-function findByLessonSlug(slug) {
+async function findByLessonSlug(slug) {
   for (const c of COURSES) {
     const l = c.lessons.find((x) => x.slug === slug);
-    if (l) return { course: c, lesson: l };
+    if (l) return { course: c, lesson: l, media: getMedia(slug) };
   }
+  try {
+    const db = await getDb();
+    const pubs = await db.collection('courses_published').find({}).toArray();
+    for (const c of pubs) {
+      const l = (c.lessons || []).find((x) => x.slug === slug);
+      if (l) {
+        const media = {
+          image: l.image || null,
+          imageAlt: l.imagePrompt || l.title,
+          imageCredit: l.image ? 'External' : null,
+          sources: l.sources || [],
+        };
+        return { course: c, lesson: l, media };
+      }
+    }
+  } catch (e) { console.error('findByLessonSlug DB error', e); }
   return null;
 }
 
@@ -23,40 +41,39 @@ const siteUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://onlinespiritsclub.c
 
 export async function generateMetadata({ params }) {
   const { slug } = await params;
-  const found = findByLessonSlug(slug);
+  const found = await findByLessonSlug(slug);
   if (!found) return { title: 'Lesson not found — Online Spirits Club' };
-  const { lesson, course } = found;
-  const media = getMedia(slug);
-  const description = lesson.theory.split('\n\n')[0].replace(/\*\*/g, '').slice(0, 155) + '…';
+  const { lesson, course, media } = found;
+  const seoDesc = lesson.seo?.description || (lesson.theory.split('\n\n')[0].replace(/\*\*/g, '').slice(0, 155) + '…');
+  const seoTitle = lesson.seo?.title || `${lesson.title} — ${course.title}`;
   const url = `${siteUrl}/learn/${slug}`;
-  const title = `${lesson.title} — ${course.title} · Online Spirits Club`;
+  const title = `${seoTitle} · Online Spirits Club`;
   return {
     title,
-    description,
+    description: seoDesc,
     alternates: { canonical: url },
     openGraph: {
       title,
-      description,
+      description: seoDesc,
       url,
       type: 'article',
       siteName: 'Online Spirits Club',
-      images: media.image ? [{ url: media.image, width: 1600, height: 900, alt: media.imageAlt }] : [],
+      images: media?.image ? [{ url: media.image, width: 1600, height: 900, alt: media.imageAlt }] : [],
     },
     twitter: {
       card: 'summary_large_image',
       title,
-      description,
-      images: media.image ? [media.image] : [],
+      description: seoDesc,
+      images: media?.image ? [media.image] : [],
     },
   };
 }
 
 export default async function Page({ params }) {
   const { slug } = await params;
-  const found = findByLessonSlug(slug);
+  const found = await findByLessonSlug(slug);
   if (!found) notFound();
-  const { course, lesson } = found;
-  const media = getMedia(slug);
+  const { course, lesson, media } = found;
   const description = lesson.theory.split('\n\n')[0].replace(/\*\*/g, '').slice(0, 200);
 
   const jsonLd = {
