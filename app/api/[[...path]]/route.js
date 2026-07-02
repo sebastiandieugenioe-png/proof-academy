@@ -6,6 +6,7 @@ import { AI_COURSES } from '@/lib/ai-content';
 import { getMedia } from '@/lib/media';
 import { schedule } from '@/lib/sm2';
 import { checkPassword, isAdminEmail, makeSessionToken, getAdminSessionFromRequest, ADMIN_COOKIE } from '@/lib/admin-auth';
+import { uploadImage, uploadImageFromUrl, fetchImageBuffer, deleteImage, MAX_UPLOAD_BYTES, ALLOWED_MIME } from '@/lib/image-storage';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -38,28 +39,21 @@ async function allCoursesMerged() {
   return Array.from(map.values());
 }
 async function findCourseMerged(slug) {
-  const staticC = getCourse(slug);
-  if (staticC) return staticC;
-  const ai = AI_COURSES.find((c) => c.slug === slug);
-  if (ai) {
-    // DB override wins if present
-    try {
-      const db = await getDb();
-      const p = await db.collection('courses_published').findOne({ slug });
-      if (p) { delete p._id; return p; }
-    } catch {}
-    return ai;
-  }
+  // Try DB override first — that's where admin edits live.
   try {
     const db = await getDb();
     const p = await db.collection('courses_published').findOne({ slug });
-    if (p) { delete p._id; return p; }
+    if (p && !p.hidden) { delete p._id; return p; }
+    if (p?.hidden) return null; // explicitly hidden
   } catch (e) { console.error('findCourseMerged DB error', e); }
+  const staticC = getCourse(slug);
+  if (staticC) return staticC;
+  const ai = AI_COURSES.find((c) => c.slug === slug);
+  if (ai) return ai;
   return null;
 }
 async function findLessonMerged(courseSlug, lessonSlug) {
-  const staticData = getLesson(courseSlug, lessonSlug);
-  if (staticData) return staticData;
+  // DB override wins over static bundled content (so admin edits are honored).
   const c = await findCourseMerged(courseSlug);
   if (!c) return null;
   const idx = c.lessons.findIndex((l) => l.slug === lessonSlug);
@@ -91,7 +85,7 @@ export async function GET(request, { params }) {
       return json(merged.map(({ slug, title, tagline, level, accent, icon, lessons }) => ({
         slug, title, tagline, level, accent, icon,
         lessonCount: lessons.length,
-        lessons: lessons.map((l) => ({ slug: l.slug, title: l.title, minutes: l.minutes })),
+        lessons: lessons.map((l) => ({ slug: l.slug, title: l.title, minutes: l.minutes, hasImage: !!(l.image && (typeof l.image === 'string' ? l.image : l.image.url)) })),
       })));
     }
 
@@ -107,17 +101,60 @@ export async function GET(request, { params }) {
     if (path[0] === 'lessons' && path[1] && path[2]) {
       const data = await findLessonMerged(path[1], path[2]);
       if (!data) return err('Lesson not found', 404);
-      // media: prefer AI lesson.sources+imageSearch mapped to media shape, else static getMedia
-      let media = getMedia(path[2]);
-      if ((!media || !media.image) && data.lesson) {
+      // Resolve media in priority order:
+      //   1) structured lesson.image = { url, alt, caption, credit, id }  (admin-managed)
+      //   2) legacy string lesson.image (AI-generated)
+      //   3) static media map in /lib/media.js
+      //   4) placeholder
+      let media = null;
+      const li = data.lesson?.image;
+      const mappedFallback = getMedia(path[2]);
+      const fallbackSources = data.lesson?.sources?.length ? data.lesson.sources : (mappedFallback?.sources || []);
+      if (li && typeof li === 'object' && li.url) {
         media = {
-          image: data.lesson.image || null,
+          image: li.url,
+          imageAlt: li.alt || data.lesson.title,
+          imageCaption: li.caption || '',
+          imageCredit: li.credit || '',
+          imageId: li.id || null,
+          sources: fallbackSources,
+        };
+      } else if (typeof li === 'string' && li) {
+        media = {
+          image: li,
           imageAlt: data.lesson.imagePrompt || data.lesson.title,
-          imageCredit: data.lesson.imageCredit || 'AI-suggested',
-          sources: data.lesson.sources || [],
+          imageCaption: '',
+          imageCredit: data.lesson.imageCredit || 'External',
+          sources: fallbackSources,
+        };
+      } else if (mappedFallback?.image) {
+        media = {
+          image: mappedFallback.image,
+          imageAlt: mappedFallback.imageAlt || data.lesson.title,
+          imageCaption: '',
+          imageCredit: mappedFallback.imageCredit || '',
+          sources: fallbackSources,
         };
       }
+      if (!media) {
+        media = { image: '/placeholder-lesson.svg', imageAlt: 'Online Spirits Club — Educational lesson', imageCaption: '', imageCredit: '', sources: fallbackSources };
+      }
       return json({ ...data, media });
+    }
+
+    // Public: serve stored lesson image
+    if (path[0] === 'images' && path[1]) {
+      const rec = await fetchImageBuffer(path[1]);
+      if (!rec) return err('Image not found', 404);
+      return new NextResponse(rec.buffer, {
+        status: 200,
+        headers: {
+          'Content-Type': rec.contentType,
+          'Content-Length': String(rec.buffer.length),
+          'Cache-Control': 'public, max-age=31536000, immutable',
+          'X-Content-Type-Options': 'nosniff',
+        },
+      });
     }
 
     // User-scoped
@@ -375,6 +412,10 @@ export async function DELETE(request, { params }) {
       await db.collection('comments').deleteOne({ id: path[2] });
       return NextResponse.json({ ok: true });
     }
+    if (path[0] === 'admin' && path[1] === 'images' && path[2]) {
+      const ok = await deleteImage(path[2]);
+      return NextResponse.json({ ok });
+    }
     if (path[0] === 'admin' && path[1] === 'drafts') {
       return NextResponse.json({ error: 'AI generation is disabled' }, { status: 410 });
     }
@@ -388,6 +429,36 @@ export async function DELETE(request, { params }) {
 export async function POST(request, { params }) {
   const { path = [] } = await params;
   const seg = path.join('/');
+
+  // Special-case: admin image upload accepts multipart/form-data OR JSON.
+  // We must NOT call request.json() before handling multipart.
+  if (seg === 'admin/images') {
+    const s = getAdminSessionFromRequest(request);
+    if (!s) return NextResponse.json({ error: 'Admin authentication required' }, { status: 401 });
+    const ct = (request.headers.get('content-type') || '').toLowerCase();
+    try {
+      if (ct.includes('multipart/form-data')) {
+        const form = await request.formData();
+        const file = form.get('file');
+        if (!file || typeof file === 'string') return err('No file provided');
+        if (!ALLOWED_MIME.has(file.type)) return err(`Unsupported type: ${file.type || 'unknown'}. Use JPG, PNG or WebP.`);
+        if (file.size > MAX_UPLOAD_BYTES) return err('Image is too large (max 8MB).');
+        const buffer = Buffer.from(await file.arrayBuffer());
+        const info = await uploadImage({ buffer, contentType: file.type, filename: file.name || 'upload', uploadedBy: s.email });
+        return json({ ok: true, image: info });
+      }
+      const body = await request.json().catch(() => ({}));
+      if (body?.url) {
+        const info = await uploadImageFromUrl(body.url, { uploadedBy: s.email });
+        return json({ ok: true, image: info });
+      }
+      return err('Provide a file (multipart) or a JSON body with { url }');
+    } catch (e) {
+      console.error('admin/images upload error', e);
+      return err(e.message || 'Upload failed', 400);
+    }
+  }
+
   const body = await request.json().catch(() => ({}));
 
   // Public admin-auth endpoints (do not need the cookie yet)
@@ -552,6 +623,49 @@ export async function POST(request, { params }) {
       const saved = await db.collection('courses_published').findOne({ slug: course.slug });
       if (saved) delete saved._id;
       return json({ ok: true, course: saved });
+    }
+
+    // Save/replace/remove a lesson image. Body: { courseSlug, lessonSlug, image: {url, alt, caption, credit, id} | null }
+    if (seg === 'admin/lesson-image') {
+      const { courseSlug, lessonSlug, image } = body || {};
+      if (!courseSlug || !lessonSlug) return err('courseSlug and lessonSlug are required');
+      const course = await findCourseMerged(courseSlug);
+      if (!course) return err('Course not found', 404);
+      const idx = (course.lessons || []).findIndex((l) => l.slug === lessonSlug);
+      if (idx === -1) return err('Lesson not found', 404);
+      const db = await getDb();
+      const existing = await db.collection('courses_published').findOne({ slug: courseSlug });
+      const base = existing ? { ...existing } : { ...course };
+      delete base._id;
+      base.lessons = (base.lessons || course.lessons).map((l) => ({ ...l }));
+      const previousImage = base.lessons[idx].image;
+      if (image === null || image === undefined) {
+        delete base.lessons[idx].image;
+      } else {
+        // Sanitize
+        base.lessons[idx].image = {
+          url: String(image.url || '').slice(0, 2048),
+          alt: String(image.alt || '').slice(0, 300),
+          caption: String(image.caption || '').slice(0, 300),
+          credit: String(image.credit || '').slice(0, 200),
+          id: image.id ? String(image.id) : null,
+          updatedAt: new Date(),
+        };
+        if (!base.lessons[idx].image.url) return err('Image URL required');
+      }
+      base.updatedAt = new Date();
+      await db.collection('courses_published').updateOne(
+        { slug: courseSlug },
+        { $set: base },
+        { upsert: true }
+      );
+      // Optional cleanup: if the previous image had an internal GridFS id and it's being replaced/removed, delete the blob.
+      try {
+        const prevId = previousImage && typeof previousImage === 'object' ? previousImage.id : null;
+        const newId = base.lessons[idx].image?.id || null;
+        if (prevId && prevId !== newId) await deleteImage(prevId);
+      } catch (e) { console.warn('previous image cleanup failed', e); }
+      return json({ ok: true, image: base.lessons[idx].image || null });
     }
 
     if (seg === 'admin/course-publish') {

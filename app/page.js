@@ -390,10 +390,17 @@ const LessonView = ({ courseSlug, lessonSlug, user, onNav }) => {
 const StepObjectives = ({ lesson, media, onNext }) => (
   <section className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
     {media?.image && (
-      <div className="relative">
-        <img src={media.image} alt={media.imageAlt || lesson.title} className="w-full h-44 md:h-64 object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
-        <div className="absolute bottom-3 left-4 right-4 text-white/95 text-xs">{media.imageAlt}</div>
+      <div>
+        <div className="relative">
+          <img src={media.image} alt={media.imageAlt || lesson.title} className="w-full aspect-[16/9] object-cover bg-slate-100" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
+        </div>
+        {(media.imageCaption || media.imageCredit) && (
+          <div className="px-4 md:px-6 py-2.5 border-b border-slate-100 bg-slate-50/60 text-xs text-slate-500 flex flex-wrap gap-x-3 gap-y-1">
+            {media.imageCaption && <span className="text-slate-600">{media.imageCaption}</span>}
+            {media.imageCredit && <span className="text-slate-400">Photo: {media.imageCredit}</span>}
+          </div>
+        )}
       </div>
     )}
     <div className="p-6 md:p-8">

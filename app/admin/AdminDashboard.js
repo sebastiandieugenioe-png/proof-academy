@@ -1,10 +1,12 @@
 'use client'
 
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
+import { toast } from 'sonner'
 import {
   ArrowLeft, ChevronDown, ChevronRight, Check, X, Trash2, Send, Undo2, Eye,
   Loader2, LogOut, MessageSquare, Users as UsersIcon, Mail, BookOpen, Plus,
   BarChart3, TrendingUp, Search, Download, Save, AlertCircle, Filter,
+  ImageIcon, Upload, Link2, RefreshCcw,
 } from 'lucide-react'
 
 const api = async (path, opts = {}) => {
@@ -229,7 +231,7 @@ function CoursesList({ onOpen }) {
   useEffect(() => { api('/courses').then(setCourses) }, [])
   if (!courses) return <Spinner />
   const filtered = courses.filter((c) => {
-    if (filter === 'missing-images') return c.lessons.some((l) => !l.image)
+    if (filter === 'missing-images') return c.lessons.some((l) => !l.hasImage && !l.image)
     return true
   })
   return (
@@ -318,7 +320,7 @@ function CourseEditor({ slug, onBack }) {
               {openIdx === i ? <ChevronDown className="h-4 w-4 text-slate-400" /> : <ChevronRight className="h-4 w-4 text-slate-400" />}
             </button>
             {openIdx === i && lessons[l.slug] && (
-              <LessonEditor lesson={lessons[l.slug]} onSave={(next) => patchLesson(l.slug, next)} />
+              <LessonEditor courseSlug={slug} lesson={lessons[l.slug]} onSave={(next) => patchLesson(l.slug, next)} onImageUpdated={(img) => setLessons((m) => ({ ...m, [l.slug]: { ...(m[l.slug] || {}), image: img } }))} />
             )}
           </li>
         ))}
@@ -327,12 +329,13 @@ function CourseEditor({ slug, onBack }) {
   )
 }
 
-function LessonEditor({ lesson, onSave }) {
+function LessonEditor({ courseSlug, lesson, onSave, onImageUpdated }) {
   const [d, setD] = useState(lesson)
   useEffect(() => setD(lesson), [lesson])
   const c = () => onSave(d)
   const s = (k, v) => setD((x) => ({ ...x, [k]: v }))
   const sArr = (k, i, v) => setD((x) => ({ ...x, [k]: x[k].map((it, j) => (j === i ? v : it)) }))
+  const handleImageUpdated = (img) => { setD((x) => ({ ...x, image: img })); onImageUpdated?.(img) }
   return (
     <div className="border-t border-slate-100 p-4 space-y-5 bg-slate-50/40">
       <F label="Title"><input value={d.title} onChange={(e) => s('title', e.target.value)} onBlur={c} className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm bg-white" /></F>
@@ -350,14 +353,270 @@ function LessonEditor({ lesson, onSave }) {
       <ArrEditor label="Flashcards" items={d.flashcards || []} onChange={(x) => s('flashcards', x)} onCommit={c} makeNew={() => ({ front: '', back: '' })} render={FlashcardItem} />
       <ArrEditor label="Quiz" items={d.quiz || []} onChange={(x) => s('quiz', x)} onCommit={c} makeNew={() => ({ q: '', options: ['', '', ''], correct: 0, explanation: '' })} render={QuizItem} />
       <ArrEditor label="Sources & citations" items={d.sources || []} onChange={(x) => s('sources', x)} onCommit={c} makeNew={() => ({ label: '', url: '' })} render={SourceItem} />
-      <div className="grid gap-3 md:grid-cols-2">
-        <F label="Image URL"><input value={d.image || ''} onChange={(e) => s('image', e.target.value)} onBlur={c} className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm bg-white font-mono" /></F>
-        <F label="Image alt / prompt"><input value={d.imagePrompt || ''} onChange={(e) => s('imagePrompt', e.target.value)} onBlur={c} className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm bg-white" /></F>
-      </div>
-      {d.image && <img src={d.image} alt="" className="w-full h-40 object-cover rounded-lg border border-slate-200" />}
+      <LessonImageEditor courseSlug={courseSlug} lessonSlug={d.slug} image={d.image} onChange={handleImageUpdated} />
       <div className="grid gap-3 md:grid-cols-2">
         <F label="SEO title"><input value={d.seo?.title || ''} onChange={(e) => s('seo', { ...(d.seo || {}), title: e.target.value })} onBlur={c} className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm bg-white" /></F>
         <F label="SEO description"><input value={d.seo?.description || ''} onChange={(e) => s('seo', { ...(d.seo || {}), description: e.target.value })} onBlur={c} className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm bg-white" /></F>
+      </div>
+    </div>
+  )
+}
+
+/* ================ LESSON IMAGE EDITOR ================ */
+const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
+const MAX_MB = 8
+const MAX_BYTES = MAX_MB * 1024 * 1024
+
+function normalizeImage(img) {
+  // Accepts legacy string OR structured object; returns { url, alt, caption, credit, id }
+  if (!img) return { url: '', alt: '', caption: '', credit: '', id: null }
+  if (typeof img === 'string') return { url: img, alt: '', caption: '', credit: '', id: null }
+  return { url: img.url || '', alt: img.alt || '', caption: img.caption || '', credit: img.credit || '', id: img.id || null }
+}
+
+function LessonImageEditor({ courseSlug, lessonSlug, image, onChange }) {
+  const initial = useMemo(() => normalizeImage(image), [image])
+  const [current, setCurrent] = useState(initial)
+  const [preview, setPreview] = useState(initial.url)
+  const [pendingBlob, setPendingBlob] = useState(null) // { file, previewUrl } — for pre-upload preview
+  const [urlInput, setUrlInput] = useState('')
+  const [mode, setMode] = useState('upload') // 'upload' | 'url'
+  const [dragOver, setDragOver] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const fileRef = useRef(null)
+
+  useEffect(() => {
+    const n = normalizeImage(image)
+    setCurrent(n)
+    setPreview(n.url)
+    setPendingBlob(null)
+  }, [image, lessonSlug])
+
+  const dirty = pendingBlob || (
+    current.url !== initial.url || current.alt !== initial.alt ||
+    current.caption !== initial.caption || current.credit !== initial.credit
+  )
+
+  const validateFile = (file) => {
+    if (!file) return 'No file selected.'
+    if (!ALLOWED_TYPES.includes(file.type)) return `Unsupported type: ${file.type || 'unknown'}. Use JPG, PNG or WebP.`
+    if (file.size > MAX_BYTES) return `File too large (${(file.size/1024/1024).toFixed(1)}MB). Max ${MAX_MB}MB.`
+    return null
+  }
+
+  const pickFile = (file) => {
+    const err = validateFile(file)
+    if (err) { toast.error(err); return }
+    // Revoke previous blob URL to avoid leaks
+    if (pendingBlob?.previewUrl) URL.revokeObjectURL(pendingBlob.previewUrl)
+    const previewUrl = URL.createObjectURL(file)
+    setPendingBlob({ file, previewUrl })
+    setPreview(previewUrl)
+  }
+
+  const onFileInput = (e) => { const f = e.target.files?.[0]; if (f) pickFile(f); e.target.value = '' }
+  const onDrop = (e) => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files?.[0]; if (f) pickFile(f) }
+
+  const uploadPending = async () => {
+    if (!pendingBlob) return null
+    const fd = new FormData()
+    fd.append('file', pendingBlob.file)
+    const res = await fetch('/api/admin/images', { method: 'POST', body: fd, credentials: 'same-origin' })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.error || `Upload failed (HTTP ${res.status})`)
+    return data.image
+  }
+
+  const importUrl = async () => {
+    if (!urlInput.trim()) return
+    setBusy(true)
+    try {
+      const r = await fetch('/api/admin/images', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ url: urlInput.trim() }) })
+      const data = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(data.error || `Import failed (HTTP ${r.status})`)
+      setCurrent((c) => ({ ...c, url: data.image.url, id: data.image.id }))
+      setPreview(data.image.url)
+      setUrlInput('')
+      toast.success('Image imported from URL. Click "Save image" to attach it to this lesson.')
+    } catch (e) { toast.error(e.message) } finally { setBusy(false) }
+  }
+
+  const useExternalUrl = () => {
+    if (!urlInput.trim()) return
+    if (!/^https?:\/\//i.test(urlInput.trim())) { toast.error('Enter a valid http(s) URL.'); return }
+    setCurrent((c) => ({ ...c, url: urlInput.trim(), id: null }))
+    setPreview(urlInput.trim())
+    setUrlInput('')
+    toast('Preview updated. Click "Save image" to attach it.')
+  }
+
+  const save = async () => {
+    setSaving(true)
+    try {
+      let imageObj = { ...current }
+      if (pendingBlob) {
+        toast.loading('Uploading image…', { id: 'imgsave' })
+        const info = await uploadPending()
+        // Cleanup blob URL
+        URL.revokeObjectURL(pendingBlob.previewUrl)
+        imageObj = { ...imageObj, url: info.url, id: info.id }
+        setPendingBlob(null)
+      }
+      const r = await fetch('/api/admin/lesson-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ courseSlug, lessonSlug, image: imageObj }),
+      })
+      const data = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(data.error || `Save failed (HTTP ${r.status})`)
+      toast.success('Image saved.', { id: 'imgsave' })
+      onChange?.(data.image)
+      const n = normalizeImage(data.image)
+      setCurrent(n); setPreview(n.url)
+    } catch (e) { toast.error(e.message, { id: 'imgsave' }) } finally { setSaving(false) }
+  }
+
+  const remove = async () => {
+    if (!confirm('Remove image from this lesson? The image file will be permanently deleted.')) return
+    setSaving(true)
+    try {
+      const r = await fetch('/api/admin/lesson-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ courseSlug, lessonSlug, image: null }),
+      })
+      const data = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(data.error || `Remove failed (HTTP ${r.status})`)
+      toast.success('Image removed.')
+      onChange?.(null)
+      setCurrent({ url: '', alt: '', caption: '', credit: '', id: null })
+      setPreview('')
+      if (pendingBlob?.previewUrl) URL.revokeObjectURL(pendingBlob.previewUrl)
+      setPendingBlob(null)
+    } catch (e) { toast.error(e.message) } finally { setSaving(false) }
+  }
+
+  const replace = () => { setPendingBlob(null); setPreview(''); setCurrent((c) => ({ ...c, url: '', id: null })) }
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4 md:p-5">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <div className="h-9 w-9 rounded-lg bg-blue-50 text-blue-700 grid place-items-center"><ImageIcon className="h-4.5 w-4.5" /></div>
+          <div>
+            <div className="font-semibold text-slate-900 text-sm">Lesson image</div>
+            <div className="text-[11px] text-slate-500">16:9 recommended · JPG · PNG · WebP · max {MAX_MB}MB · auto-optimized</div>
+          </div>
+        </div>
+        {(preview || current.url) && (
+          <div className="flex items-center gap-1.5">
+            <button type="button" onClick={replace} className="h-8 px-3 rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs inline-flex items-center gap-1.5"><RefreshCcw className="h-3.5 w-3.5" /> Replace</button>
+            <button type="button" onClick={remove} disabled={saving} className="h-8 px-3 rounded-md border border-red-200 bg-white text-red-600 hover:bg-red-50 text-xs inline-flex items-center gap-1.5 disabled:opacity-60"><Trash2 className="h-3.5 w-3.5" /> Remove</button>
+          </div>
+        )}
+      </div>
+
+      {/* Preview */}
+      <div className="mt-4 rounded-lg overflow-hidden border border-slate-200 bg-slate-50">
+        <div className="relative w-full aspect-[16/9] bg-slate-100">
+          {preview ? (
+            // Local blob preview — using native img is required (Next.js Image doesn't play well with blob: URLs in this context)
+            <img src={preview} alt="preview" className="w-full h-full object-cover" onError={() => { toast.error('Image failed to load.'); }} />
+          ) : (
+            <div className="absolute inset-0 grid place-items-center text-center p-4">
+              <div>
+                <ImageIcon className="h-8 w-8 text-slate-300 mx-auto" />
+                <p className="mt-2 text-xs text-slate-500">No image yet. Upload or paste a URL below.</p>
+                <p className="mt-1 text-[11px] text-slate-400">Recommended aspect ratio 16:9 · 1600×900 or larger</p>
+              </div>
+            </div>
+          )}
+          <div className="absolute top-2 left-2 text-[10px] font-medium bg-black/50 text-white/95 px-2 py-0.5 rounded">16:9</div>
+        </div>
+      </div>
+
+      {/* Source picker */}
+      {!preview && (
+        <div className="mt-3">
+          <div className="flex gap-1 mb-2">
+            {[{k:'upload',l:'Upload file',i:Upload},{k:'url',l:'Paste URL',i:Link2}].map((t) => (
+              <button key={t.k} type="button" onClick={() => setMode(t.k)} className={`h-8 px-3 rounded-md text-xs font-medium inline-flex items-center gap-1.5 ${mode === t.k ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'}`}>
+                <t.i className="h-3.5 w-3.5" /> {t.l}
+              </button>
+            ))}
+          </div>
+          {mode === 'upload' ? (
+            <div
+              onClick={() => fileRef.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={onDrop}
+              className={`rounded-lg border-2 border-dashed p-6 text-center cursor-pointer transition ${dragOver ? 'border-blue-500 bg-blue-50' : 'border-slate-300 bg-white hover:border-blue-400'}`}
+            >
+              <Upload className="h-6 w-6 text-slate-400 mx-auto" />
+              <p className="mt-2 text-sm text-slate-700 font-medium">Drop image here or tap to browse</p>
+              <p className="text-[11px] text-slate-500 mt-0.5">JPG · PNG · WebP · up to {MAX_MB}MB</p>
+              <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={onFileInput} className="hidden" />
+            </div>
+          ) : (
+            <div className="rounded-lg border border-slate-200 bg-white p-3">
+              <label className="text-xs font-medium text-slate-700">Image URL</label>
+              <div className="mt-1.5 flex flex-col sm:flex-row gap-2">
+                <input value={urlInput} onChange={(e) => setUrlInput(e.target.value)} placeholder="https://…" className="flex-1 h-10 rounded-lg border border-slate-200 px-3 text-sm font-mono" />
+                <div className="flex gap-2">
+                  <button type="button" onClick={useExternalUrl} className="h-10 px-3 rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs whitespace-nowrap">Use as-is</button>
+                  <button type="button" onClick={importUrl} disabled={busy || !urlInput.trim()} className="h-10 px-3 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs whitespace-nowrap inline-flex items-center gap-1.5 disabled:opacity-60">{busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><Download className="h-3.5 w-3.5" /> Fetch &amp; store</>}</button>
+                </div>
+              </div>
+              <p className="mt-1.5 text-[11px] text-slate-500">&ldquo;Fetch &amp; store&rdquo; downloads &amp; hosts a permanent copy. &ldquo;Use as-is&rdquo; keeps the original URL (breaks if remote goes down).</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Editable pending file bar */}
+      {pendingBlob && (
+        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span className="truncate">{pendingBlob.file.name} · {(pendingBlob.file.size/1024).toFixed(0)} KB · not saved yet</span>
+          </div>
+          <button type="button" onClick={() => { URL.revokeObjectURL(pendingBlob.previewUrl); setPendingBlob(null); setPreview(current.url) }} className="text-amber-900 hover:text-amber-700 shrink-0"><X className="h-4 w-4" /></button>
+        </div>
+      )}
+
+      {/* Metadata */}
+      {(preview || current.url) && (
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <F label={<>Alt text <span className="text-slate-400 font-normal">(for screen readers &amp; SEO)</span></>}>
+            <input value={current.alt} onChange={(e) => setCurrent((c) => ({ ...c, alt: e.target.value }))} maxLength={300} placeholder="e.g. Copper pot stills in a Scottish distillery" className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm bg-white" />
+          </F>
+          <F label={<>Caption <span className="text-slate-400 font-normal">(shown under image)</span></>}>
+            <input value={current.caption} onChange={(e) => setCurrent((c) => ({ ...c, caption: e.target.value }))} maxLength={300} placeholder="Optional. e.g. Copper reacts with sulphur compounds during distillation." className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm bg-white" />
+          </F>
+          <F label={<>Credit / source</>}>
+            <input value={current.credit} onChange={(e) => setCurrent((c) => ({ ...c, credit: e.target.value }))} maxLength={200} placeholder="e.g. © John Doe / Unsplash" className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm bg-white" />
+          </F>
+          <F label={<>Direct URL <span className="text-slate-400 font-normal">(read-only)</span></>}>
+            <input value={current.url} readOnly className="w-full h-10 rounded-lg border border-slate-200 px-3 text-xs bg-slate-50 font-mono text-slate-500" />
+          </F>
+        </div>
+      )}
+
+      {/* Save bar */}
+      <div className="mt-4 flex items-center justify-end gap-2">
+        {dirty && <span className="text-[11px] text-amber-700">Unsaved changes</span>}
+        <button
+          type="button"
+          onClick={save}
+          disabled={saving || !dirty || (!current.url && !pendingBlob)}
+          className="h-10 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium disabled:opacity-60 inline-flex items-center gap-1.5"
+        >
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Save className="h-4 w-4" /> Save image</>}
+        </button>
       </div>
     </div>
   )

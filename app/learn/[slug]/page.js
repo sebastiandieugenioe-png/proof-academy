@@ -17,42 +17,51 @@ export async function generateStaticParams() {
 }
 
 async function findByLessonSlug(slug) {
+  // Priority: DB override → static → AI content.
+  // This ensures admin edits (images, theory, etc.) always win.
+  try {
+    const db = await getDb();
+    const pubs = await db.collection('courses_published').find({ hidden: { $ne: true } }).toArray();
+    for (const c of pubs) {
+      const l = (c.lessons || []).find((x) => x.slug === slug);
+      if (l) return { course: c, lesson: l, media: resolveMedia(l, slug) };
+    }
+  } catch (e) { console.error('findByLessonSlug DB error', e); }
   for (const c of COURSES) {
     const l = c.lessons.find((x) => x.slug === slug);
-    if (l) return { course: c, lesson: l, media: getMedia(slug) };
+    if (l) return { course: c, lesson: l, media: resolveMedia(l, slug) };
   }
   for (const c of AI_COURSES) {
     const l = (c.lessons || []).find((x) => x.slug === slug);
-    if (l) {
-      const media = {
-        image: l.image || null,
-        imageAlt: l.imagePrompt || l.title,
-        imageCredit: l.image ? 'External' : null,
-        sources: l.sources || [],
-      };
-      return { course: c, lesson: l, media };
-    }
+    if (l) return { course: c, lesson: l, media: resolveMedia(l, slug) };
   }
-  try {
-    const db = await getDb();
-    const pubs = await db.collection('courses_published').find({}).toArray();
-    for (const c of pubs) {
-      const l = (c.lessons || []).find((x) => x.slug === slug);
-      if (l) {
-        const media = {
-          image: l.image || null,
-          imageAlt: l.imagePrompt || l.title,
-          imageCredit: l.image ? 'External' : null,
-          sources: l.sources || [],
-        };
-        return { course: c, lesson: l, media };
-      }
-    }
-  } catch (e) { console.error('findByLessonSlug DB error', e); }
   return null;
 }
 
+// Same resolution rules as /api/lessons: structured image → legacy string → media.js → placeholder
+function resolveMedia(lesson, slug) {
+  const li = lesson?.image;
+  const mapped = getMedia(slug);
+  const fallbackSources = lesson?.sources?.length ? lesson.sources : (mapped?.sources || []);
+  if (li && typeof li === 'object' && li.url) {
+    return { image: li.url, imageAlt: li.alt || lesson.title, imageCaption: li.caption || '', imageCredit: li.credit || '', imageId: li.id || null, sources: fallbackSources };
+  }
+  if (typeof li === 'string' && li) {
+    return { image: li, imageAlt: lesson.imagePrompt || lesson.title, imageCaption: '', imageCredit: lesson.imageCredit || 'External', sources: fallbackSources };
+  }
+  if (mapped?.image) {
+    return { image: mapped.image, imageAlt: mapped.imageAlt || lesson.title, imageCaption: '', imageCredit: mapped.imageCredit || '', sources: fallbackSources };
+  }
+  return { image: '/placeholder-lesson.svg', imageAlt: 'Online Spirits Club — Educational lesson', imageCaption: '', imageCredit: '', sources: fallbackSources };
+}
+
 const siteUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://onlinespiritsclub.com';
+// Turn /api/images/... into a fully-qualified URL for OG/Twitter cards.
+function absoluteUrl(u) {
+  if (!u) return null;
+  if (/^https?:\/\//i.test(u)) return u;
+  return `${siteUrl}${u.startsWith('/') ? '' : '/'}${u}`;
+}
 
 export async function generateMetadata({ params }) {
   const { slug } = await params;
@@ -63,6 +72,7 @@ export async function generateMetadata({ params }) {
   const seoTitle = lesson.seo?.title || `${lesson.title} — ${course.title}`;
   const url = `${siteUrl}/learn/${slug}`;
   const title = `${seoTitle} · Online Spirits Club`;
+  const ogImage = absoluteUrl(media?.image);
   return {
     title,
     description: seoDesc,
@@ -73,13 +83,13 @@ export async function generateMetadata({ params }) {
       url,
       type: 'article',
       siteName: 'Online Spirits Club',
-      images: media?.image ? [{ url: media.image, width: 1600, height: 900, alt: media.imageAlt }] : [],
+      images: ogImage ? [{ url: ogImage, width: 1600, height: 900, alt: media.imageAlt }] : [],
     },
     twitter: {
       card: 'summary_large_image',
       title,
       description: seoDesc,
-      images: media?.image ? [media.image] : [],
+      images: ogImage ? [ogImage] : [],
     },
   };
 }
@@ -96,7 +106,7 @@ export default async function Page({ params }) {
     '@type': 'EducationalArticle',
     headline: lesson.title,
     description,
-    image: media.image ? [media.image] : undefined,
+    image: media.image ? [absoluteUrl(media.image)] : undefined,
     author: { '@type': 'Organization', name: 'Online Spirits Club' },
     publisher: {
       '@type': 'Organization',
@@ -155,8 +165,13 @@ export default async function Page({ params }) {
 
           {media.image && (
             <figure className="mt-6 rounded-2xl overflow-hidden border border-slate-200">
-              <img src={media.image} alt={media.imageAlt} className="w-full h-auto object-cover aspect-[16/9]" loading="eager" />
-              {media.imageCredit && <figcaption className="px-4 py-2 text-xs text-slate-500 bg-slate-50 border-t border-slate-100">Photo: {media.imageCredit}</figcaption>}
+              <img src={media.image} alt={media.imageAlt || ''} className="w-full h-auto object-cover aspect-[16/9] bg-slate-100" loading="eager" />
+              {(media.imageCaption || media.imageCredit) && (
+                <figcaption className="px-4 py-2.5 text-xs text-slate-500 bg-slate-50 border-t border-slate-100 flex flex-wrap gap-x-3 gap-y-1 items-baseline">
+                  {media.imageCaption && <span className="text-slate-600">{media.imageCaption}</span>}
+                  {media.imageCredit && <span className="text-slate-400">Photo: {media.imageCredit}</span>}
+                </figcaption>
+              )}
             </figure>
           )}
 
