@@ -872,18 +872,6 @@ const ProfileView = ({ user, setUser, onNav }) => {
           <div><div className="text-2xl font-semibold text-slate-900">{stats?.minutesStudied ?? 0}m</div><div className="text-xs text-slate-500 uppercase tracking-wide mt-1">Time</div></div>
         </div>
       </div>
-      {user?.isAdmin && (
-        <a href="/admin" className="block rounded-2xl border border-slate-900 bg-slate-900 text-white p-5 hover:bg-slate-800 transition">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs uppercase tracking-wide text-slate-300">Admin</div>
-              <div className="font-semibold mt-0.5">Open admin dashboard</div>
-              <div className="text-xs text-slate-400 mt-0.5">Manage courses, comments, users and newsletter.</div>
-            </div>
-            <ArrowRight className="h-5 w-5" />
-          </div>
-        </a>
-      )}
     </div>
   )
 }
