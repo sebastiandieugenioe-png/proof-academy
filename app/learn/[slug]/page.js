@@ -18,6 +18,19 @@ export async function generateStaticParams() {
 
 // Strip trailing " Beginner" for public-facing displays (level field still stores it for filtering/admin).
 function publicCourseTitle(t) { return typeof t === 'string' ? t.replace(/\s+Beginner\s*$/i, '').trim() : t; }
+// Broader helper: strip inline "Beginner" from SEO strings (e.g. "Vodka Beginner Lesson 1" → "Vodka Lesson 1")
+function stripBeginnerText(s) {
+  if (typeof s !== 'string') return s;
+  return s
+    .replace(/\bBeginner Lesson\b/gi, 'Lesson')
+    .replace(/\bBeginner('s)? Guide\b/gi, 'Guide')
+    .replace(/\bBeginner Vodka Course\b/gi, 'Vodka Course')
+    .replace(/\|\s*[A-Z][a-z]+\s+Beginner\s*(?=[|·—-]|$)/g, '')
+    .replace(/\s+Beginner\s*(?=[|·—-]|$)/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/[|·—-]\s*$/g, '')
+    .trim();
+}
 
 async function findByLessonSlug(slug) {
   // Priority: DB override → static → AI content.
@@ -37,7 +50,8 @@ async function findByLessonSlug(slug) {
     for (const c of pubs) {
       const l = (c.lessons || []).find((x) => x.slug === slug);
       if (l) {
-    return { course: { ...c, title: publicCourseTitle(c.title) }, lesson: hydrated, media: resolveMedia(hydrated, slug) };
+        const hydrated = hydrateWithCanonical(c.slug, slug, l);
+        return { course: { ...c, title: publicCourseTitle(c.title) }, lesson: hydrated, media: resolveMedia(hydrated, slug) };
       }
     }
   } catch (e) { console.error('findByLessonSlug DB error', e); }
@@ -82,8 +96,8 @@ export async function generateMetadata({ params }) {
   const found = await findByLessonSlug(slug);
   if (!found) return { title: 'Lesson not found — Online Spirits Club' };
   const { lesson, course, media } = found;
-  const seoDesc = lesson.seo?.description || (lesson.theory.split('\n\n')[0].replace(/\*\*/g, '').slice(0, 155) + '…');
-  const seoTitle = lesson.seo?.title || `${lesson.title} — ${course.title}`;
+  const seoDesc = stripBeginnerText(lesson.seo?.description || (lesson.theory.split('\n\n')[0].replace(/\*\*/g, '').slice(0, 155) + '…'));
+  const seoTitle = stripBeginnerText(lesson.seo?.title || `${lesson.title} — ${course.title}`);
   const url = `${siteUrl}/learn/${slug}`;
   const title = `${seoTitle} · Online Spirits Club`;
   const ogImage = absoluteUrl(media?.image);

@@ -122,7 +122,7 @@ async function findLessonMerged(courseSlug, lessonSlug) {
   const lesson = c.lessons[idx];
   const next = c.lessons[idx + 1] || null;
   const prev = c.lessons[idx - 1] || null;
-  return { course: { slug: c.slug, title: publicCourseTitle(c), rawTitle: c.title, accent: c.accent }, lesson, next, prev, index: idx, total: c.lessons.length };
+  return { course: { slug: c.slug, title: publicCourseTitle(c), rawTitle: c.title, level: c.level, accent: c.accent }, lesson, next, prev, index: idx, total: c.lessons.length };
 }
 
 export async function GET(request, { params }) {
