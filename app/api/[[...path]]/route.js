@@ -216,12 +216,14 @@ export async function GET(request, { params }) {
       })));
     }
 
-    // Build/version endpoint — used by footer to confirm what's deployed.
-    if (seg === 'version') {
+    // Build/version endpoint — admin-only. Kept out of the public surface so version
+    // strings are never used for fingerprinting by anonymous visitors.
+    if (seg === 'admin/version') {
       return json({
-        version: process.env.APP_VERSION || 'v1.1-admin-changes',
-        builtAt: process.env.BUILT_AT || new Date().toISOString(),
+        version: process.env.APP_VERSION || 'dev',
+        builtAt: process.env.BUILT_AT || null,
         env: process.env.NODE_ENV || 'development',
+        node: process.version,
       });
     }
 

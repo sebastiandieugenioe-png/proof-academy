@@ -8,7 +8,6 @@ import {
   Zap, StopCircle, Timer, Award, Smartphone,
 } from 'lucide-react'
 
-const APP_BUILD = 'Admin Changes v1.1'
 const ICONS = { Flame, GlassWater, Sparkles }
 
 const api = async (path, opts = {}) => {
@@ -71,16 +70,9 @@ function App() {
         </div>
       </main>
       <BottomNav user={user} route={route} onNav={go} />
-      <SiteFooter />
     </div>
   )
 }
-
-const SiteFooter = () => (
-  <div className="pointer-events-none fixed bottom-1 right-2 z-40 md:bottom-2 md:right-3 text-[10px] text-slate-400/70 font-mono tracking-tight select-none">
-    Build: {APP_BUILD}
-  </div>
-)
 
 const FullPageLoader = () => (
   <div className="min-h-screen grid place-items-center text-slate-500"><Loader2 className="h-6 w-6 animate-spin" /></div>
@@ -107,7 +99,7 @@ const TopBar = ({ user, onNav, onLogout }) => (
         ) : (
           <>
           <button onClick={() => { if (typeof window !== 'undefined') window.location.href = '/login' }} className="hidden sm:inline-flex text-sm h-9 px-3 items-center rounded-md hover:bg-slate-100 text-slate-700 font-medium">Log in</button>
-          <button onClick={() => { if (typeof window !== 'undefined') window.location.href = '/register' }} className="text-sm h-9 px-4 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm">Start learning</button>
+          <button onClick={() => { if (typeof window !== 'undefined') window.location.href = '/register' }} className="text-sm h-9 px-4 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm">Start free</button>
           </>
         )}
       </nav>
@@ -143,11 +135,11 @@ const Landing = ({ courses, onCta }) => (
   <div className="space-y-16 pt-4 md:pt-10">
     <nav className="flex items-center justify-end gap-2 -mt-2">
       <a href="/login" className="h-9 px-3 rounded-md hover:bg-slate-100 text-sm text-slate-700 font-medium inline-flex items-center">Log in</a>
-      <a href="/register" className="h-9 px-3.5 rounded-md bg-blue-600 hover:bg-blue-700 text-sm text-white font-medium inline-flex items-center gap-1.5">Start learning <ArrowRight className="h-3.5 w-3.5" /></a>
+      <a href="/register" className="h-9 px-3.5 rounded-md bg-blue-600 hover:bg-blue-700 text-sm text-white font-medium inline-flex items-center gap-1.5">Start free <ArrowRight className="h-3.5 w-3.5" /></a>
     </nav>
     <section className="text-center max-w-3xl mx-auto">
       <div className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-800 mb-6">
-        <Sparkles className="h-3.5 w-3.5" /> 100% free · science-based · no ads
+        <Sparkles className="h-3.5 w-3.5" /> Free forever · evidence-based · no ads
       </div>
       <h1 className="text-4xl md:text-6xl font-semibold tracking-tight text-slate-900">
         Master spirits, cocktails <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">& hospitality.</span>
@@ -159,7 +151,7 @@ const Landing = ({ courses, onCta }) => (
         <a href="/register" className="h-11 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm inline-flex items-center gap-2">Start free <ArrowRight className="h-4 w-4" /></a>
         <a href="#courses" className="h-11 px-6 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-800 font-medium">See courses</a>
       </div>
-      <p className="mt-4 text-xs text-slate-400">Signup takes 30 seconds. Start learning within a minute.</p>
+      <p className="mt-4 text-xs text-slate-400">Free forever. No ads. No credit card required.</p>
     </section>
 
     <section className="grid gap-4 md:grid-cols-4">

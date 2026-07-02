@@ -85,7 +85,9 @@ export default function AdminDashboard({ adminEmail }) {
 /* ===================== OVERVIEW ===================== */
 function Overview() {
   const [data, setData] = useState(null)
+  const [ver, setVer] = useState(null)
   useEffect(() => { api('/admin/overview').then(setData).catch(console.error) }, [])
+  useEffect(() => { api('/admin/version').then(setVer).catch(() => setVer(null)) }, [])
   if (!data) return <Spinner />
   return (
     <div className="space-y-6">
@@ -115,6 +117,14 @@ function Overview() {
           <Stat label="Course completion rate" value={`${data.learning.completionRate}%`} />
         </div>
       </div>
+      {ver && (
+        <div className="pt-4 border-t border-slate-100 text-[11px] font-mono text-slate-400 flex flex-wrap gap-x-4 gap-y-1">
+          <span>Build: <span className="text-slate-500">{ver.version}</span></span>
+          <span>Env: <span className="text-slate-500">{ver.env}</span></span>
+          {ver.builtAt && <span>Built: <span className="text-slate-500">{ver.builtAt}</span></span>}
+          {ver.node && <span>Node: <span className="text-slate-500">{ver.node}</span></span>}
+        </div>
+      )}
     </div>
   )
 }
