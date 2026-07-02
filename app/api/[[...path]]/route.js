@@ -8,6 +8,9 @@ import { schedule } from '@/lib/sm2';
 import { checkPassword, isAdminEmail, makeSessionToken, getAdminSessionFromRequest, ADMIN_COOKIE } from '@/lib/admin-auth';
 import { uploadImage, uploadImageFromUrl, fetchImageBuffer, deleteImage, MAX_UPLOAD_BYTES, ALLOWED_MIME } from '@/lib/image-storage';
 import { sanitizeContentHtml, htmlToPlainText } from '@/lib/sanitize';
+import { getUserIdFromRequest, makeUserSessionToken, USER_COOKIE, USER_COOKIE_CLEAR } from '@/lib/user-session';
+import { isSafeId, assertSafeId, isSafeSlug, assertSafeSlug, isSafeEmail, assertSafeEmail } from '@/lib/validators';
+import { rateLimit, ipFromRequest, rateLimitResponse } from '@/lib/rate-limit';
 import bcrypt from 'bcryptjs';
 
 const BCRYPT_ROUNDS = 10;
@@ -25,6 +28,30 @@ function sanitizeUserOut(u) {
   delete c._id;
   delete c.passwordHash;
   return c;
+}
+
+// Require an authenticated regular-user session for the request. Returns userId string or throws.
+function requireUser(request) {
+  const userId = getUserIdFromRequest(request);
+  if (!userId || !isSafeId(userId)) {
+    const e = new Error('Not authenticated');
+    e.status = 401;
+    throw e;
+  }
+  return userId;
+}
+
+// Attach the user session cookie to a NextResponse.
+function attachUserSession(res, userId) {
+  const token = makeUserSessionToken(userId);
+  res.cookies.set({ ...USER_COOKIE.options, name: USER_COOKIE.name, value: token });
+  return res;
+}
+
+// 429 response helper
+function tooMany(retryAfterMs) {
+  const r = rateLimitResponse(retryAfterMs);
+  return NextResponse.json(r.body, { status: r.status, headers: r.headers });
 }
 
 export const runtime = 'nodejs';
@@ -146,7 +173,6 @@ async function findLessonMerged(courseSlug, lessonSlug) {
 export async function GET(request, { params }) {
   const { path = [] } = await params;
   const url = new URL(request.url);
-  const userId = url.searchParams.get('userId') || request.headers.get('x-user-id');
   const seg = path.join('/');
 
   // Guard: all /api/admin/** requires a valid signed admin cookie
@@ -186,6 +212,7 @@ export async function GET(request, { params }) {
       return json(rows);
     }
     if (path[0] === 'pages' && path[1]) {
+      if (!isSafeSlug(path[1])) return err('Not found', 404);
       const db = await getDb();
       const p = await db.collection('pages').findOne({ slug: path[1], published: true });
       if (!p) return err('Page not found', 404);
@@ -194,6 +221,7 @@ export async function GET(request, { params }) {
     }
 
     if (path[0] === 'courses' && path[1]) {
+      if (!isSafeSlug(path[1])) return err('Course not found', 404);
       // Check slug alias first: if this slug was renamed, tell the client to redirect.
       const alias = await resolveCourseSlugAlias(path[1]);
       if (alias) return json({ redirect: alias }, { status: 301, headers: { Location: `/api/courses/${alias}` } });
@@ -206,6 +234,7 @@ export async function GET(request, { params }) {
     }
 
     if (path[0] === 'lessons' && path[1] && path[2]) {
+      if (!isSafeSlug(path[1]) || !isSafeSlug(path[2])) return err('Lesson not found', 404);
       const data = await findLessonMerged(path[1], path[2]);
       if (!data) return err('Lesson not found', 404);
       // Resolve media in priority order:
@@ -251,6 +280,7 @@ export async function GET(request, { params }) {
 
     // Public: serve stored lesson image
     if (path[0] === 'images' && path[1]) {
+      if (!isSafeId(path[1])) return err('Image not found', 404);
       const rec = await fetchImageBuffer(path[1]);
       if (!rec) return err('Image not found', 404);
       return new NextResponse(rec.buffer, {
@@ -266,7 +296,7 @@ export async function GET(request, { params }) {
 
     // User-scoped
     if (seg === 'me') {
-      if (!userId) return err('Not authenticated', 401);
+      const userId = requireUser(request);
       const db = await getDb();
       const user = await db.collection('users').findOne({ id: userId });
       if (!user) return err('User not found', 404);
@@ -277,14 +307,14 @@ export async function GET(request, { params }) {
     }
 
     if (seg === 'progress') {
-      if (!userId) return err('Not authenticated', 401);
+      const userId = requireUser(request);
       const db = await getDb();
       const rows = await db.collection('progress').find({ userId }).toArray();
       return json(rows.map((r) => ({ ...r, _id: undefined })));
     }
 
     if (seg === 'stats') {
-      if (!userId) return err('Not authenticated', 401);
+      const userId = requireUser(request);
       const db = await getDb();
       const completed = await db.collection('progress').countDocuments({ userId, completed: true });
       const cards = await db.collection('reviews').countDocuments({ userId });
@@ -305,7 +335,7 @@ export async function GET(request, { params }) {
     }
 
     if (seg === 'reviews/due') {
-      if (!userId) return err('Not authenticated', 401);
+      const userId = requireUser(request);
       const db = await getDb();
       const now = new Date();
       const rows = await db.collection('reviews').find({ userId, dueAt: { $lte: now } }).sort({ dueAt: 1 }).limit(50).toArray();
@@ -320,9 +350,10 @@ export async function GET(request, { params }) {
     //   5) unseeded from progressed lessons -> source='new'  (opt-in via ?includeNew=1)
     // Client passes ?exclude=id1,id2 to avoid re-serving in the same session.
     if (seg === 'study/next') {
-      if (!userId) return err('Not authenticated', 401);
+      const userId = requireUser(request);
       const db = await getDb();
-      const excludeIds = (url.searchParams.get('exclude') || '').split(',').map((s) => s.trim()).filter(Boolean);
+      const excludeIds = (url.searchParams.get('exclude') || '')
+        .split(',').map((s) => s.trim()).filter(Boolean).filter(isSafeId).slice(0, 500);
       const includeNew = url.searchParams.get('includeNew') === '1' || url.searchParams.get('includeNew') === 'true';
       const now = new Date();
       const d7 = new Date(now - 7 * 86400e3);
@@ -394,9 +425,20 @@ export async function GET(request, { params }) {
     }
 
     if (path[0] === 'comments' && path[1] && path[2]) {
+      if (!isSafeSlug(path[1]) || !isSafeSlug(path[2])) return err('Invalid course or lesson', 400);
       const db = await getDb();
-      const rows = await db.collection('comments').find({ courseSlug: path[1], lessonSlug: path[2], approved: { $ne: false } }).sort({ createdAt: -1 }).toArray();
-      return json(rows.map((r) => ({ ...r, _id: undefined })));
+      const rows = await db.collection('comments')
+        .find({ courseSlug: path[1], lessonSlug: path[2], approved: { $ne: false } })
+        .sort({ createdAt: -1 }).limit(200).toArray();
+      // Redact internal userId from public responses to prevent BOLA (SEC-001).
+      return json(rows.map((r) => ({
+        id: r.id,
+        userName: r.userName,
+        text: r.text,
+        courseSlug: r.courseSlug,
+        lessonSlug: r.lessonSlug,
+        createdAt: r.createdAt,
+      })));
     }
 
     if (seg === 'admin/comments') {
@@ -512,21 +554,25 @@ export async function GET(request, { params }) {
 
     if (seg === 'admin/users') {
       const db = await getDb();
-      const q = (url.searchParams.get('q') || '').trim().toLowerCase();
-      const filter = q ? { $or: [
-        { email: { $regex: q, $options: 'i' } },
-        { name: { $regex: q, $options: 'i' } },
+      const rawQ = (url.searchParams.get('q') || '').trim().toLowerCase().slice(0, 100);
+      // Escape regex meta so search stays literal (prevents ReDoS + operator injection).
+      const escQ = rawQ.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const filter = escQ ? { $or: [
+        { email: { $regex: escQ, $options: 'i' } },
+        { name: { $regex: escQ, $options: 'i' } },
       ] } : {};
       const rows = await db.collection('users').find(filter).sort({ createdAt: -1 }).limit(500).toArray();
       const total = await db.collection('users').countDocuments(filter);
-      return json({ total, users: rows.map((u) => ({ ...u, _id: undefined })) });
+      return json({ total, users: rows.map((u) => ({ ...u, _id: undefined, passwordHash: undefined })) });
     }
 
     if (path[0] === 'admin' && path[1] === 'users' && path[2]) {
+      if (!isSafeId(path[2])) return err('User not found', 404);
       const db = await getDb();
       const user = await db.collection('users').findOne({ id: path[2] });
       if (!user) return err('User not found', 404);
       delete user._id;
+      delete user.passwordHash;
       const progress = await db.collection('progress').find({ userId: user.id }).sort({ updatedAt: -1 }).toArray();
       const reviewsCount = await db.collection('reviews').countDocuments({ userId: user.id });
       const reviewsDone = await db.collection('reviews').countDocuments({ userId: user.id, lastReviewedAt: { $ne: null } });
@@ -561,6 +607,7 @@ export async function GET(request, { params }) {
       return json(rows.map((r) => ({ ...r, _id: undefined })));
     }
     if (path[0] === 'admin' && path[1] === 'pages' && path[2]) {
+      if (!isSafeId(path[2])) return err('Page not found', 404);
       const db = await getDb();
       const p = await db.collection('pages').findOne({ id: path[2] });
       if (!p) return err('Page not found', 404);
@@ -582,8 +629,11 @@ export async function GET(request, { params }) {
 
     return err('Not found', 404);
   } catch (e) {
+    if (e && e.status && e.status >= 400 && e.status < 500) {
+      return err(e.message || 'Bad request', e.status);
+    }
     console.error('GET error', seg, e);
-    return err(e.message || 'Server error', 500);
+    return err('Server error', 500);
   }
 }
 
@@ -599,6 +649,7 @@ export async function PATCH(request, { params }) {
 
   try {
     if (path[0] === 'admin' && path[1] === 'users' && path[2]) {
+      if (!isSafeId(path[2])) return err('Invalid user id', 400);
       const db = await getDb();
       const set = { updatedAt: new Date() };
       if (typeof body.name === 'string') set.name = body.name.trim();
@@ -610,6 +661,7 @@ export async function PATCH(request, { params }) {
       return NextResponse.json({ ok: true, user: u });
     }
     if (path[0] === 'admin' && path[1] === 'comments' && path[2]) {
+      if (!isSafeId(path[2])) return err('Invalid comment id', 400);
       const db = await getDb();
       const set = {};
       if (typeof body.approved === 'boolean') set.approved = body.approved;
@@ -622,6 +674,7 @@ export async function PATCH(request, { params }) {
 
     // Pages CMS — update
     if (path[0] === 'admin' && path[1] === 'pages' && path[2]) {
+      if (!isSafeId(path[2])) return err('Invalid page id', 400);
       const db = await getDb();
       const set = { updatedAt: new Date() };
       if (typeof body.title === 'string') set.title = body.title.trim().slice(0, 200);
@@ -651,8 +704,11 @@ export async function PATCH(request, { params }) {
     }
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   } catch (e) {
+    if (e && e.status && e.status >= 400 && e.status < 500) {
+      return NextResponse.json({ error: e.message || 'Bad request' }, { status: e.status });
+    }
     console.error('PATCH error', e);
-    return NextResponse.json({ error: e.message || 'Server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }
 
@@ -666,6 +722,7 @@ export async function DELETE(request, { params }) {
 
   try {
     if (path[0] === 'admin' && path[1] === 'users' && path[2]) {
+      if (!isSafeId(path[2])) return err('Invalid user id', 400);
       const db = await getDb();
       const uid = path[2];
       await Promise.all([
@@ -677,15 +734,18 @@ export async function DELETE(request, { params }) {
       return NextResponse.json({ ok: true });
     }
     if (path[0] === 'admin' && path[1] === 'comments' && path[2]) {
+      if (!isSafeId(path[2])) return err('Invalid comment id', 400);
       const db = await getDb();
       await db.collection('comments').deleteOne({ id: path[2] });
       return NextResponse.json({ ok: true });
     }
     if (path[0] === 'admin' && path[1] === 'images' && path[2]) {
+      if (!isSafeId(path[2])) return err('Invalid image id', 400);
       const ok = await deleteImage(path[2]);
       return NextResponse.json({ ok });
     }
     if (path[0] === 'admin' && path[1] === 'pages' && path[2]) {
+      if (!isSafeId(path[2])) return err('Invalid page id', 400);
       const db = await getDb();
       const res = await db.collection('pages').deleteOne({ id: path[2] });
       return NextResponse.json({ ok: res.deletedCount > 0 });
@@ -695,8 +755,11 @@ export async function DELETE(request, { params }) {
     }
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   } catch (e) {
+    if (e && e.status && e.status >= 400 && e.status < 500) {
+      return NextResponse.json({ error: e.message || 'Bad request' }, { status: e.status });
+    }
     console.error('DELETE error', e);
-    return NextResponse.json({ error: e.message || 'Server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }
 
@@ -737,9 +800,15 @@ export async function POST(request, { params }) {
 
   // Public admin-auth endpoints (do not need the cookie yet)
   if (seg === 'admin-auth') {
+    const ip = ipFromRequest(request);
+    const emailForLimit = String((body && body.email) || '').trim().toLowerCase().slice(0, 254);
+    // 8 attempts per 10 min per (ip+email); 30 per 10 min per ip.
+    const rl1 = rateLimit(`admin-auth:${ip}:${emailForLimit}`, { max: 8, windowMs: 10 * 60 * 1000 });
+    if (!rl1.allowed) return tooMany(rl1.retryAfterMs);
+    const rl2 = rateLimit(`admin-auth:${ip}`, { max: 30, windowMs: 10 * 60 * 1000 });
+    if (!rl2.allowed) return tooMany(rl2.retryAfterMs);
     const { email, password } = body || {};
     if (!isAdminEmail(email)) {
-      // Deliberately generic error to avoid leaking whether an email is on the allowlist
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
     }
     if (!checkPassword(password)) {
@@ -753,6 +822,13 @@ export async function POST(request, { params }) {
   if (seg === 'admin-auth/logout') {
     const res = NextResponse.json({ ok: true });
     res.cookies.set({ ...ADMIN_COOKIE.options, name: ADMIN_COOKIE.name, value: '', maxAge: 0 });
+    return res;
+  }
+
+  // Regular-user logout (clears the osc_user cookie).
+  if (seg === 'logout') {
+    const res = NextResponse.json({ ok: true });
+    res.cookies.set({ ...USER_COOKIE_CLEAR.options, name: USER_COOKIE_CLEAR.name, value: '' });
     return res;
   }
 
@@ -779,16 +855,21 @@ function sanitizeRole(v) {
 function sanitizeUserOut2Remove() { /* removed — using module-level sanitizeUserOut */ }
 
     if (seg === 'register') {
+      // Rate limit
+      const ip = ipFromRequest(request);
+      const rl = rateLimit(`register:${ip}`, { max: 10, windowMs: 60 * 60 * 1000 });
+      if (!rl.allowed) return tooMany(rl.retryAfterMs);
+
       const email = (body.email || '').trim().toLowerCase();
       const password = body.password;
       const confirmPassword = body.confirmPassword;
-      const name = (body.name || '').trim() || email.split('@')[0];
+      const name = (body.name || '').trim() || (isSafeEmail(email) ? email.split('@')[0] : '');
       const country = sanitizeProfileField(body.country, 60);
       const city = sanitizeProfileField(body.city, 80);
       const role = sanitizeRole(body.role);
       const newsletter = !!body.newsletter;
 
-      if (!email || !email.includes('@')) return err('Valid email required');
+      if (!isSafeEmail(email)) return err('Valid email required');
       if (!country) return err('Country is required');
       if (!city) return err('City is required');
       if (!role) return err('Role is required');
@@ -798,26 +879,14 @@ function sanitizeUserOut2Remove() { /* removed — using module-level sanitizeUs
 
       const db = await getDb();
       const existing = await db.collection('users').findOne({ email });
-      if (existing?.passwordHash) return err('An account with this email already exists. Please log in.', 409);
-
-      const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+      // SEC-002: never let /register overwrite or claim an existing account, even a legacy one.
+      // Legacy accounts (no passwordHash) must go through a supported claim flow (email token),
+      // which is not enabled for the MVP.
       if (existing) {
-        // Migrate legacy email-only user in place — keep progress, newsletter, etc.
-        const patch = {
-          passwordHash, authMethod: 'password', verified: true, updatedAt: new Date(),
-          ...(existing.country ? {} : { country }),
-          ...(existing.city ? {} : { city }),
-          ...(existing.role ? {} : { role }),
-          ...(!existing.newsletter && newsletter ? { newsletter: true } : {}),
-        };
-        await db.collection('users').updateOne({ id: existing.id }, { $set: patch });
-        if (!existing.newsletter && newsletter) {
-          await db.collection('newsletter').insertOne({ id: uuid(), email, source: 'register', createdAt: new Date() });
-        }
-        const user = await db.collection('users').findOne({ id: existing.id });
-        return json({ user: sanitizeUserOut(user), migrated: true });
+        return err('This email is already registered. Please log in or contact support.', 409);
       }
 
+      const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
       const user = {
         id: uuid(), email, name, provider: 'email',
         authMethod: 'password',
@@ -832,41 +901,41 @@ function sanitizeUserOut2Remove() { /* removed — using module-level sanitizeUs
       if (newsletter) {
         await db.collection('newsletter').insertOne({ id: uuid(), email, source: 'register', createdAt: new Date() });
       }
-      return json({ user: sanitizeUserOut(user) });
+      const res = json({ user: sanitizeUserOut(user) });
+      attachUserSession(res, user.id);
+      return res;
     }
 
     if (seg === 'login') {
+      // Rate limit — per (ip+email) + per ip
+      const ip = ipFromRequest(request);
+      const emailForLimit = String((body && body.email) || '').trim().toLowerCase().slice(0, 254);
+      const rl1 = rateLimit(`login:${ip}:${emailForLimit}`, { max: 8, windowMs: 10 * 60 * 1000 });
+      if (!rl1.allowed) return tooMany(rl1.retryAfterMs);
+      const rl2 = rateLimit(`login:${ip}`, { max: 30, windowMs: 10 * 60 * 1000 });
+      if (!rl2.allowed) return tooMany(rl2.retryAfterMs);
+
       const email = (body.email || '').trim().toLowerCase();
       const password = body.password;
-      if (!email || !password) return err('Email and password required', 400);
+      if (!isSafeEmail(email) || typeof password !== 'string' || !password) {
+        return err('Invalid email or password', 401);
+      }
       const db = await getDb();
       const user = await db.collection('users').findOne({ email });
-      if (!user) return err('Invalid email or password', 401);
-      if (!user.passwordHash) {
-        // Legacy user without password — cannot log in until they set one.
-        return json({ needsPasswordSetup: true, userId: user.id, email: user.email }, { status: 428 });
-      }
+      // SEC-002: legacy accounts without a password MUST NOT reveal their existence and
+      // must not be claimable via /set-password. Treat as invalid credentials.
+      if (!user || !user.passwordHash) return err('Invalid email or password', 401);
       const ok = await bcrypt.compare(password, user.passwordHash);
       if (!ok) return err('Invalid email or password', 401);
-      return json({ user: sanitizeUserOut(user) });
+      const res = json({ user: sanitizeUserOut(user) });
+      attachUserSession(res, user.id);
+      return res;
     }
 
     if (seg === 'set-password') {
-      const email = (body.email || '').trim().toLowerCase();
-      const password = body.password;
-      const confirmPassword = body.confirmPassword;
-      const pwErr = validatePassword(password);
-      if (pwErr) return err(pwErr);
-      if (password !== confirmPassword) return err('Passwords do not match');
-      if (!email) return err('Email required');
-      const db = await getDb();
-      const user = await db.collection('users').findOne({ email });
-      if (!user) return err('User not found', 404);
-      if (user.passwordHash) return err('Account already has a password. Please log in.', 409);
-      const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-      await db.collection('users').updateOne({ id: user.id }, { $set: { passwordHash, authMethod: 'password', updatedAt: new Date() } });
-      const fresh = await db.collection('users').findOne({ id: user.id });
-      return json({ user: sanitizeUserOut(fresh) });
+      // SEC-002: legacy-user claim flow disabled. Requires a verified email-token
+      // delivery mechanism which is not yet available in the MVP.
+      return err('Legacy account claim is not available. Please contact support.', 410);
     }
 
     if (seg === 'auth') {
@@ -877,77 +946,41 @@ function sanitizeUserOut2Remove() { /* removed — using module-level sanitizeUs
     }
 
     if (seg === 'auth-legacy-disabled') {
-      const email = (body.email || '').trim().toLowerCase();
-      const name = (body.name || '').trim() || email.split('@')[0];
-      if (!email || !email.includes('@')) return err('Valid email required');
-      const country = sanitizeProfileField(body.country, 60);
-      const city = sanitizeProfileField(body.city, 80);
-      const role = sanitizeRole(body.role);
-      const db = await getDb();
-      let user = await db.collection('users').findOne({ email });
-      if (!user) {
-        user = {
-          id: uuid(), email, name, provider: 'email',
-          authMethod: 'email',
-          verified: true,
-          newsletter: !!body.newsletter,
-          newsletterSyncedAt: null,
-          source: body.source || null,
-          country, city, role,
-          createdAt: new Date(), updatedAt: new Date(),
-        };
-        await db.collection('users').insertOne({ ...user });
-        if (user.newsletter) {
-          await db.collection('newsletter').insertOne({ id: uuid(), email, source: 'signup', createdAt: new Date() });
-        }
-      } else {
-        // Fill in profile fields if user provided them (don't overwrite existing values with blanks).
-        const patch = { updatedAt: new Date() };
-        if (body.newsletter && !user.newsletter) {
-          patch.newsletter = true;
-          await db.collection('newsletter').insertOne({ id: uuid(), email, source: 'signup', createdAt: new Date() });
-          user.newsletter = true;
-        }
-        if (country && !user.country) patch.country = country;
-        if (city && !user.city) patch.city = city;
-        if (role && !user.role) patch.role = role;
-        if (Object.keys(patch).length > 1) {
-          await db.collection('users').updateOne({ id: user.id }, { $set: patch });
-          Object.assign(user, patch);
-        }
-      }
-      delete user._id;
-      return json({ user });
+      return err('Deprecated', 410);
     }
 
     if (seg === 'me/update') {
-      const { userId, name, newsletter, country, city, role } = body;
-      if (!userId) return err('Not authenticated', 401);
+      const userId = requireUser(request);
+      const { name, newsletter, country, city, role } = body;
       const db = await getDb();
       const set = { updatedAt: new Date() };
-      if (typeof name === 'string') set.name = name;
+      if (typeof name === 'string') set.name = name.trim().slice(0, 100);
       if (typeof newsletter === 'boolean') set.newsletter = newsletter;
       if (typeof country === 'string') set.country = sanitizeProfileField(country, 60);
       if (typeof city === 'string') set.city = sanitizeProfileField(city, 80);
       if (typeof role === 'string') set.role = sanitizeRole(role);
       await db.collection('users').updateOne({ id: userId }, { $set: set });
       const user = await db.collection('users').findOne({ id: userId });
-      delete user._id;
-      return json({ user });
+      return json({ user: sanitizeUserOut(user) });
     }
 
     if (seg === 'progress') {
-      const { userId, courseSlug, lessonSlug, completed, step, minutesSpent, quizScore } = body;
-      if (!userId || !courseSlug || !lessonSlug) return err('Missing fields');
+      const userId = requireUser(request);
+      const { courseSlug, lessonSlug, completed, step, minutesSpent, quizScore } = body;
+      if (!isSafeSlug(courseSlug) || !isSafeSlug(lessonSlug)) return err('Invalid course or lesson', 400);
+      const stepStr = typeof step === 'string' && step.length <= 40 ? step : undefined;
+      const completedBool = typeof completed === 'boolean' ? completed : undefined;
+      const mins = typeof minutesSpent === 'number' && minutesSpent >= 0 && minutesSpent < 24 * 60 ? minutesSpent : 0;
+      const quiz = typeof quizScore === 'number' && quizScore >= 0 && quizScore <= 100 ? quizScore : null;
       const db = await getDb();
       const existing = await db.collection('progress').findOne({ userId, courseSlug, lessonSlug });
       const doc = {
         id: existing?.id || uuid(),
         userId, courseSlug, lessonSlug,
-        step: step ?? existing?.step ?? 'objectives',
-        completed: completed ?? existing?.completed ?? false,
-        minutesSpent: (existing?.minutesSpent || 0) + (minutesSpent || 0),
-        quizScore: quizScore ?? existing?.quizScore ?? null,
+        step: stepStr ?? existing?.step ?? 'objectives',
+        completed: completedBool ?? existing?.completed ?? false,
+        minutesSpent: (existing?.minutesSpent || 0) + mins,
+        quizScore: quiz ?? existing?.quizScore ?? null,
         createdAt: existing?.createdAt || new Date(),
         updatedAt: new Date(),
       };
@@ -958,7 +991,7 @@ function sanitizeUserOut2Remove() { /* removed — using module-level sanitizeUs
       );
 
       // seed reviews when a lesson is completed and reviews don't exist yet
-      if (completed) {
+      if (completedBool) {
         const has = await db.collection('reviews').countDocuments({ userId, courseSlug, lessonSlug });
         if (has === 0) {
           const lp = getLesson(courseSlug, lessonSlug);
@@ -978,30 +1011,38 @@ function sanitizeUserOut2Remove() { /* removed — using module-level sanitizeUs
     }
 
     if (seg === 'reviews/answer') {
-      const { userId, reviewId, grade } = body;
-      if (!userId || !reviewId || !['again', 'hard', 'easy'].includes(grade)) return err('Missing fields');
+      const userId = requireUser(request);
+      const { reviewId, grade } = body;
+      if (!isSafeId(reviewId) || !['again', 'hard', 'easy'].includes(grade)) return err('Missing fields');
       const db = await getDb();
       const card = await db.collection('reviews').findOne({ id: reviewId, userId });
       if (!card) return err('Card not found', 404);
       const upd = schedule(card, grade);
-      await db.collection('reviews').updateOne({ id: reviewId }, { $set: upd });
+      await db.collection('reviews').updateOne({ id: reviewId, userId }, { $set: upd });
       return json({ ok: true, card: { ...card, ...upd, _id: undefined } });
     }
 
     if (seg === 'comments') {
-      const { userId, courseSlug, lessonSlug, text } = body;
-      if (!userId || !courseSlug || !lessonSlug || !text?.trim()) return err('Missing fields');
+      const userId = requireUser(request);
+      const { courseSlug, lessonSlug, text } = body;
+      if (!isSafeSlug(courseSlug) || !isSafeSlug(lessonSlug)) return err('Invalid course or lesson', 400);
+      if (typeof text !== 'string' || !text.trim()) return err('Missing fields');
       const db = await getDb();
       const user = await db.collection('users').findOne({ id: userId });
       if (!user) return err('Not authenticated', 401);
       const doc = {
         id: uuid(), userId, userName: user.name, courseSlug, lessonSlug,
         text: text.trim().slice(0, 800),
-        approved: true, // manual moderation off by default; toggle in admin later
+        approved: true,
         createdAt: new Date(),
       };
       await db.collection('comments').insertOne(doc);
-      return json({ ok: true, comment: { ...doc, _id: undefined } });
+      // Do NOT return userId to the client — mirror the redacted public shape.
+      return json({ ok: true, comment: {
+        id: doc.id, userName: doc.userName,
+        courseSlug: doc.courseSlug, lessonSlug: doc.lessonSlug,
+        text: doc.text, createdAt: doc.createdAt,
+      } });
     }
 
     if (seg === 'newsletter') {
@@ -1196,7 +1237,10 @@ function sanitizeUserOut2Remove() { /* removed — using module-level sanitizeUs
 
     return err('Not found', 404);
   } catch (e) {
+    if (e && e.status && e.status >= 400 && e.status < 500) {
+      return err(e.message || 'Bad request', e.status);
+    }
     console.error('POST error', seg, e);
-    return err(e.message || 'Server error', 500);
+    return err('Server error', 500);
   }
 }

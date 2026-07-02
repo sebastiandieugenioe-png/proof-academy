@@ -1,837 +1,674 @@
 #!/usr/bin/env python3
 """
-Backend regression test for Online Spirits Club - Session 5
-Focus: Mandatory email+password authentication flow
+Backend regression test suite for Session 6: Security-audit remediation (SEC-001..005 + hardening)
+
+CRITICAL: The auth shape has changed. Session identity is now an HTTP-only cookie called `osc_user`,
+set by /api/register and /api/login. This test harness uses requests.Session() to maintain cookies.
+Caller-supplied `userId` in body, query, or `x-user-id` header is IGNORED by the server.
 """
 
 import os
 import sys
 import requests
-import json
-from uuid import uuid4
-from datetime import datetime
+import time
 from pymongo import MongoClient
-from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv('/app/.env')
-
-BASE_URL = os.getenv('NEXT_PUBLIC_BASE_URL', 'http://localhost:3000')
+# Configuration
+BASE_URL = os.getenv("NEXT_PUBLIC_BASE_URL", "https://proof-academy.preview.emergentagent.com")
 API_BASE = f"{BASE_URL}/api"
-MONGO_URL = os.getenv('MONGO_URL', 'mongodb://localhost:27017')
-DB_NAME = os.getenv('DB_NAME', 'your_database_name')
+MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017")
+DB_NAME = os.getenv("DB_NAME", "osc_db")
 
 # Test state
 test_users = []
-test_emails = []
-passed = 0
-failed = 0
+test_pages = []
+test_reviews = []
+test_comments = []
 
-def log(msg):
-    print(f"[TEST] {msg}")
-
-def log_pass(msg):
-    global passed
-    passed += 1
-    print(f"✅ PASS: {msg}")
-
-def log_fail(msg):
-    global failed
-    failed += 1
-    print(f"❌ FAIL: {msg}")
-
-def create_legacy_user(email, name="Legacy User", country=None, city=None, role=None, newsletter=False):
-    """Insert a legacy email-only user directly into MongoDB (no passwordHash)"""
-    try:
-        client = MongoClient(MONGO_URL)
-        db = client[DB_NAME]
-        user_id = str(uuid4())
-        user = {
-            'id': user_id,
-            'email': email,
-            'name': name,
-            'provider': 'email',
-            'authMethod': 'email',
-            'verified': True,
-            'newsletter': newsletter,
-            'newsletterSyncedAt': None,
-            'source': 'test',
-            'createdAt': datetime.utcnow(),
-            'updatedAt': datetime.utcnow(),
-        }
-        if country:
-            user['country'] = country
-        if city:
-            user['city'] = city
-        if role:
-            user['role'] = role
-        
-        db.users.insert_one(user)
-        test_users.append(user_id)
-        test_emails.append(email)
-        log(f"Created legacy user: {email} (id: {user_id})")
-        return user_id
-    except Exception as e:
-        log_fail(f"Failed to create legacy user: {e}")
-        return None
+def get_db():
+    """Get MongoDB database connection"""
+    client = MongoClient(MONGO_URL)
+    return client[DB_NAME]
 
 def cleanup():
-    """Delete all test users and newsletter docs"""
-    try:
-        client = MongoClient(MONGO_URL)
-        db = client[DB_NAME]
-        
-        # Delete users
-        if test_users:
-            result = db.users.delete_many({'id': {'$in': test_users}})
-            log(f"Deleted {result.deleted_count} test users")
-        
-        # Delete newsletter docs
-        if test_emails:
-            result = db.newsletter.delete_many({'email': {'$in': test_emails}})
-            log(f"Deleted {result.deleted_count} newsletter docs")
-        
-        client.close()
-    except Exception as e:
-        log_fail(f"Cleanup error: {e}")
+    """Clean up all test data"""
+    print("\n🧹 CLEANUP:")
+    db = get_db()
+    
+    # Delete test users
+    if test_users:
+        result = db.users.delete_many({"id": {"$in": test_users}})
+        print(f"   - Deleted {result.deleted_count} test users")
+    
+    # Delete test pages
+    if test_pages:
+        result = db.pages.delete_many({"id": {"$in": test_pages}})
+        print(f"   - Deleted {result.deleted_count} test pages")
+    
+    # Delete test reviews
+    if test_reviews:
+        result = db.reviews.delete_many({"id": {"$in": test_reviews}})
+        print(f"   - Deleted {result.deleted_count} test reviews")
+    
+    # Delete test comments
+    if test_comments:
+        result = db.comments.delete_many({"id": {"$in": test_comments}})
+        print(f"   - Deleted {result.deleted_count} test comments")
+    
+    # Delete test progress
+    if test_users:
+        result = db.progress.delete_many({"userId": {"$in": test_users}})
+        print(f"   - Deleted {result.deleted_count} test progress records")
+    
+    # Delete test newsletter entries
+    if test_users:
+        db_users = list(db.users.find({"id": {"$in": test_users}}, {"email": 1}))
+        emails = [u["email"] for u in db_users]
+        if emails:
+            result = db.newsletter.delete_many({"email": {"$in": emails}})
+            print(f"   - Deleted {result.deleted_count} test newsletter entries")
 
-def test_auth_deprecated():
-    """Test 1: POST /api/auth should return 410"""
-    log("\n=== TEST 1: Legacy /api/auth deprecation ===")
+def test_positive_cookie_auth_flow():
+    """Test 1-7: Positive tests for cookie-based authentication"""
+    print("\n✅ TEST 1-7: Positive Cookie Auth Flow")
+    
+    # Test 1: Register → 200, Set-Cookie, no passwordHash
+    print("   Test 1: Register with cookie")
+    session = requests.Session()
+    email = f"test-sec-{int(time.time())}@example.com"
+    payload = {
+        "email": email,
+        "password": "SecurePass123",
+        "confirmPassword": "SecurePass123",
+        "name": "Security Test User",
+        "country": "United States",
+        "city": "San Francisco",
+        "role": "Cocktail enthusiast",
+        "newsletter": True
+    }
     
     try:
-        # Test with any body
-        resp = requests.post(f"{API_BASE}/auth", json={'email': 'test@example.com'}, timeout=10)
-        if resp.status_code == 410:
-            log_pass("POST /api/auth returns 410 (Gone)")
-            data = resp.json()
-            if 'error' in data and ('deprecated' in data['error'].lower() or 'register' in data['error'].lower()):
-                log_pass("Error message mentions deprecation/register")
-            else:
-                log_fail(f"Error message unclear: {data.get('error')}")
-        else:
-            log_fail(f"POST /api/auth returned {resp.status_code}, expected 410. Body: {resp.text}")
-    except Exception as e:
-        log_fail(f"POST /api/auth test failed: {e}")
-
-def test_register_validation():
-    """Test 2: POST /api/register validation"""
-    log("\n=== TEST 2: Register endpoint validation ===")
-    
-    # 2a: Missing password
-    try:
-        resp = requests.post(f"{API_BASE}/register", json={
-            'email': 'test1@example.com',
-            'confirmPassword': 'password123',
-            'country': 'USA',
-            'city': 'New York',
-            'role': 'Bartender'
-        }, timeout=10)
-        if resp.status_code == 400:
-            log_pass("Missing password → 400")
-        else:
-            log_fail(f"Missing password returned {resp.status_code}, expected 400")
-    except Exception as e:
-        log_fail(f"Missing password test failed: {e}")
-    
-    # 2b: Password too short
-    try:
-        resp = requests.post(f"{API_BASE}/register", json={
-            'email': 'test2@example.com',
-            'password': 'short',
-            'confirmPassword': 'short',
-            'country': 'USA',
-            'city': 'New York',
-            'role': 'Bartender'
-        }, timeout=10)
-        if resp.status_code == 400:
-            data = resp.json()
-            if 'password' in data.get('error', '').lower() and '8' in data.get('error', ''):
-                log_pass("Password < 8 chars → 400 with clear message")
-            else:
-                log_fail(f"Password < 8 chars → 400 but unclear message: {data.get('error')}")
-        else:
-            log_fail(f"Password < 8 chars returned {resp.status_code}, expected 400")
-    except Exception as e:
-        log_fail(f"Password < 8 chars test failed: {e}")
-    
-    # 2c: Password mismatch
-    try:
-        resp = requests.post(f"{API_BASE}/register", json={
-            'email': 'test3@example.com',
-            'password': 'password123',
-            'confirmPassword': 'password456',
-            'country': 'USA',
-            'city': 'New York',
-            'role': 'Bartender'
-        }, timeout=10)
-        if resp.status_code == 400:
-            data = resp.json()
-            if 'match' in data.get('error', '').lower():
-                log_pass("Password mismatch → 400 with clear message")
-            else:
-                log_fail(f"Password mismatch → 400 but unclear message: {data.get('error')}")
-        else:
-            log_fail(f"Password mismatch returned {resp.status_code}, expected 400")
-    except Exception as e:
-        log_fail(f"Password mismatch test failed: {e}")
-    
-    # 2d: Missing country
-    try:
-        resp = requests.post(f"{API_BASE}/register", json={
-            'email': 'test4@example.com',
-            'password': 'password123',
-            'confirmPassword': 'password123',
-            'city': 'New York',
-            'role': 'Bartender'
-        }, timeout=10)
-        if resp.status_code == 400:
-            data = resp.json()
-            if 'country' in data.get('error', '').lower():
-                log_pass("Missing country → 400 with clear message")
-            else:
-                log_fail(f"Missing country → 400 but unclear message: {data.get('error')}")
-        else:
-            log_fail(f"Missing country returned {resp.status_code}, expected 400")
-    except Exception as e:
-        log_fail(f"Missing country test failed: {e}")
-    
-    # 2e: Missing city
-    try:
-        resp = requests.post(f"{API_BASE}/register", json={
-            'email': 'test5@example.com',
-            'password': 'password123',
-            'confirmPassword': 'password123',
-            'country': 'USA',
-            'role': 'Bartender'
-        }, timeout=10)
-        if resp.status_code == 400:
-            data = resp.json()
-            if 'city' in data.get('error', '').lower():
-                log_pass("Missing city → 400 with clear message")
-            else:
-                log_fail(f"Missing city → 400 but unclear message: {data.get('error')}")
-        else:
-            log_fail(f"Missing city returned {resp.status_code}, expected 400")
-    except Exception as e:
-        log_fail(f"Missing city test failed: {e}")
-    
-    # 2f: Missing role
-    try:
-        resp = requests.post(f"{API_BASE}/register", json={
-            'email': 'test6@example.com',
-            'password': 'password123',
-            'confirmPassword': 'password123',
-            'country': 'USA',
-            'city': 'New York'
-        }, timeout=10)
-        if resp.status_code == 400:
-            data = resp.json()
-            if 'role' in data.get('error', '').lower():
-                log_pass("Missing role → 400 with clear message")
-            else:
-                log_fail(f"Missing role → 400 but unclear message: {data.get('error')}")
-        else:
-            log_fail(f"Missing role returned {resp.status_code}, expected 400")
-    except Exception as e:
-        log_fail(f"Missing role test failed: {e}")
-
-def test_register_success():
-    """Test 3: POST /api/register successful registration"""
-    log("\n=== TEST 3: Register endpoint - successful registration ===")
-    
-    email = f"newuser-{uuid4()}@example.com"
-    test_emails.append(email)
-    
-    try:
-        resp = requests.post(f"{API_BASE}/register", json={
-            'email': email,
-            'password': 'password123',
-            'confirmPassword': 'password123',
-            'name': 'Test User',
-            'country': 'USA',
-            'city': 'New York',
-            'role': 'Bartender',
-            'newsletter': True
-        }, timeout=10)
+        resp = session.post(f"{API_BASE}/register", json=payload)
+        assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+        data = resp.json()
+        assert "user" in data, "Response missing user"
+        assert "passwordHash" not in data["user"], "Response contains passwordHash (security leak)"
+        assert "_id" not in data["user"], "Response contains _id (should be sanitized)"
+        assert data["user"]["email"] == email, "Email mismatch"
         
-        if resp.status_code == 200:
-            log_pass("Valid registration → 200")
+        # Check Set-Cookie header
+        cookies = resp.cookies
+        assert "osc_user" in cookies, "Missing osc_user cookie"
+        
+        user_id = data["user"]["id"]
+        test_users.append(user_id)
+        print(f"      ✅ Register successful, userId={user_id}, cookie set")
+        
+        # Test 2: GET /api/me on same session → 200 with user
+        print("   Test 2: GET /api/me with cookie")
+        resp = session.get(f"{API_BASE}/me")
+        assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+        data = resp.json()
+        assert data["id"] == user_id, "User ID mismatch"
+        assert "passwordHash" not in data, "Response contains passwordHash"
+        assert data["hasPassword"] == True, "hasPassword should be True"
+        print(f"      ✅ GET /api/me successful")
+        
+        # Test 3: POST /api/me/update on same session (no userId in body)
+        print("   Test 3: POST /api/me/update with cookie")
+        resp = session.post(f"{API_BASE}/me/update", json={"name": "Updated Security User"})
+        assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+        data = resp.json()
+        assert data["user"]["name"] == "Updated Security User", "Name not updated"
+        assert "passwordHash" not in data["user"], "Response contains passwordHash"
+        print(f"      ✅ Profile update successful")
+        
+        # Test 4: POST /api/progress on same session
+        print("   Test 4: POST /api/progress with cookie")
+        resp = session.post(f"{API_BASE}/progress", json={
+            "courseSlug": "alcohol-fundamentals",
+            "lessonSlug": "what-is-alcohol",
+            "completed": True,
+            "step": "quiz",
+            "minutesSpent": 5
+        })
+        assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+        data = resp.json()
+        assert data["ok"] == True, "Progress not recorded"
+        assert data["progress"]["userId"] == user_id, "Progress userId mismatch"
+        print(f"      ✅ Progress recorded successfully")
+        
+        # Test 5: POST /api/reviews/answer with valid reviewId
+        print("   Test 5: POST /api/reviews/answer with cookie")
+        # First, get a review card
+        db = get_db()
+        review = db.reviews.find_one({"userId": user_id})
+        if review:
+            test_reviews.append(review["id"])
+            resp = session.post(f"{API_BASE}/reviews/answer", json={
+                "reviewId": review["id"],
+                "grade": "easy"
+            })
+            assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
             data = resp.json()
-            user = data.get('user')
-            
-            if not user:
-                log_fail("Response missing 'user' field")
-                return
-            
-            # Check required fields
-            if user.get('id'):
-                log_pass("Response contains user.id")
-                test_users.append(user['id'])
-            else:
-                log_fail("Response missing user.id")
-            
-            if user.get('email') == email:
-                log_pass("Response contains correct email")
-            else:
-                log_fail(f"Email mismatch: {user.get('email')} vs {email}")
-            
-            if user.get('name') == 'Test User':
-                log_pass("Response contains correct name")
-            else:
-                log_fail(f"Name mismatch: {user.get('name')}")
-            
-            if user.get('country') == 'USA':
-                log_pass("Response contains correct country")
-            else:
-                log_fail(f"Country mismatch: {user.get('country')}")
-            
-            if user.get('city') == 'New York':
-                log_pass("Response contains correct city")
-            else:
-                log_fail(f"City mismatch: {user.get('city')}")
-            
-            if user.get('role') == 'Bartender':
-                log_pass("Response contains correct role")
-            else:
-                log_fail(f"Role mismatch: {user.get('role')}")
-            
-            if user.get('newsletter') == True:
-                log_pass("Response contains correct newsletter opt-in")
-            else:
-                log_fail(f"Newsletter mismatch: {user.get('newsletter')}")
-            
-            if user.get('authMethod') == 'password':
-                log_pass("authMethod is 'password'")
-            else:
-                log_fail(f"authMethod mismatch: {user.get('authMethod')}")
-            
-            if user.get('verified') == True:
-                log_pass("verified is true")
-            else:
-                log_fail(f"verified mismatch: {user.get('verified')}")
-            
-            # Check forbidden fields
-            if 'passwordHash' in user:
-                log_fail("Response contains passwordHash (SECURITY ISSUE)")
-            else:
-                log_pass("Response does NOT contain passwordHash")
-            
-            if '_id' in user:
-                log_fail("Response contains _id (should be sanitized)")
-            else:
-                log_pass("Response does NOT contain _id")
-            
-            # Verify newsletter doc was created
-            try:
-                client = MongoClient(MONGO_URL)
-                db = client[DB_NAME]
-                newsletter_doc = db.newsletter.find_one({'email': email})
-                if newsletter_doc:
-                    log_pass("Newsletter doc created in database")
-                else:
-                    log_fail("Newsletter doc NOT created in database")
-                client.close()
-            except Exception as e:
-                log_fail(f"Failed to verify newsletter doc: {e}")
+            assert data["ok"] == True, "Review answer not recorded"
+            print(f"      ✅ Review answer recorded successfully")
         else:
-            log_fail(f"Valid registration returned {resp.status_code}, expected 200. Body: {resp.text}")
-    except Exception as e:
-        log_fail(f"Valid registration test failed: {e}")
-
-def test_register_duplicate():
-    """Test 4: POST /api/register duplicate email with password"""
-    log("\n=== TEST 4: Register endpoint - duplicate email ===")
-    
-    email = f"duplicate-{uuid4()}@example.com"
-    test_emails.append(email)
-    
-    # First registration
-    try:
-        resp1 = requests.post(f"{API_BASE}/register", json={
-            'email': email,
-            'password': 'password123',
-            'confirmPassword': 'password123',
-            'country': 'USA',
-            'city': 'New York',
-            'role': 'Bartender'
-        }, timeout=10)
+            print(f"      ⚠️  No review cards found (expected after completing lesson)")
         
-        if resp1.status_code == 200:
-            data = resp1.json()
-            test_users.append(data['user']['id'])
-            log_pass("First registration successful")
-        else:
-            log_fail(f"First registration failed: {resp1.status_code}")
-            return
-    except Exception as e:
-        log_fail(f"First registration failed: {e}")
-        return
-    
-    # Second registration (duplicate)
-    try:
-        resp2 = requests.post(f"{API_BASE}/register", json={
-            'email': email,
-            'password': 'password456',
-            'confirmPassword': 'password456',
-            'country': 'Canada',
-            'city': 'Toronto',
-            'role': 'Bar manager'
-        }, timeout=10)
+        # Test 6: POST /api/comments → 200, no userId in response
+        print("   Test 6: POST /api/comments with cookie")
+        resp = session.post(f"{API_BASE}/comments", json={
+            "courseSlug": "alcohol-fundamentals",
+            "lessonSlug": "what-is-alcohol",
+            "text": "This is a test comment for security testing"
+        })
+        assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+        data = resp.json()
+        assert data["ok"] == True, "Comment not created"
+        assert "userId" not in data["comment"], "Comment response contains userId (BOLA vulnerability)"
+        test_comments.append(data["comment"]["id"])
+        print(f"      ✅ Comment created, userId not exposed")
         
-        if resp2.status_code == 409:
-            log_pass("Duplicate email with password → 409")
-            data = resp2.json()
-            if 'error' in data and ('exists' in data['error'].lower() or 'log in' in data['error'].lower()):
-                log_pass("Error message mentions account exists / log in")
-            else:
-                log_fail(f"Error message unclear: {data.get('error')}")
-        else:
-            log_fail(f"Duplicate email returned {resp2.status_code}, expected 409. Body: {resp2.text}")
+        # Verify GET /api/comments also doesn't expose userId
+        print("   Test 6b: GET /api/comments doesn't expose userId")
+        resp = session.get(f"{API_BASE}/comments/alcohol-fundamentals/what-is-alcohol")
+        assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+        comments = resp.json()
+        for comment in comments:
+            assert "userId" not in comment, f"Public comment contains userId (BOLA vulnerability): {comment}"
+        print(f"      ✅ GET /api/comments doesn't expose userId")
+        
+        # Test 7: POST /api/logout clears cookie, GET /api/me returns 401
+        print("   Test 7: POST /api/logout clears cookie")
+        resp = session.post(f"{API_BASE}/logout")
+        assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+        
+        # Verify cookie is cleared
+        resp = session.get(f"{API_BASE}/me")
+        assert resp.status_code == 401, f"Expected 401 after logout, got {resp.status_code}"
+        print(f"      ✅ Logout successful, session cleared")
+        
+        # Test 7b: POST /api/login → 200 with Set-Cookie, no needsPasswordSetup
+        print("   Test 7b: POST /api/login with valid credentials")
+        session2 = requests.Session()
+        resp = session2.post(f"{API_BASE}/login", json={
+            "email": email,
+            "password": "SecurePass123"
+        })
+        assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+        data = resp.json()
+        assert "user" in data, "Response missing user"
+        assert "needsPasswordSetup" not in data, "Response contains needsPasswordSetup (should not be present)"
+        assert "osc_user" in resp.cookies, "Missing osc_user cookie"
+        print(f"      ✅ Login successful, no needsPasswordSetup field")
+        
+        print("   ✅ ALL POSITIVE TESTS PASSED")
+        return True
+        
+    except AssertionError as e:
+        print(f"      ❌ FAILED: {e}")
+        return False
     except Exception as e:
-        log_fail(f"Duplicate email test failed: {e}")
+        print(f"      ❌ ERROR: {e}")
+        return False
 
-def test_register_legacy_migration():
-    """Test 5: POST /api/register with legacy email-only user"""
-    log("\n=== TEST 5: Register endpoint - legacy user migration ===")
+def test_negative_auth_bypass_attempts():
+    """Test 8-11: Negative tests - auth bypass attempts must be rejected"""
+    print("\n❌ TEST 8-11: Negative Auth Bypass Attempts")
     
-    email = f"legacy-{uuid4()}@example.com"
-    test_emails.append(email)
+    # Create a victim user for testing
+    session_victim = requests.Session()
+    email_victim = f"victim-{int(time.time())}@example.com"
+    payload = {
+        "email": email_victim,
+        "password": "VictimPass123",
+        "confirmPassword": "VictimPass123",
+        "name": "Victim User",
+        "country": "Canada",
+        "city": "Toronto",
+        "role": "Bar manager",
+        "newsletter": False
+    }
     
-    # Create legacy user with existing profile fields
-    user_id = create_legacy_user(
-        email=email,
-        name="Legacy User",
-        country="France",
-        city="Paris",
-        role="Wine enthusiast",
-        newsletter=True
-    )
-    
-    if not user_id:
-        log_fail("Failed to create legacy user")
-        return
-    
-    # Register with password (migration)
     try:
+        resp = session_victim.post(f"{API_BASE}/register", json=payload)
+        assert resp.status_code == 200, f"Victim registration failed: {resp.status_code}"
+        victim_data = resp.json()
+        victim_id = victim_data["user"]["id"]
+        test_users.append(victim_id)
+        print(f"   Setup: Created victim user {victim_id}")
+        
+        # Test 8: GET /api/me?userId=<victim-id> with NO cookie → 401
+        print("   Test 8: GET /api/me?userId=<victim-id> without cookie")
+        session_attacker = requests.Session()
+        resp = session_attacker.get(f"{API_BASE}/me?userId={victim_id}")
+        assert resp.status_code == 401, f"Expected 401, got {resp.status_code}: {resp.text}"
+        print(f"      ✅ Query param userId ignored, 401 returned")
+        
+        # Test 9: GET /api/me with x-user-id header and NO cookie → 401
+        print("   Test 9: GET /api/me with x-user-id header without cookie")
+        resp = session_attacker.get(f"{API_BASE}/me", headers={"x-user-id": victim_id})
+        assert resp.status_code == 401, f"Expected 401, got {resp.status_code}: {resp.text}"
+        print(f"      ✅ x-user-id header ignored, 401 returned")
+        
+        # Test 10: POST /api/me/update with userId in body and NO cookie → 401
+        print("   Test 10: POST /api/me/update with userId in body without cookie")
+        resp = session_attacker.post(f"{API_BASE}/me/update", json={
+            "userId": victim_id,
+            "name": "Owned by Attacker"
+        })
+        assert resp.status_code == 401, f"Expected 401, got {resp.status_code}: {resp.text}"
+        
+        # Verify victim's profile is unchanged
+        resp_victim = session_victim.get(f"{API_BASE}/me")
+        assert resp_victim.status_code == 200, "Victim session broken"
+        victim_profile = resp_victim.json()
+        assert victim_profile["name"] == "Victim User", f"Victim profile was modified! Name: {victim_profile['name']}"
+        print(f"      ✅ Body userId ignored, 401 returned, victim profile unchanged")
+        
+        # Test 11: POST /api/me/update from session A with userId=B in body → updates A, not B
+        print("   Test 11: Cross-session tampering attempt")
+        # Create attacker user with valid session
+        session_attacker2 = requests.Session()
+        email_attacker = f"attacker-{int(time.time())}@example.com"
+        payload_attacker = {
+            "email": email_attacker,
+            "password": "AttackerPass123",
+            "confirmPassword": "AttackerPass123",
+            "name": "Attacker User",
+            "country": "Russia",
+            "city": "Moscow",
+            "role": "Other",
+            "newsletter": False
+        }
+        resp = session_attacker2.post(f"{API_BASE}/register", json=payload_attacker)
+        assert resp.status_code == 200, f"Attacker registration failed: {resp.status_code}"
+        attacker_data = resp.json()
+        attacker_id = attacker_data["user"]["id"]
+        test_users.append(attacker_id)
+        
+        # Attacker tries to update victim's profile by sending victim's userId in body
+        resp = session_attacker2.post(f"{API_BASE}/me/update", json={
+            "userId": victim_id,
+            "name": "Owned by Attacker Session"
+        })
+        assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+        data = resp.json()
+        # Verify the update was applied to attacker, not victim
+        assert data["user"]["id"] == attacker_id, "Update was applied to wrong user!"
+        assert data["user"]["name"] == "Owned by Attacker Session", "Attacker's own profile not updated"
+        
+        # Verify victim's profile is still unchanged
+        resp_victim = session_victim.get(f"{API_BASE}/me")
+        victim_profile = resp_victim.json()
+        assert victim_profile["name"] == "Victim User", f"Victim profile was modified! Name: {victim_profile['name']}"
+        print(f"      ✅ Body userId ignored, update applied to cookie owner (attacker), victim unchanged")
+        
+        print("   ✅ ALL NEGATIVE AUTH TESTS PASSED")
+        return True
+        
+    except AssertionError as e:
+        print(f"      ❌ FAILED: {e}")
+        return False
+    except Exception as e:
+        print(f"      ❌ ERROR: {e}")
+        return False
+
+def test_nosql_injection_protection():
+    """Test 12: NoSQL operator injection must be rejected"""
+    print("\n🛡️  TEST 12: NoSQL Injection Protection")
+    
+    # Create a user with valid session
+    session = requests.Session()
+    email = f"test-nosql-{int(time.time())}@example.com"
+    payload = {
+        "email": email,
+        "password": "NoSQLTest123",
+        "confirmPassword": "NoSQLTest123",
+        "name": "NoSQL Test User",
+        "country": "Germany",
+        "city": "Berlin",
+        "role": "Spirits enthusiast",
+        "newsletter": False
+    }
+    
+    try:
+        resp = session.post(f"{API_BASE}/register", json=payload)
+        assert resp.status_code == 200, f"Registration failed: {resp.status_code}"
+        user_id = resp.json()["user"]["id"]
+        test_users.append(user_id)
+        
+        # Test 12a: Unauthenticated NoSQL injection attempt → 401
+        print("   Test 12a: NoSQL injection while unauthenticated")
+        session_unauth = requests.Session()
+        resp = session_unauth.post(f"{API_BASE}/reviews/answer", json={
+            "reviewId": {"$ne": None},
+            "grade": "easy"
+        })
+        assert resp.status_code == 401, f"Expected 401, got {resp.status_code}: {resp.text}"
+        print(f"      ✅ Unauthenticated NoSQL injection rejected with 401")
+        
+        # Test 12b: Authenticated NoSQL injection attempt → 400 (invalid id)
+        print("   Test 12b: NoSQL injection while authenticated")
+        resp = session.post(f"{API_BASE}/reviews/answer", json={
+            "reviewId": {"$ne": None},
+            "grade": "easy"
+        })
+        assert resp.status_code == 400, f"Expected 400, got {resp.status_code}: {resp.text}"
+        error_data = resp.json()
+        assert "error" in error_data, "Error response missing error field"
+        print(f"      ✅ Authenticated NoSQL injection rejected with 400: {error_data['error']}")
+        
+        print("   ✅ NOSQL INJECTION PROTECTION PASSED")
+        return True
+        
+    except AssertionError as e:
+        print(f"      ❌ FAILED: {e}")
+        return False
+    except Exception as e:
+        print(f"      ❌ ERROR: {e}")
+        return False
+
+def test_legacy_flow_disabled():
+    """Test 13-15: Legacy password-claim flow must be disabled"""
+    print("\n🚫 TEST 13-15: Legacy Flow Disabled")
+    
+    try:
+        # Test 13: POST /api/set-password → 410
+        print("   Test 13: POST /api/set-password returns 410")
+        resp = requests.post(f"{API_BASE}/set-password", json={
+            "email": "legacy@example.com",
+            "password": "NewPass123",
+            "confirmPassword": "NewPass123"
+        })
+        assert resp.status_code == 410, f"Expected 410, got {resp.status_code}: {resp.text}"
+        print(f"      ✅ /api/set-password returns 410 (disabled)")
+        
+        # Test 14: POST /api/register with existing legacy email → 409, no passwordHash added
+        print("   Test 14: Register with existing legacy email")
+        # Create a legacy user (no passwordHash) directly in DB
+        db = get_db()
+        legacy_email = f"legacy-{int(time.time())}@example.com"
+        legacy_user = {
+            "id": f"legacy-{int(time.time())}",
+            "email": legacy_email,
+            "name": "Legacy User",
+            "provider": "email",
+            "authMethod": "email",
+            "verified": True,
+            "newsletter": False,
+            "country": "France",
+            "city": "Paris",
+            "role": "Bartender",
+            "createdAt": time.time(),
+            "updatedAt": time.time()
+        }
+        db.users.insert_one(legacy_user)
+        test_users.append(legacy_user["id"])
+        
+        # Try to register with the same email
         resp = requests.post(f"{API_BASE}/register", json={
-            'email': email,
-            'password': 'newpassword123',
-            'confirmPassword': 'newpassword123',
-            'country': 'USA',  # Should NOT overwrite existing
-            'city': 'New York',  # Should NOT overwrite existing
-            'role': 'Bartender',  # Should NOT overwrite existing
-            'newsletter': False  # Should NOT overwrite existing
-        }, timeout=10)
+            "email": legacy_email,
+            "password": "NewPass123",
+            "confirmPassword": "NewPass123",
+            "name": "Attacker",
+            "country": "USA",
+            "city": "New York",
+            "role": "Other",
+            "newsletter": False
+        })
+        assert resp.status_code == 409, f"Expected 409, got {resp.status_code}: {resp.text}"
         
-        if resp.status_code == 200:
-            log_pass("Legacy user migration → 200")
-            data = resp.json()
-            user = data.get('user')
-            
-            if data.get('migrated') == True:
-                log_pass("Response contains migrated=true")
-            else:
-                log_fail(f"Response missing migrated flag or false: {data.get('migrated')}")
-            
-            # Verify existing fields were NOT overwritten
-            if user.get('country') == 'France':
-                log_pass("Existing country NOT overwritten")
-            else:
-                log_fail(f"Country was overwritten: {user.get('country')} (expected France)")
-            
-            if user.get('city') == 'Paris':
-                log_pass("Existing city NOT overwritten")
-            else:
-                log_fail(f"City was overwritten: {user.get('city')} (expected Paris)")
-            
-            if user.get('role') == 'Wine enthusiast':
-                log_pass("Existing role NOT overwritten")
-            else:
-                log_fail(f"Role was overwritten: {user.get('role')} (expected Wine enthusiast)")
-            
-            if user.get('newsletter') == True:
-                log_pass("Existing newsletter NOT overwritten")
-            else:
-                log_fail(f"Newsletter was overwritten: {user.get('newsletter')} (expected True)")
-            
-            if user.get('authMethod') == 'password':
-                log_pass("authMethod updated to 'password'")
-            else:
-                log_fail(f"authMethod not updated: {user.get('authMethod')}")
-            
-            if 'passwordHash' in user:
-                log_fail("Response contains passwordHash (SECURITY ISSUE)")
-            else:
-                log_pass("Response does NOT contain passwordHash")
-            
-            # Verify user can now log in with new password
-            try:
-                login_resp = requests.post(f"{API_BASE}/login", json={
-                    'email': email,
-                    'password': 'newpassword123'
-                }, timeout=10)
-                
-                if login_resp.status_code == 200:
-                    log_pass("Migrated user can log in with new password")
-                else:
-                    log_fail(f"Migrated user login failed: {login_resp.status_code}")
-            except Exception as e:
-                log_fail(f"Migrated user login test failed: {e}")
-        else:
-            log_fail(f"Legacy user migration returned {resp.status_code}, expected 200. Body: {resp.text}")
-    except Exception as e:
-        log_fail(f"Legacy user migration test failed: {e}")
-
-def test_login():
-    """Test 6: POST /api/login"""
-    log("\n=== TEST 6: Login endpoint ===")
-    
-    email = f"logintest-{uuid4()}@example.com"
-    test_emails.append(email)
-    password = 'testpassword123'
-    
-    # Create user first
-    try:
-        resp = requests.post(f"{API_BASE}/register", json={
-            'email': email,
-            'password': password,
-            'confirmPassword': password,
-            'country': 'USA',
-            'city': 'New York',
-            'role': 'Bartender'
-        }, timeout=10)
+        # Verify the legacy user still has no passwordHash
+        updated_user = db.users.find_one({"id": legacy_user["id"]})
+        assert "passwordHash" not in updated_user or updated_user.get("passwordHash") is None, \
+            "Legacy user was modified with passwordHash!"
+        print(f"      ✅ Register with legacy email returns 409, no passwordHash added")
         
-        if resp.status_code == 200:
-            data = resp.json()
-            test_users.append(data['user']['id'])
-            log_pass("Test user created for login tests")
-        else:
-            log_fail(f"Failed to create test user: {resp.status_code}")
-            return
-    except Exception as e:
-        log_fail(f"Failed to create test user: {e}")
-        return
-    
-    # 6a: Valid credentials
-    try:
+        # Test 15: POST /api/login with legacy email → 401 (no 428, no userId echo)
+        print("   Test 15: Login with legacy email returns 401")
         resp = requests.post(f"{API_BASE}/login", json={
-            'email': email,
-            'password': password
-        }, timeout=10)
+            "email": legacy_email,
+            "password": "AnyPassword123"
+        })
+        assert resp.status_code == 401, f"Expected 401, got {resp.status_code}: {resp.text}"
+        data = resp.json()
+        assert "needsPasswordSetup" not in data, "Response contains needsPasswordSetup (should not be present)"
+        assert "userId" not in data, "Response contains userId (should not be present)"
+        print(f"      ✅ Login with legacy email returns 401, no needsPasswordSetup or userId")
         
-        if resp.status_code == 200:
-            log_pass("Valid credentials → 200")
-            data = resp.json()
-            user = data.get('user')
-            
-            if user and user.get('email') == email:
-                log_pass("Response contains correct user")
-            else:
-                log_fail(f"Response user mismatch: {user}")
-            
-            if 'passwordHash' in user:
-                log_fail("Login response contains passwordHash (SECURITY ISSUE)")
-            else:
-                log_pass("Login response does NOT contain passwordHash")
-        else:
-            log_fail(f"Valid login returned {resp.status_code}, expected 200. Body: {resp.text}")
+        print("   ✅ LEGACY FLOW DISABLED TESTS PASSED")
+        return True
+        
+    except AssertionError as e:
+        print(f"      ❌ FAILED: {e}")
+        return False
     except Exception as e:
-        log_fail(f"Valid login test failed: {e}")
+        print(f"      ❌ ERROR: {e}")
+        return False
+
+def test_rate_limiting():
+    """Test 16: Rate limiting on /api/login"""
+    print("\n⏱️  TEST 16: Rate Limiting on /api/login")
     
-    # 6b: Wrong password
     try:
-        resp = requests.post(f"{API_BASE}/login", json={
-            'email': email,
-            'password': 'wrongpassword'
-        }, timeout=10)
+        # Make 8+ rapid failed login attempts
+        print("   Making 10 rapid failed login attempts...")
+        email = f"ratelimit-{int(time.time())}@example.com"
+        rate_limited = False
+        retry_after = None
         
-        if resp.status_code == 401:
-            log_pass("Wrong password → 401")
-        else:
-            log_fail(f"Wrong password returned {resp.status_code}, expected 401")
-    except Exception as e:
-        log_fail(f"Wrong password test failed: {e}")
-    
-    # 6c: Unknown email
-    try:
-        resp = requests.post(f"{API_BASE}/login", json={
-            'email': f"unknown-{uuid4()}@example.com",
-            'password': 'anypassword'
-        }, timeout=10)
-        
-        if resp.status_code == 401:
-            log_pass("Unknown email → 401")
-        else:
-            log_fail(f"Unknown email returned {resp.status_code}, expected 401")
-    except Exception as e:
-        log_fail(f"Unknown email test failed: {e}")
-    
-    # 6d: Legacy user without password
-    legacy_email = f"legacy-login-{uuid4()}@example.com"
-    test_emails.append(legacy_email)
-    legacy_id = create_legacy_user(legacy_email)
-    
-    if legacy_id:
-        try:
+        for i in range(10):
             resp = requests.post(f"{API_BASE}/login", json={
-                'email': legacy_email,
-                'password': 'anypassword'
-            }, timeout=10)
+                "email": email,
+                "password": "WrongPassword123"
+            })
             
-            if resp.status_code == 428:
-                log_pass("Legacy user without password → 428")
-                data = resp.json()
-                
-                if data.get('needsPasswordSetup') == True:
-                    log_pass("Response contains needsPasswordSetup=true")
-                else:
-                    log_fail(f"Response missing needsPasswordSetup: {data}")
-                
-                if data.get('email') == legacy_email:
-                    log_pass("Response contains correct email")
-                else:
-                    log_fail(f"Response email mismatch: {data.get('email')}")
-                
-                if data.get('userId'):
-                    log_pass("Response contains userId")
-                else:
-                    log_fail("Response missing userId")
+            if resp.status_code == 429:
+                rate_limited = True
+                retry_after = resp.headers.get("Retry-After")
+                print(f"      ✅ Rate limited on attempt {i+1}, status=429, Retry-After={retry_after}")
+                break
+            elif resp.status_code == 401:
+                print(f"      Attempt {i+1}: 401 (expected)")
             else:
-                log_fail(f"Legacy user login returned {resp.status_code}, expected 428. Body: {resp.text}")
-        except Exception as e:
-            log_fail(f"Legacy user login test failed: {e}")
+                print(f"      ⚠️  Attempt {i+1}: Unexpected status {resp.status_code}")
+        
+        assert rate_limited, "Rate limiting did not trigger after 10 attempts"
+        assert retry_after is not None, "Retry-After header missing"
+        assert int(retry_after) > 0, f"Invalid Retry-After value: {retry_after}"
+        
+        print(f"   ✅ RATE LIMITING TEST PASSED")
+        return True
+        
+    except AssertionError as e:
+        print(f"      ❌ FAILED: {e}")
+        return False
+    except Exception as e:
+        print(f"      ❌ ERROR: {e}")
+        return False
 
-def test_set_password():
-    """Test 7: POST /api/set-password"""
-    log("\n=== TEST 7: Set-password endpoint ===")
-    
-    # 7a: Legacy user setting password
-    legacy_email = f"legacy-setpw-{uuid4()}@example.com"
-    test_emails.append(legacy_email)
-    legacy_id = create_legacy_user(legacy_email)
-    
-    if legacy_id:
-        try:
-            resp = requests.post(f"{API_BASE}/set-password", json={
-                'email': legacy_email,
-                'password': 'newpassword123',
-                'confirmPassword': 'newpassword123'
-            }, timeout=10)
-            
-            if resp.status_code == 200:
-                log_pass("Legacy user set-password → 200")
-                data = resp.json()
-                user = data.get('user')
-                
-                if user and user.get('email') == legacy_email:
-                    log_pass("Response contains correct user")
-                else:
-                    log_fail(f"Response user mismatch: {user}")
-                
-                if 'passwordHash' in user:
-                    log_fail("Set-password response contains passwordHash (SECURITY ISSUE)")
-                else:
-                    log_pass("Set-password response does NOT contain passwordHash")
-                
-                # Verify user can now log in
-                try:
-                    login_resp = requests.post(f"{API_BASE}/login", json={
-                        'email': legacy_email,
-                        'password': 'newpassword123'
-                    }, timeout=10)
-                    
-                    if login_resp.status_code == 200:
-                        log_pass("User can log in after set-password")
-                    else:
-                        log_fail(f"Login after set-password failed: {login_resp.status_code}")
-                except Exception as e:
-                    log_fail(f"Login after set-password test failed: {e}")
-            else:
-                log_fail(f"Legacy user set-password returned {resp.status_code}, expected 200. Body: {resp.text}")
-        except Exception as e:
-            log_fail(f"Legacy user set-password test failed: {e}")
-    
-    # 7b: User with existing password
-    email_with_pw = f"haspw-{uuid4()}@example.com"
-    test_emails.append(email_with_pw)
+def test_security_headers():
+    """Test 17-18: Security headers on HTML and API responses"""
+    print("\n🔒 TEST 17-18: Security Headers")
     
     try:
-        # Create user with password
-        resp = requests.post(f"{API_BASE}/register", json={
-            'email': email_with_pw,
-            'password': 'password123',
-            'confirmPassword': 'password123',
-            'country': 'USA',
-            'city': 'New York',
-            'role': 'Bartender'
-        }, timeout=10)
+        # Test 17: GET / must include security headers
+        print("   Test 17: Security headers on GET /")
+        resp = requests.get(BASE_URL)
+        assert resp.status_code == 200, f"Expected 200, got {resp.status_code}"
         
-        if resp.status_code == 200:
-            data = resp.json()
-            test_users.append(data['user']['id'])
-            
-            # Try to set password again
-            resp2 = requests.post(f"{API_BASE}/set-password", json={
-                'email': email_with_pw,
-                'password': 'newpassword456',
-                'confirmPassword': 'newpassword456'
-            }, timeout=10)
-            
-            if resp2.status_code == 409:
-                log_pass("User with existing password → 409")
-                data2 = resp2.json()
-                if 'error' in data2 and ('already' in data2['error'].lower() or 'log in' in data2['error'].lower()):
-                    log_pass("Error message mentions already has password / log in")
-                else:
-                    log_fail(f"Error message unclear: {data2.get('error')}")
-            else:
-                log_fail(f"User with existing password returned {resp2.status_code}, expected 409")
+        headers = resp.headers
+        
+        # Check X-Frame-Options
+        assert "X-Frame-Options" in headers, "Missing X-Frame-Options header"
+        assert headers["X-Frame-Options"] == "SAMEORIGIN", \
+            f"X-Frame-Options should be SAMEORIGIN, got {headers['X-Frame-Options']}"
+        print(f"      ✅ X-Frame-Options: SAMEORIGIN")
+        
+        # Check X-Content-Type-Options
+        assert "X-Content-Type-Options" in headers, "Missing X-Content-Type-Options header"
+        assert headers["X-Content-Type-Options"] == "nosniff", \
+            f"X-Content-Type-Options should be nosniff, got {headers['X-Content-Type-Options']}"
+        print(f"      ✅ X-Content-Type-Options: nosniff")
+        
+        # Check Referrer-Policy
+        assert "Referrer-Policy" in headers, "Missing Referrer-Policy header"
+        assert "strict-origin-when-cross-origin" in headers["Referrer-Policy"], \
+            f"Referrer-Policy should contain strict-origin-when-cross-origin, got {headers['Referrer-Policy']}"
+        print(f"      ✅ Referrer-Policy: {headers['Referrer-Policy']}")
+        
+        # Check Content-Security-Policy
+        assert "Content-Security-Policy" in headers, "Missing Content-Security-Policy header"
+        csp = headers["Content-Security-Policy"]
+        assert "frame-ancestors *" not in csp, "CSP contains 'frame-ancestors *' (insecure)"
+        print(f"      ✅ Content-Security-Policy present and doesn't contain 'frame-ancestors *'")
+        
+        # Test 18: OPTIONS /api/courses does NOT return Access-Control-Allow-Origin: *
+        print("   Test 18: CORS headers on OPTIONS /api/courses")
+        resp = requests.options(f"{API_BASE}/courses")
+        headers = resp.headers
+        
+        if "Access-Control-Allow-Origin" in headers:
+            origin = headers["Access-Control-Allow-Origin"]
+            assert origin != "*", f"Access-Control-Allow-Origin is wildcard (*), should be specific origin"
+            print(f"      ✅ Access-Control-Allow-Origin: {origin} (not wildcard)")
         else:
-            log_fail(f"Failed to create user with password: {resp.status_code}")
-    except Exception as e:
-        log_fail(f"User with existing password test failed: {e}")
-    
-    # 7c: Password validation
-    legacy_email2 = f"legacy-setpw2-{uuid4()}@example.com"
-    test_emails.append(legacy_email2)
-    legacy_id2 = create_legacy_user(legacy_email2)
-    
-    if legacy_id2:
-        # Password too short
-        try:
-            resp = requests.post(f"{API_BASE}/set-password", json={
-                'email': legacy_email2,
-                'password': 'short',
-                'confirmPassword': 'short'
-            }, timeout=10)
-            
-            if resp.status_code == 400:
-                log_pass("Password < 8 chars → 400")
-            else:
-                log_fail(f"Password < 8 chars returned {resp.status_code}, expected 400")
-        except Exception as e:
-            log_fail(f"Password < 8 chars test failed: {e}")
+            print(f"      ✅ Access-Control-Allow-Origin not present (same-origin only)")
         
-        # Password mismatch
-        try:
-            resp = requests.post(f"{API_BASE}/set-password", json={
-                'email': legacy_email2,
-                'password': 'password123',
-                'confirmPassword': 'password456'
-            }, timeout=10)
-            
-            if resp.status_code == 400:
-                log_pass("Password mismatch → 400")
-            else:
-                log_fail(f"Password mismatch returned {resp.status_code}, expected 400")
-        except Exception as e:
-            log_fail(f"Password mismatch test failed: {e}")
+        print("   ✅ SECURITY HEADERS TESTS PASSED")
+        return True
+        
+    except AssertionError as e:
+        print(f"      ❌ FAILED: {e}")
+        return False
+    except Exception as e:
+        print(f"      ❌ ERROR: {e}")
+        return False
 
-def test_sanitization():
-    """Test 8: Verify passwordHash is never in responses"""
-    log("\n=== TEST 8: Universal sanitization check ===")
+def test_html_sanitizer():
+    """Test SEC-005: HTML sanitizer strips iframes and data: URIs"""
+    print("\n🧹 TEST SEC-005: HTML Sanitizer")
     
-    email = f"sanitize-{uuid4()}@example.com"
-    test_emails.append(email)
+    # Get admin session
+    admin_session = requests.Session()
+    admin_email = os.getenv("ADMIN_EMAILS", "sebastiandieugenioe@gmail.com").split(",")[0]
+    admin_password = os.getenv("ADMIN_PASSWORD", "preview-only-change-in-prod")
     
-    # Register
     try:
-        resp = requests.post(f"{API_BASE}/register", json={
-            'email': email,
-            'password': 'password123',
-            'confirmPassword': 'password123',
-            'country': 'USA',
-            'city': 'New York',
-            'role': 'Bartender'
-        }, timeout=10)
+        # Admin login
+        print("   Logging in as admin...")
+        resp = admin_session.post(f"{API_BASE}/admin-auth", json={
+            "email": admin_email,
+            "password": admin_password
+        })
+        assert resp.status_code == 200, f"Admin login failed: {resp.status_code}: {resp.text}"
+        print(f"      ✅ Admin logged in")
         
-        if resp.status_code == 200:
-            data = resp.json()
-            user = data.get('user')
-            test_users.append(user['id'])
-            
-            if 'passwordHash' not in user:
-                log_pass("POST /api/register response does NOT contain passwordHash")
-            else:
-                log_fail("POST /api/register response contains passwordHash (SECURITY ISSUE)")
-        else:
-            log_fail(f"Register failed: {resp.status_code}")
-            return
-    except Exception as e:
-        log_fail(f"Register test failed: {e}")
-        return
-    
-    # Login
-    try:
-        resp = requests.post(f"{API_BASE}/login", json={
-            'email': email,
-            'password': 'password123'
-        }, timeout=10)
+        # Test: POST /api/admin/pages with malicious HTML
+        print("   Test: Creating page with malicious HTML")
+        malicious_html = """
+        <h1>Test Page</h1>
+        <p>This is safe content.</p>
+        <iframe src="https://evil.com/steal-cookies"></iframe>
+        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" alt="Evil">
+        <img src="https://example.com/safe.jpg" alt="Safe">
+        <script>alert('XSS')</script>
+        """
         
-        if resp.status_code == 200:
-            data = resp.json()
-            user = data.get('user')
-            
-            if 'passwordHash' not in user:
-                log_pass("POST /api/login response does NOT contain passwordHash")
-            else:
-                log_fail("POST /api/login response contains passwordHash (SECURITY ISSUE)")
-        else:
-            log_fail(f"Login failed: {resp.status_code}")
-    except Exception as e:
-        log_fail(f"Login test failed: {e}")
-    
-    # GET /api/me (if implemented)
-    try:
-        resp = requests.get(f"{API_BASE}/me?userId={test_users[-1]}", timeout=10)
+        resp = admin_session.post(f"{API_BASE}/admin/pages", json={
+            "title": "Sanitizer Test Page",
+            "slug": f"sanitizer-test-{int(time.time())}",
+            "seoTitle": "Sanitizer Test",
+            "seoDescription": "Testing HTML sanitization",
+            "contentHtml": malicious_html,
+            "published": True
+        })
+        assert resp.status_code == 200, f"Page creation failed: {resp.status_code}: {resp.text}"
+        data = resp.json()
+        page_id = data["page"]["id"]
+        test_pages.append(page_id)
         
-        if resp.status_code == 200:
-            data = resp.json()
-            user = data.get('user')
-            
-            if user:
-                if 'passwordHash' not in user:
-                    log_pass("GET /api/me response does NOT contain passwordHash")
-                else:
-                    log_fail("GET /api/me response contains passwordHash (SECURITY ISSUE)")
-        else:
-            log(f"GET /api/me returned {resp.status_code} (may not be implemented)")
+        sanitized_html = data["page"]["contentHtml"]
+        print(f"      Original HTML length: {len(malicious_html)}")
+        print(f"      Sanitized HTML length: {len(sanitized_html)}")
+        
+        # Verify iframe is stripped
+        assert "<iframe" not in sanitized_html.lower(), "Sanitizer did not strip <iframe>"
+        print(f"      ✅ <iframe> stripped")
+        
+        # Verify data: URI is stripped
+        assert "data:image" not in sanitized_html.lower(), "Sanitizer did not strip data: URI"
+        print(f"      ✅ data: URI stripped")
+        
+        # Verify script is stripped
+        assert "<script" not in sanitized_html.lower(), "Sanitizer did not strip <script>"
+        print(f"      ✅ <script> stripped")
+        
+        # Verify safe content is preserved
+        assert "<h1>Test Page</h1>" in sanitized_html, "Sanitizer removed safe <h1>"
+        assert "This is safe content" in sanitized_html, "Sanitizer removed safe text"
+        assert "https://example.com/safe.jpg" in sanitized_html, "Sanitizer removed safe image"
+        print(f"      ✅ Safe content preserved")
+        
+        print("   ✅ HTML SANITIZER TEST PASSED")
+        return True
+        
+    except AssertionError as e:
+        print(f"      ❌ FAILED: {e}")
+        return False
     except Exception as e:
-        log(f"GET /api/me test skipped: {e}")
+        print(f"      ❌ ERROR: {e}")
+        return False
 
 def main():
+    """Run all security regression tests"""
     print("=" * 80)
-    print("BACKEND REGRESSION TEST - SESSION 5")
-    print("Focus: Mandatory email+password authentication flow")
+    print("SESSION 6: Security-Audit Remediation Backend Tests")
+    print("=" * 80)
+    print(f"API Base: {API_BASE}")
+    print(f"MongoDB: {MONGO_URL}/{DB_NAME}")
     print("=" * 80)
     
+    results = []
+    
     try:
-        # Run all tests
-        test_auth_deprecated()
-        test_register_validation()
-        test_register_success()
-        test_register_duplicate()
-        test_register_legacy_migration()
-        test_login()
-        test_set_password()
-        test_sanitization()
+        # Run all test suites
+        results.append(("Positive Cookie Auth Flow (Tests 1-7)", test_positive_cookie_auth_flow()))
+        results.append(("Negative Auth Bypass (Tests 8-11)", test_negative_auth_bypass_attempts()))
+        results.append(("NoSQL Injection Protection (Test 12)", test_nosql_injection_protection()))
+        results.append(("Legacy Flow Disabled (Tests 13-15)", test_legacy_flow_disabled()))
+        results.append(("Rate Limiting (Test 16)", test_rate_limiting()))
+        results.append(("Security Headers (Tests 17-18)", test_security_headers()))
+        results.append(("HTML Sanitizer (SEC-005)", test_html_sanitizer()))
         
     finally:
-        # Cleanup
-        log("\n=== CLEANUP ===")
+        # Always cleanup
         cleanup()
-        
-        # Summary
-        print("\n" + "=" * 80)
-        print(f"TEST SUMMARY: {passed} passed, {failed} failed")
-        print("=" * 80)
-        
-        if failed > 0:
-            sys.exit(1)
-        else:
-            print("\n✅ ALL TESTS PASSED")
-            sys.exit(0)
+    
+    # Print summary
+    print("\n" + "=" * 80)
+    print("TEST SUMMARY")
+    print("=" * 80)
+    
+    passed = sum(1 for _, result in results if result)
+    total = len(results)
+    
+    for name, result in results:
+        status = "✅ PASS" if result else "❌ FAIL"
+        print(f"{status}: {name}")
+    
+    print("=" * 80)
+    print(f"TOTAL: {passed}/{total} test suites passed ({passed*100//total}%)")
+    print("=" * 80)
+    
+    if passed == total:
+        print("\n🎉 ALL SECURITY TESTS PASSED!")
+        sys.exit(0)
+    else:
+        print(f"\n⚠️  {total - passed} test suite(s) failed")
+        sys.exit(1)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

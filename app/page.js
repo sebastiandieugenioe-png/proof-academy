@@ -14,7 +14,8 @@ const ICONS = { Flame, GlassWater, Sparkles }
 const api = async (path, opts = {}) => {
   const res = await fetch(`/api${path}`, {
     method: opts.method || 'GET',
-    headers: { 'Content-Type': 'application/json', ...(opts.userId ? { 'x-user-id': opts.userId } : {}) },
+    credentials: 'include', // include the osc_user HTTP-only cookie
+    headers: opts.body ? { 'Content-Type': 'application/json' } : undefined,
     body: opts.body ? JSON.stringify(opts.body) : undefined,
   })
   const data = await res.json().catch(() => ({}))
@@ -31,23 +32,26 @@ function App() {
   useEffect(() => {
     (async () => {
       try { setCourses(await api('/courses')) } catch (e) { console.error(e) }
-      const saved = typeof window !== 'undefined' ? window.localStorage.getItem('osc.userId') : null
-      if (saved) {
-        try { const u = await api('/me', { userId: saved }); setUser(u); setRoute({ name: 'dashboard' }) }
-        catch { window.localStorage.removeItem('osc.userId') }
-      }
+      // Server-verified session via HTTP-only cookie — no localStorage identifier.
+      try {
+        const u = await api('/me')
+        setUser(u); setRoute({ name: 'dashboard' })
+      } catch { /* not logged in */ }
       setBooting(false)
     })()
   }, [])
 
   const login = useCallback((u) => {
     setUser(u)
-    if (typeof window !== 'undefined') window.localStorage.setItem('osc.userId', u.id)
     setRoute({ name: 'dashboard' })
   }, [])
-  const logout = useCallback(() => {
-    if (typeof window !== 'undefined') window.localStorage.removeItem('osc.userId')
+  const logout = useCallback(async () => {
+    try { await api('/logout', { method: 'POST' }) } catch { /* ignore */ }
     setUser(null); setRoute({ name: 'landing' })
+    if (typeof window !== 'undefined') {
+      // Clean up legacy client-side id from any pre-cookie install.
+      try { window.localStorage.removeItem('osc.userId') } catch {}
+    }
   }, [])
   const go = useCallback((r) => setRoute(r), [])
 
@@ -226,8 +230,8 @@ const Dashboard = ({ user, courses, onNav }) => {
   const [progress, setProgress] = useState([])
   useEffect(() => {
     if (!user) return
-    api('/stats', { userId: user.id }).then(setStats).catch(() => {})
-    api('/progress', { userId: user.id }).then(setProgress).catch(() => {})
+    api('/stats').then(setStats).catch(() => {})
+    api('/progress').then(setProgress).catch(() => {})
   }, [user])
   const progressMap = useMemo(() => {
     const m = {}; for (const p of progress) m[`${p.courseSlug}/${p.lessonSlug}`] = p; return m
@@ -411,7 +415,7 @@ const CourseView = ({ slug, onNav, user }) => {
   const [progress, setProgress] = useState([])
   useEffect(() => {
     api(`/courses/${slug}`).then(setCourse).catch(() => {})
-    if (user) api('/progress', { userId: user.id }).then(setProgress)
+    if (user) api('/progress').then(setProgress)
   }, [slug, user])
   if (!course) return <FullPageLoader />
   const Icon = ICONS[course.icon] || BookOpen
@@ -460,12 +464,12 @@ const LessonView = ({ courseSlug, lessonSlug, user, onNav }) => {
   useEffect(() => {
     setData(null); setStep(0)
     api(`/lessons/${courseSlug}/${lessonSlug}`).then(setData).catch(() => {})
-    if (user) api('/progress', { method: 'POST', body: { userId: user.id, courseSlug, lessonSlug, step: 'objectives' } }).catch(() => {})
+    if (user) api('/progress', { method: 'POST', body: { courseSlug, lessonSlug, step: 'objectives' } }).catch(() => {})
   }, [courseSlug, lessonSlug, user])
   const complete = async (quizScore) => {
     if (!user) return
     const minutes = Math.max(1, Math.round((Date.now() - startedAt) / 60000))
-    try { await api('/progress', { method: 'POST', body: { userId: user.id, courseSlug, lessonSlug, step: 'done', completed: true, minutesSpent: minutes, quizScore } }) }
+    try { await api('/progress', { method: 'POST', body: { courseSlug, lessonSlug, step: 'done', completed: true, minutesSpent: minutes, quizScore } }) }
     catch (e) { console.error(e) }
   }
   if (!data) return <FullPageLoader />
@@ -733,7 +737,7 @@ const StepDone = ({ lesson, next, courseSlug, onNav, user }) => {
   const post = async () => {
     if (!text.trim() || !user) return
     try {
-      const { comment } = await api('/comments', { method: 'POST', body: { userId: user.id, courseSlug, lessonSlug: lesson.slug, text } })
+      const { comment } = await api('/comments', { method: 'POST', body: { courseSlug, lessonSlug: lesson.slug, text } })
       setComments([comment, ...comments]); setText('')
     } catch (e) { console.error(e) }
   }
@@ -791,7 +795,7 @@ const StudyView = ({ user, onNav }) => {
       const qs = new URLSearchParams()
       if (exclude) qs.set('exclude', exclude)
       if (opts.includeNew ?? includeNew) qs.set('includeNew', '1')
-      const r = await api(`/study/next?${qs}`, { userId: user.id })
+      const r = await api(`/study/next?${qs}`)
       if (r.done) {
         setDone(true); setCard(null); setSource(null)
         setStats(r.stats || stats)
@@ -808,7 +812,7 @@ const StudyView = ({ user, onNav }) => {
     if (!card) return
     seenIds.current.add(card.id)
     try {
-      const r = await api('/reviews/answer', { method: 'POST', body: { userId: user.id, reviewId: card.id, grade } })
+      const r = await api('/reviews/answer', { method: 'POST', body: { reviewId: card.id, grade } })
       const nextReview = r?.card?.dueAt ? new Date(r.card.dueAt) : null
       setSession((s) => ({
         ...s,
@@ -940,9 +944,9 @@ const ProfileView = ({ user, setUser, onNav }) => {
   const [role, setRole] = useState(user?.role || '')
   const [saved, setSaved] = useState(false)
   const [stats, setStats] = useState(null)
-  useEffect(() => { if (user) api('/stats', { userId: user.id }).then(setStats) }, [user])
+  useEffect(() => { if (user) api('/stats').then(setStats) }, [user])
   const save = async () => {
-    const { user: u } = await api('/me/update', { method: 'POST', body: { userId: user.id, name, newsletter, country, city, role } })
+    const { user: u } = await api('/me/update', { method: 'POST', body: { name, newsletter, country, city, role } })
     setUser(u); setSaved(true); setTimeout(() => setSaved(false), 1500)
   }
   return (

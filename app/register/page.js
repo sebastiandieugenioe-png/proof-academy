@@ -10,6 +10,7 @@ const ROLE_OPTIONS = ['Bartender','Barback','Waiter/Server','Hospitality student
 async function api(path, opts = {}) {
   const r = await fetch(`/api${path}`, {
     method: opts.method || (opts.body ? 'POST' : 'GET'),
+    credentials: 'include',
     headers: opts.body ? { 'Content-Type': 'application/json' } : undefined,
     body: opts.body ? JSON.stringify(opts.body) : undefined,
   })
@@ -58,16 +59,17 @@ export default function RegisterPage() {
   const [name, setName] = useState('')
 
   useEffect(() => {
-    // If already logged in, redirect to dashboard.
-    const saved = typeof window !== 'undefined' ? localStorage.getItem('osc.userId') : null
-    if (!saved) { setChecking(false); return }
-    api('/me', { method: 'GET' }).catch(() => null).finally(async () => {
+    // Purge any legacy client-side id from pre-cookie installs.
+    if (typeof window !== 'undefined') {
+      try { window.localStorage.removeItem('osc.userId') } catch {}
+    }
+    ;(async () => {
       try {
-        const r = await fetch(`/api/me?userId=${encodeURIComponent(saved)}`)
+        const r = await fetch('/api/me', { credentials: 'include' })
         if (r.ok) { router.replace('/'); return }
       } catch {}
       setChecking(false)
-    })
+    })()
   }, [router])
 
   const submit = async (e) => {
@@ -76,12 +78,12 @@ export default function RegisterPage() {
     if (password.length < 8) { setError('Password must be at least 8 characters.'); return }
     setLoading(true)
     try {
-      const r = await api('/register', { method: 'POST', body: { email, password, confirmPassword, name, country, city, role, newsletter } })
-      if (typeof window !== 'undefined') localStorage.setItem('osc.userId', r.user.id)
+      await api('/register', { method: 'POST', body: { email, password, confirmPassword, name, country, city, role, newsletter } })
       router.replace('/')
     } catch (e) {
-      if (e.status === 409) setError('This email is already registered. Please log in instead.')
-      else setError(e.message)
+      if (e.status === 409) setError('This email is already registered. Please log in or contact support.')
+      else if (e.status === 429) setError('Too many attempts. Please try again in a few minutes.')
+      else setError('Could not create the account. Please check your details and try again.')
     } finally { setLoading(false) }
   }
 

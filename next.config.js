@@ -1,3 +1,31 @@
+const isProd = process.env.NODE_ENV === 'production';
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || '';
+// Derive origin (protocol + host) for CORS. In dev / when unset, allow same-origin only.
+let allowedOrigin = 'null';
+try {
+  if (baseUrl) allowedOrigin = new URL(baseUrl).origin;
+} catch { /* fall through */ }
+
+// Content Security Policy: no unsafe-inline scripts, no wildcard frame-ancestors.
+// Note: Next.js dev needs 'unsafe-eval' + 'unsafe-inline' for HMR; only relax in dev.
+const csp = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'self'",
+  "img-src 'self' data: blob: https:",
+  "font-src 'self' data:",
+  "connect-src 'self' https:",
+  "media-src 'self' https:",
+  "object-src 'none'",
+  isProd
+    ? "script-src 'self'"
+    : "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+  isProd
+    ? "style-src 'self' 'unsafe-inline'"
+    : "style-src 'self' 'unsafe-inline'",
+].join('; ');
+
 const nextConfig = {
   output: 'standalone',
   images: {
@@ -12,8 +40,8 @@ const nextConfig = {
     if (dev) {
       // Reduce CPU/memory from file watching
       config.watchOptions = {
-        poll: 2000, // check every 2 seconds
-        aggregateTimeout: 300, // wait before rebuilding
+        poll: 2000,
+        aggregateTimeout: 300,
         ignored: ['**/node_modules'],
       };
     }
@@ -24,15 +52,33 @@ const nextConfig = {
     pagesBufferLength: 2,
   },
   async headers() {
+    // Note: CORS for /api/* is same-origin by default (browser blocks other origins because
+    // we do NOT send Access-Control-Allow-Origin: *). If you truly need cross-origin API
+    // access from another domain, set NEXT_PUBLIC_BASE_URL to that origin.
+    const commonSecurityHeaders = [
+      { key: 'X-Content-Type-Options', value: 'nosniff' },
+      { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+      { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+      { key: 'Permissions-Policy', value: 'geolocation=(), microphone=(), camera=(), payment=(), usb=()' },
+      { key: 'Content-Security-Policy', value: csp },
+      ...(isProd ? [{ key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' }] : []),
+    ];
     return [
       {
-        source: "/(.*)",
+        source: '/(.*)',
+        headers: commonSecurityHeaders,
+      },
+      {
+        // API-scoped: same-origin CORS. If NEXT_PUBLIC_BASE_URL is set, mirror that origin.
+        source: '/api/(.*)',
         headers: [
-          { key: "X-Frame-Options", value: "ALLOWALL" },
-          { key: "Content-Security-Policy", value: "frame-ancestors *;" },
-          { key: "Access-Control-Allow-Origin", value: process.env.CORS_ORIGINS || "*" },
-          { key: "Access-Control-Allow-Methods", value: "GET, POST, PUT, DELETE, OPTIONS" },
-          { key: "Access-Control-Allow-Headers", value: "*" },
+          ...(allowedOrigin && allowedOrigin !== 'null'
+            ? [{ key: 'Access-Control-Allow-Origin', value: allowedOrigin }]
+            : []),
+          { key: 'Access-Control-Allow-Credentials', value: 'true' },
+          { key: 'Access-Control-Allow-Methods', value: 'GET, POST, PATCH, DELETE, OPTIONS' },
+          { key: 'Access-Control-Allow-Headers', value: 'Content-Type' },
+          { key: 'Vary', value: 'Origin' },
         ],
       },
     ];
