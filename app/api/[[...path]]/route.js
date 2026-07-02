@@ -65,16 +65,27 @@ async function allCoursesMerged() {
 }
 async function findCourseMerged(slug) {
   // Try DB override first — that's where admin edits live.
+  const staticC = getCourse(slug);
+  const aiC = AI_COURSES.find((c) => c.slug === slug);
+  const canonical = staticC || aiC || null;
   try {
     const db = await getDb();
     const p = await db.collection('courses_published').findOne({ slug });
-    if (p && !p.hidden) { delete p._id; return p; }
+    if (p && !p.hidden) {
+      delete p._id;
+      // Rehydrate: any lesson field missing on the DB record falls back to canonical source.
+      // Prevents crashes when admin-override accidentally stored a lesson without theory/flashcards/etc.
+      if (canonical?.lessons) {
+        p.lessons = (p.lessons || []).map((l) => {
+          const src = canonical.lessons.find((c) => c.slug === l.slug);
+          return src ? { ...src, ...l } : l;
+        });
+      }
+      return p;
+    }
     if (p?.hidden) return null; // explicitly hidden
   } catch (e) { console.error('findCourseMerged DB error', e); }
-  const staticC = getCourse(slug);
-  if (staticC) return staticC;
-  const ai = AI_COURSES.find((c) => c.slug === slug);
-  if (ai) return ai;
+  if (canonical) return canonical;
   // Try slug alias — old slug renamed to a new one.
   const target = await resolveCourseSlugAlias(slug);
   if (target && target !== slug) {
@@ -82,6 +93,18 @@ async function findCourseMerged(slug) {
     if (c) return c;
   }
   return null;
+}
+
+// Merge an incoming lesson patch with the canonical source, filling any missing fields.
+// Never drops fields on save.
+function hydrateLesson(courseSlug, lessonPatch) {
+  if (!lessonPatch?.slug) return lessonPatch;
+  const staticC = getCourse(courseSlug);
+  const aiC = AI_COURSES.find((c) => c.slug === courseSlug);
+  const src = (staticC?.lessons || aiC?.lessons || []).find((l) => l.slug === lessonPatch.slug);
+  if (!src) return lessonPatch;
+  // Deep-ish merge: incoming values win, but preserve arrays/objects that admin didn't touch.
+  return { ...src, ...lessonPatch };
 }
 async function findLessonMerged(courseSlug, lessonSlug) {
   // DB override wins over static bundled content (so admin edits are honored).
@@ -806,10 +829,17 @@ export async function POST(request, { params }) {
     if (seg === 'admin/course-override') {
       const { course } = body;
       if (!course?.slug) return err('course.slug required');
+      // Rehydrate lessons — never save a lesson without theory/embedded/flashcards/quiz.
+      // The client's course.lessons may be a truncated projection (from GET /api/courses/:slug),
+      // so we must merge with the canonical source before persisting.
+      const hydrated = {
+        ...course,
+        lessons: (course.lessons || []).map((l) => hydrateLesson(course.slug, l)),
+      };
       const db = await getDb();
       await db.collection('courses_published').updateOne(
         { slug: course.slug },
-        { $set: { ...course, updatedAt: new Date() } },
+        { $set: { ...hydrated, updatedAt: new Date() } },
         { upsert: true }
       );
       const saved = await db.collection('courses_published').findOne({ slug: course.slug });
@@ -829,7 +859,11 @@ export async function POST(request, { params }) {
       const existing = await db.collection('courses_published').findOne({ slug: courseSlug });
       const base = existing ? { ...existing } : { ...course };
       delete base._id;
-      base.lessons = (base.lessons || course.lessons).map((l) => ({ ...l }));
+      // Always hydrate lessons from canonical source — never persist a lesson stripped of theory/quiz/etc.
+      base.lessons = (course.lessons).map((canonicalLesson) => {
+        const existingLesson = (existing?.lessons || []).find((l) => l.slug === canonicalLesson.slug);
+        return { ...canonicalLesson, ...(existingLesson || {}) };
+      });
       const previousImage = base.lessons[idx].image;
       if (image === null || image === undefined) {
         delete base.lessons[idx].image;

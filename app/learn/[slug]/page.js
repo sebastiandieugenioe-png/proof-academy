@@ -19,12 +19,24 @@ export async function generateStaticParams() {
 async function findByLessonSlug(slug) {
   // Priority: DB override → static → AI content.
   // This ensures admin edits (images, theory, etc.) always win.
+  // We ALSO hydrate DB records from canonical sources to guard against corrupted overrides
+  // (e.g. saved without theory/quiz/flashcards).
+  const hydrateWithCanonical = (courseSlug, lessonSlug, dbLesson) => {
+    const canonicalCourse = COURSES.find((c) => c.slug === courseSlug) || AI_COURSES.find((c) => c.slug === courseSlug);
+    const canonicalLesson = canonicalCourse?.lessons?.find((x) => x.slug === lessonSlug);
+    if (!canonicalLesson) return dbLesson;
+    // Canonical fills gaps; DB fields win over canonical (admin edits are authoritative).
+    return { ...canonicalLesson, ...dbLesson };
+  };
   try {
     const db = await getDb();
     const pubs = await db.collection('courses_published').find({ hidden: { $ne: true } }).toArray();
     for (const c of pubs) {
       const l = (c.lessons || []).find((x) => x.slug === slug);
-      if (l) return { course: c, lesson: l, media: resolveMedia(l, slug) };
+      if (l) {
+        const hydrated = hydrateWithCanonical(c.slug, slug, l);
+        return { course: c, lesson: hydrated, media: resolveMedia(hydrated, slug) };
+      }
     }
   } catch (e) { console.error('findByLessonSlug DB error', e); }
   for (const c of COURSES) {

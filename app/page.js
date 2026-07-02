@@ -371,6 +371,13 @@ const LessonView = ({ courseSlug, lessonSlug, user, onNav }) => {
   }
   if (!data) return <FullPageLoader />
   const { course, lesson, next, index, total } = data
+  if (!lesson) return (
+    <div className="max-w-lg mx-auto text-center py-12 space-y-4">
+      <h1 className="text-xl font-semibold text-slate-900">Lesson unavailable</h1>
+      <p className="text-sm text-slate-600">This lesson could not be loaded. Please try again or go back.</p>
+      <button onClick={() => onNav({ name: 'course', slug: courseSlug })} className="h-10 px-5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm">Back to course</button>
+    </div>
+  )
   const pct = Math.round(((step) / (STEPS.length - 1)) * 100)
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -396,12 +403,14 @@ const LessonView = ({ courseSlug, lessonSlug, user, onNav }) => {
   )
 }
 
-const StepObjectives = ({ lesson, media, onNext }) => (
+const StepObjectives = ({ lesson, media, onNext }) => {
+  const objectives = Array.isArray(lesson?.objectives) ? lesson.objectives : []
+  return (
   <section className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
     {media?.image && (
       <div>
         <div className="relative">
-          <img src={media.image} alt={media.imageAlt || lesson.title} className="w-full aspect-[16/9] object-cover bg-slate-100" />
+          <img src={media.image} alt={media.imageAlt || lesson?.title || ''} className="w-full aspect-[16/9] object-cover bg-slate-100" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
         </div>
         {(media.imageCaption || media.imageCredit) && (
@@ -414,18 +423,22 @@ const StepObjectives = ({ lesson, media, onNext }) => (
     )}
     <div className="p-6 md:p-8">
       <div className="text-xs font-medium uppercase tracking-wide text-blue-700 flex items-center gap-1.5"><Target className="h-3.5 w-3.5" /> Learning objectives</div>
-      <ul className="mt-4 space-y-3">
-        {lesson.objectives.map((o, i) => (
-          <li key={i} className="flex gap-3 text-slate-800">
-            <div className="h-6 w-6 shrink-0 rounded-full bg-blue-50 text-blue-700 grid place-items-center text-xs font-semibold">{i + 1}</div>
-            <span className="leading-relaxed">{o}</span>
-          </li>
-        ))}
-      </ul>
+      {objectives.length === 0 ? (
+        <p className="mt-4 text-sm text-slate-500 italic">No objectives listed for this lesson.</p>
+      ) : (
+        <ul className="mt-4 space-y-3">
+          {objectives.map((o, i) => (
+            <li key={i} className="flex gap-3 text-slate-800">
+              <div className="h-6 w-6 shrink-0 rounded-full bg-blue-50 text-blue-700 grid place-items-center text-xs font-semibold">{i + 1}</div>
+              <span className="leading-relaxed">{o}</span>
+            </li>
+          ))}
+        </ul>
+      )}
       <button onClick={onNext} className="mt-8 w-full sm:w-auto h-12 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium inline-flex items-center justify-center gap-2 tap">Start lesson <ArrowRight className="h-4 w-4" /></button>
     </div>
   </section>
-)
+)}
 
 const formatInline = (t) => {
   const parts = t.split(/(\*\*[^*]+\*\*)/g)
@@ -443,20 +456,23 @@ const MarkdownParagraph = ({ text }) => {
 }
 
 const StepTheory = ({ lesson, onNext }) => {
-  const paragraphs = lesson.theory.split('\n\n')
+  const theory = typeof lesson?.theory === 'string' ? lesson.theory : ''
+  const paragraphs = theory ? theory.split('\n\n') : []
   const [answers, setAnswers] = useState({})
-  const embeds = lesson.embedded || []
-  const positions = embeds.length ? embeds.map((_, i) => Math.min(paragraphs.length - 1, Math.floor(((i + 1) * paragraphs.length) / (embeds.length + 1)))) : []
+  const embeds = Array.isArray(lesson?.embedded) ? lesson.embedded : []
+  const positions = embeds.length && paragraphs.length ? embeds.map((_, i) => Math.min(paragraphs.length - 1, Math.floor(((i + 1) * paragraphs.length) / (embeds.length + 1)))) : []
   const allEmbedsAnswered = embeds.length === 0 || embeds.every((_, i) => answers[i] !== undefined)
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-6 md:p-8 prose-lesson">
       <div className="text-xs font-medium uppercase tracking-wide text-blue-700 flex items-center gap-1.5 mb-4"><BookOpen className="h-3.5 w-3.5" /> Theory</div>
-      {paragraphs.map((p, idx) => {
+      {paragraphs.length === 0 ? (
+        <p className="text-sm text-slate-500 italic">No theory content available for this lesson.</p>
+      ) : paragraphs.map((p, idx) => {
         const embedIdx = positions.indexOf(idx)
         return (
           <div key={idx}>
             <MarkdownParagraph text={p} />
-            {embedIdx !== -1 && (
+            {embedIdx !== -1 && embeds[embedIdx] && (
               <EmbeddedQuestion q={embeds[embedIdx]} value={answers[embedIdx]} onAnswer={(v) => setAnswers((a) => ({ ...a, [embedIdx]: v }))} />
             )}
           </div>
@@ -505,16 +521,16 @@ const EmbeddedQuestion = ({ q, value, onAnswer }) => {
 }
 
 const StepFlashcards = ({ lesson, onNext }) => {
-  const cards = lesson.flashcards
+  const cards = Array.isArray(lesson?.flashcards) ? lesson.flashcards : []
   const [i, setI] = useState(0)
   const [flipped, setFlipped] = useState(false)
-  const done = i >= cards.length
+  const done = cards.length === 0 || i >= cards.length
   if (done) {
     return (
       <section className="rounded-2xl border border-slate-200 bg-white p-6 md:p-8 text-center">
         <Layers className="h-6 w-6 text-blue-600 mx-auto" />
-        <h3 className="mt-3 text-lg font-semibold text-slate-900">All flashcards reviewed</h3>
-        <p className="mt-1 text-sm text-slate-600">They will now enter your spaced-repetition queue for daily study.</p>
+        <h3 className="mt-3 text-lg font-semibold text-slate-900">{cards.length === 0 ? 'No flashcards for this lesson' : 'All flashcards reviewed'}</h3>
+        <p className="mt-1 text-sm text-slate-600">{cards.length === 0 ? 'Continue to the quiz.' : 'They will now enter your spaced-repetition queue for daily study.'}</p>
         <button onClick={onNext} className="mt-6 h-11 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium inline-flex items-center gap-2">Take the quiz <ArrowRight className="h-4 w-4" /></button>
       </section>
     )
@@ -550,11 +566,21 @@ const StepFlashcards = ({ lesson, onNext }) => {
 }
 
 const StepQuiz = ({ lesson, onNext }) => {
-  const questions = lesson.quiz
+  const questions = Array.isArray(lesson?.quiz) ? lesson.quiz : []
   const [answers, setAnswers] = useState({})
   const [submitted, setSubmitted] = useState(false)
   const score = questions.reduce((s, q, i) => s + (answers[i] === q.correct ? 1 : 0), 0)
-  const complete = Object.keys(answers).length === questions.length
+  const complete = questions.length > 0 && Object.keys(answers).length === questions.length
+  if (questions.length === 0) {
+    return (
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 md:p-8 text-center">
+        <Brain className="h-6 w-6 text-blue-600 mx-auto" />
+        <h3 className="mt-3 text-lg font-semibold text-slate-900">No quiz for this lesson</h3>
+        <p className="mt-1 text-sm text-slate-600">You can finish the lesson.</p>
+        <button onClick={() => onNext(0)} className="mt-6 h-11 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium inline-flex items-center gap-2">Finish lesson <Check className="h-4 w-4" /></button>
+      </section>
+    )
+  }
   if (submitted) {
     return (
       <section className="rounded-2xl border border-slate-200 bg-white p-6 md:p-8">

@@ -565,3 +565,153 @@ agent_communication:
       
       All core v1.1 admin functionality working as specified. No major issues found.
       Ready for production.
+
+
+
+user_problem_statement: |
+  CRITICAL REGRESSION TEST: Verify the "client-side exception on lesson open" bug is fixed.
+  Root cause: admin/course-override was writing lessons stripped of theory/embedded/flashcards/quiz to courses_published.
+  DB-first read then returned corrupted lessons, crashing the client.
+  
+  Fix implemented:
+  1. New helper hydrateLesson(courseSlug, lesson) merges canonical static/AI source into incoming lesson patch
+  2. admin/course-override now hydrates every lesson before saving
+  3. admin/lesson-image uses canonical course.lessons as authoritative base
+  4. findCourseMerged re-hydrates DB records on read (safety net)
+  5. /app/app/learn/[slug]/page.js findByLessonSlug also hydrates DB lessons
+
+backend:
+  - task: "Lesson hydration on DB read (findCourseMerged)"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: Simulated production corruption by inserting a DB document with lesson containing only {slug, title, minutes, objectives} (missing theory/flashcards/quiz/embedded). GET /api/lessons/alcohol-fundamentals/what-is-alcohol returned fully hydrated lesson with theory (1060 chars), 5 flashcards, 5 quiz questions, 2 embedded questions. Hydration from canonical source working correctly."
+
+  - task: "Lesson hydration on save (admin/course-override)"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: POST /api/admin/course-override with course containing minimal lesson data {slug, title, minutes, objectives}. Verified DB document has fully hydrated lessons with theory, 5 flashcards, 5 quiz questions, 2 embedded questions. GET /api/lessons returns complete data. Hydration on save working correctly."
+
+  - task: "Lesson hydration on lesson-image save"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: POST /api/admin/lesson-image with image data for alcohol-fundamentals/what-is-alcohol. Verified all 5 lessons in courses_published have complete theory/flashcards/quiz/embedded data. Image attachment doesn't corrupt other lessons. Cleanup successful (image removed, document deleted)."
+
+  - task: "SSR page hydration (findByLessonSlug)"
+    implemented: true
+    working: true
+    file: "app/learn/[slug]/page.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: With corrupted DB document, GET /learn/what-is-alcohol returned 200 with <h1> containing 'What Is Alcohol' and body containing theory keywords like 'ethanol'. SSR page renders without crash. Hydration working correctly in SSR context."
+
+  - task: "Regression: existing endpoints"
+    implemented: true
+    working: true
+    file: "app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: All regression checks passed. GET /api/courses returns 12 courses. GET /api/version returns v1.1-admin-changes. GET /api/study/next requires auth (401). GET /api/pages working. Admin endpoints require auth. POST /api/admin/generate-course returns 410 (disabled)."
+
+  - task: "Regression: SEO pages"
+    implemented: true
+    working: true
+    file: "app/learn/[slug]/page.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: SSR pages for what-is-alcohol, scotch-whisky, london-dry-gin all return 200 with correct <h1> and body content containing expected keywords. SEO pages rendering correctly."
+
+metadata:
+  created_by: "testing_agent"
+  version: "1.0"
+  test_sequence: 3
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "Lesson hydration on DB read (findCourseMerged)"
+    - "Lesson hydration on save (admin/course-override)"
+    - "Lesson hydration on lesson-image save"
+    - "SSR page hydration (findByLessonSlug)"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+  - agent: "testing"
+    message: |
+      🎉 CRITICAL REGRESSION TEST COMPLETE - ALL 5 TESTS PASSED
+      
+      Verified the "client-side exception on lesson open" bug fix is working correctly:
+      
+      ✅ Test 1: Simulate Production Corruption
+         - Inserted corrupted DB document with lesson missing theory/flashcards/quiz/embedded
+         - GET /api/lessons returned fully hydrated lesson (theory: 1060 chars, 5 flashcards, 5 quiz, 2 embedded)
+         - GET /learn/what-is-alcohol rendered without crash (200 with correct content)
+         - Root cause fix verified: DB records are hydrated on read
+      
+      ✅ Test 2: Save-Path Sanitization (admin/course-override)
+         - POST with minimal lesson data {slug, title, minutes, objectives}
+         - DB document saved with fully hydrated lessons
+         - API returns complete data
+         - Hydration on save working correctly
+      
+      ✅ Test 3: Lesson-Image Save-Path
+         - POST /api/admin/lesson-image with image for one lesson
+         - All 5 lessons in courses_published remain fully hydrated
+         - Image attachment doesn't corrupt other lessons
+         - Cleanup successful
+      
+      ✅ Test 4: Regression Checks
+         - 12 courses returned
+         - Version: v1.1-admin-changes
+         - study/next requires auth
+         - Pages endpoint working
+         - Admin endpoints require auth
+         - generate-course disabled (410)
+      
+      ✅ Test 5: SEO Page Regression
+         - what-is-alcohol, scotch-whisky, london-dry-gin all render correctly
+         - Correct <h1> and body content with expected keywords
+      
+      ROOT CAUSE CONFIRMED FIXED:
+      The bug was caused by admin/course-override and admin/lesson-image writing lessons stripped of theory/flashcards/quiz/embedded to courses_published. The fix implements:
+      1. hydrateLesson() helper that merges canonical source with incoming patches
+      2. Hydration on save in admin/course-override and admin/lesson-image
+      3. Hydration on read in findCourseMerged and findByLessonSlug (safety net)
+      
+      All hydration paths tested and working. Client-side crashes prevented.
+      
+      Test cleanup completed: all test documents removed from courses_published.
