@@ -480,7 +480,52 @@ function LessonImageEditor({ courseSlug, lessonSlug, image, onChange }) {
   const [dragOver, setDragOver] = useState(false)
   const [busy, setBusy] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [debug, setDebug] = useState(null) // { resolvedUrl, source, imageId, storedUrl, alt, caption, credit }
+  const [debugLoading, setDebugLoading] = useState(false)
+  const [debugImgOk, setDebugImgOk] = useState(null) // null=unknown, true, false
   const fileRef = useRef(null)
+
+  // Fetch what the PUBLIC /api/lessons endpoint resolves to (this is the source of truth for both auth + SEO pages).
+  const refreshDebug = useCallback(async () => {
+    if (!courseSlug || !lessonSlug) return
+    setDebugLoading(true)
+    try {
+      const r = await fetch(`/api/lessons/${courseSlug}/${lessonSlug}`, { cache: 'no-store' })
+      const data = await r.json().catch(() => ({}))
+      const li = data?.lesson?.image
+      const structured = li && typeof li === 'object'
+      const storedUrl = structured ? li.url : (typeof li === 'string' ? li : null)
+      const mediaImg = data?.media?.image || null
+      // Determine which source /api/lessons chose.
+      let source = 'unknown'
+      if (mediaImg && storedUrl && mediaImg === storedUrl) source = 'custom (admin-managed)'
+      else if (mediaImg && mediaImg.startsWith('/api/images/')) source = 'custom (admin-managed)'
+      else if (mediaImg === '/placeholder-lesson.svg') source = 'placeholder (default)'
+      else if (mediaImg) source = 'fallback (media.js)'
+      else source = 'no image'
+      const d = {
+        resolvedUrl: mediaImg,
+        source,
+        storedUrl,
+        imageId: structured ? (li.id || null) : null,
+        alt: data?.media?.imageAlt || '',
+        caption: data?.media?.imageCaption || '',
+        credit: data?.media?.imageCredit || '',
+      }
+      setDebug(d)
+      // Probe the image URL is publicly reachable
+      if (d.resolvedUrl) {
+        try {
+          const probe = await fetch(d.resolvedUrl, { method: 'HEAD' })
+          setDebugImgOk(probe.ok)
+        } catch { setDebugImgOk(false) }
+      } else {
+        setDebugImgOk(null)
+      }
+    } catch (e) { console.error('debug fetch failed', e) } finally { setDebugLoading(false) }
+  }, [courseSlug, lessonSlug])
+
+  useEffect(() => { refreshDebug() }, [refreshDebug])
 
   useEffect(() => {
     const n = normalizeImage(image)
@@ -571,6 +616,7 @@ function LessonImageEditor({ courseSlug, lessonSlug, image, onChange }) {
       onChange?.(data.image)
       const n = normalizeImage(data.image)
       setCurrent(n); setPreview(n.url)
+      refreshDebug()
     } catch (e) { toast.error(e.message, { id: 'imgsave' }) } finally { setSaving(false) }
   }
 
@@ -592,6 +638,7 @@ function LessonImageEditor({ courseSlug, lessonSlug, image, onChange }) {
       setPreview('')
       if (pendingBlob?.previewUrl) URL.revokeObjectURL(pendingBlob.previewUrl)
       setPendingBlob(null)
+      refreshDebug()
     } catch (e) { toast.error(e.message) } finally { setSaving(false) }
   }
 
@@ -613,6 +660,47 @@ function LessonImageEditor({ courseSlug, lessonSlug, image, onChange }) {
             <button type="button" onClick={remove} disabled={saving} className="h-8 px-3 rounded-md border border-red-200 bg-white text-red-600 hover:bg-red-50 text-xs inline-flex items-center gap-1.5 disabled:opacity-60"><Trash2 className="h-3.5 w-3.5" /> Remove</button>
           </div>
         )}
+      </div>
+
+      {/* === DEBUG PANEL === What the PUBLIC /api/lessons endpoint resolves for this lesson. */}
+      <div className="mt-3 rounded-lg border border-dashed border-slate-300 bg-slate-50/70 p-3 text-[11px] font-mono leading-relaxed">
+        <div className="flex items-center justify-between mb-1.5 font-sans">
+          <div className="flex items-center gap-1.5 text-slate-600 font-medium text-[11px]"><AlertCircle className="h-3.5 w-3.5" /> Debug — public resolution ({courseSlug}/{lessonSlug})</div>
+          <button type="button" onClick={refreshDebug} disabled={debugLoading} className="h-6 px-2 rounded border border-slate-200 bg-white hover:bg-slate-100 text-slate-600 text-[10px] inline-flex items-center gap-1 disabled:opacity-50">{debugLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCcw className="h-3 w-3" />} Refresh</button>
+        </div>
+        {debug ? (
+          <div className="grid gap-y-1 gap-x-3 text-slate-700" style={{ gridTemplateColumns: 'max-content 1fr' }}>
+            <div className="text-slate-500">Source</div>
+            <div className={
+              debug.source.startsWith('custom') ? 'text-emerald-700 font-semibold' :
+              debug.source.startsWith('fallback') ? 'text-amber-700 font-semibold' :
+              debug.source.startsWith('placeholder') ? 'text-slate-500 font-semibold' :
+              'text-red-600 font-semibold'
+            }>{debug.source}</div>
+            <div className="text-slate-500">GridFS ID</div>
+            <div className="break-all">{debug.imageId || <span className="text-slate-400">(none — external URL or fallback)</span>}</div>
+            <div className="text-slate-500">Stored on lesson</div>
+            <div className="break-all">{debug.storedUrl || <span className="text-slate-400">(no lesson.image field)</span>}</div>
+            <div className="text-slate-500">Resolved media.image</div>
+            <div className="break-all">{debug.resolvedUrl || <span className="text-slate-400">(null)</span>}</div>
+            <div className="text-slate-500">Alt / caption / credit</div>
+            <div className="break-all">
+              alt=&quot;{debug.alt || ''}&quot; · caption=&quot;{debug.caption || ''}&quot; · credit=&quot;{debug.credit || ''}&quot;
+            </div>
+            <div className="text-slate-500">URL reachable</div>
+            <div>
+              {debugImgOk === true && <span className="text-emerald-700">✓ HTTP 200</span>}
+              {debugImgOk === false && <span className="text-red-600">✗ HTTP error (image will 404)</span>}
+              {debugImgOk === null && <span className="text-slate-400">n/a</span>}
+              {debug.resolvedUrl && <a href={debug.resolvedUrl} target="_blank" rel="noreferrer" className="ml-2 text-blue-700 hover:underline">open ↗</a>}
+            </div>
+          </div>
+        ) : (
+          <div className="text-slate-400">Loading debug info…</div>
+        )}
+        <div className="mt-2 pt-2 border-t border-slate-200/70 text-[10px] text-slate-500 font-sans">
+          Priority: <b>custom</b> (this admin panel) → <b>fallback</b> (/lib/media.js) → <b>placeholder</b> (/placeholder-lesson.svg). If Source shows &quot;fallback&quot; but you just saved a custom image, hard-refresh the public page (Ctrl+F5) — SEO pages are server-rendered and may be cached on the CDN.
+        </div>
       </div>
 
       {/* Preview */}
