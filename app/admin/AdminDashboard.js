@@ -1146,12 +1146,14 @@ function UserDetail({ id, onBack }) {
             <select value={role} onChange={(e) => setRole(e.target.value)} className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm bg-white">
               <option value="">—</option>
               <option value="Bartender">Bartender</option>
-              <option value="Server">Server</option>
-              <option value="Manager">Manager</option>
-              <option value="Sommelier">Sommelier</option>
-              <option value="Owner">Owner</option>
-              <option value="Student">Student</option>
-              <option value="Enthusiast">Enthusiast</option>
+              <option value="Barback">Barback</option>
+              <option value="Waiter/Server">Waiter/Server</option>
+              <option value="Bar manager">Bar manager</option>
+              <option value="Hospitality student">Hospitality student</option>
+              <option value="Cocktail enthusiast">Cocktail enthusiast</option>
+              <option value="Spirits enthusiast">Spirits enthusiast</option>
+              <option value="Beer enthusiast">Beer enthusiast</option>
+              <option value="Wine enthusiast">Wine enthusiast</option>
               <option value="Other">Other</option>
             </select>
           </F>
