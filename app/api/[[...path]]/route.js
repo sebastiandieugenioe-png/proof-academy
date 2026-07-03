@@ -107,6 +107,21 @@ const RESERVED_PAGE_SLUGS = new Set([
   '_next', 'assets', 'static', 'images',
 ]);
 
+// GDPR audience profiling — role options and sanitization helpers
+const ROLE_OPTIONS = new Set(['Bartender','Barback','Waiter/Server','Hospitality student','Cocktail enthusiast','Spirits enthusiast','Beer enthusiast','Wine enthusiast','Bar manager','Other']);
+
+function sanitizeProfileField(v, max = 80) {
+  if (typeof v !== 'string') return null;
+  const t = v.trim().slice(0, max);
+  return t || null;
+}
+
+function sanitizeRole(v) {
+  const t = sanitizeProfileField(v, 40);
+  if (!t) return null;
+  return ROLE_OPTIONS.has(t) ? t : 'Other';
+}
+
 async function resolveCourseSlugAlias(slug) {
   try {
     const db = await getDb();
@@ -620,6 +635,73 @@ export async function GET(request, { params }) {
       return json({ total, users: rows.map((u) => ({ ...u, _id: undefined, passwordHash: undefined })) });
     }
 
+    if (path[0] === 'admin' && path[1] === 'users' && path[2] && path[3] === 'export') {
+      if (!isSafeId(path[2])) return err('User not found', 404);
+      const db = await getDb();
+      const user = await db.collection('users').findOne({ id: path[2] });
+      if (!user) return err('User not found', 404);
+      delete user._id;
+      delete user.passwordHash;
+      delete user.newsletterUnsubscribeToken; // internal token — not part of the portability bundle
+      const [progress, reviews, comments, newsletterAudit] = await Promise.all([
+        db.collection('progress').find({ userId: user.id }).sort({ updatedAt: -1 }).toArray(),
+        db.collection('reviews').find({ userId: user.id }).sort({ updatedAt: -1 }).toArray(),
+        db.collection('comments').find({ userId: user.id }).sort({ createdAt: -1 }).toArray(),
+        db.collection('newsletter').find({ email: user.email || '' }).toArray(),
+      ]);
+      const strip = (arr) => arr.map((r) => { const c = { ...r }; delete c._id; return c; });
+      const bundle = {
+        exportedAt: new Date().toISOString(),
+        exportedBy: 'admin',
+        format: 'gdpr-portability-v1',
+        gdprNote: 'This export contains all personal data we hold about the user (GDPR Art. 15 access / Art. 20 portability). Internal security tokens are intentionally omitted.',
+        user,
+        progress: strip(progress),
+        flashcardReviews: strip(reviews),
+        comments: strip(comments),
+        newsletterAudit: strip(newsletterAudit),
+      };
+      const format = (url.searchParams.get('format') || 'json').toLowerCase();
+      const safeEmailStub = (user.email || 'user').replace(/[^a-z0-9._@-]+/gi, '_').slice(0, 60);
+      if (format === 'csv') {
+        // Portability CSV — flat table with a "section" column so it round-trips into a spreadsheet.
+        const rows = [];
+        rows.push(['section', 'field', 'value']);
+        const flat = (section, obj) => {
+          for (const [k, v] of Object.entries(obj || {})) {
+            const val = v instanceof Date ? v.toISOString() : (typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v ?? ''));
+            rows.push([section, k, val]);
+          }
+        };
+        flat('user', user);
+        bundle.progress.forEach((p, i) => flat(`progress[${i}]`, p));
+        bundle.flashcardReviews.forEach((r, i) => flat(`flashcardReviews[${i}]`, r));
+        bundle.comments.forEach((c, i) => flat(`comments[${i}]`, c));
+        bundle.newsletterAudit.forEach((n, i) => flat(`newsletterAudit[${i}]`, n));
+        const csv = rows.map((r) => r.map((cell) => {
+          const s = String(cell);
+          return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+        }).join(',')).join('\n');
+        return new NextResponse(csv, {
+          status: 200,
+          headers: {
+            'Content-Type': 'text/csv; charset=utf-8',
+            'Content-Disposition': `attachment; filename="gdpr-export-${safeEmailStub}.csv"`,
+            'Cache-Control': 'no-store',
+          },
+        });
+      }
+      // Default: JSON — the recommended portability format under GDPR Art. 20.
+      return new NextResponse(JSON.stringify(bundle, null, 2), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Content-Disposition': `attachment; filename="gdpr-export-${safeEmailStub}.json"`,
+          'Cache-Control': 'no-store',
+        },
+      });
+    }
+
     if (path[0] === 'admin' && path[1] === 'users' && path[2]) {
       if (!isSafeId(path[2])) return err('User not found', 404);
       const db = await getDb();
@@ -627,12 +709,16 @@ export async function GET(request, { params }) {
       if (!user) return err('User not found', 404);
       delete user._id;
       delete user.passwordHash;
-      const progress = await db.collection('progress').find({ userId: user.id }).sort({ updatedAt: -1 }).toArray();
-      const reviewsCount = await db.collection('reviews').countDocuments({ userId: user.id });
-      const reviewsDone = await db.collection('reviews').countDocuments({ userId: user.id, lastReviewedAt: { $ne: null } });
-      const totalTime = await db.collection('progress').aggregate([
-        { $match: { userId: user.id } }, { $group: { _id: null, total: { $sum: '$minutesSpent' } } },
-      ]).toArray();
+      const [progress, reviewsCount, reviewsDone, totalTime, comments, newsletterAudit] = await Promise.all([
+        db.collection('progress').find({ userId: user.id }).sort({ updatedAt: -1 }).toArray(),
+        db.collection('reviews').countDocuments({ userId: user.id }),
+        db.collection('reviews').countDocuments({ userId: user.id, lastReviewedAt: { $ne: null } }),
+        db.collection('progress').aggregate([
+          { $match: { userId: user.id } }, { $group: { _id: null, total: { $sum: '$minutesSpent' } } },
+        ]).toArray(),
+        db.collection('comments').find({ userId: user.id }).sort({ createdAt: -1 }).limit(500).toArray(),
+        db.collection('newsletter').find({ email: user.email || '' }).toArray(),
+      ]);
       const coursesStarted = new Set(progress.map((p) => p.courseSlug)).size;
       const lessonsCompleted = progress.filter((p) => p.completed).length;
       return json({
@@ -643,8 +729,11 @@ export async function GET(request, { params }) {
           minutesStudied: totalTime[0]?.total || 0,
           flashcardsInQueue: reviewsCount,
           flashcardsReviewed: reviewsDone,
+          commentsPosted: comments.length,
         },
         progress: progress.map((p) => ({ ...p, _id: undefined })),
+        comments: comments.map((c) => ({ ...c, _id: undefined })),
+        newsletterAudit: newsletterAudit.map((n) => ({ ...n, _id: undefined })),
       });
     }
 
@@ -706,9 +795,40 @@ export async function PATCH(request, { params }) {
       if (!isSafeId(path[2])) return err('Invalid user id', 400);
       const db = await getDb();
       const set = { updatedAt: new Date() };
-      if (typeof body.name === 'string') set.name = body.name.trim();
+      if (typeof body.name === 'string') set.name = body.name.trim().slice(0, 100);
       if (typeof body.email === 'string') set.email = body.email.trim().toLowerCase();
-      if (typeof body.newsletter === 'boolean') set.newsletter = body.newsletter;
+      // GDPR — Rectification (Art. 16): profile fields can be corrected by admin.
+      if (typeof body.country === 'string') set.country = sanitizeProfileField(body.country, 60);
+      if (typeof body.city === 'string') set.city = sanitizeProfileField(body.city, 80);
+      if (typeof body.role === 'string') set.role = sanitizeRole(body.role);
+      // Newsletter toggle by admin — record the correct audit trail so we don't
+      // silently lose consent metadata when an admin flips the box.
+      if (typeof body.newsletter === 'boolean') {
+        const now = new Date();
+        const current = await db.collection('users').findOne({ id: path[2] }, { projection: { newsletter: 1, email: 1, newsletterUnsubscribeToken: 1 } });
+        set.newsletter = body.newsletter;
+        if (current && current.newsletter !== body.newsletter) {
+          if (body.newsletter) {
+            const token = current.newsletterUnsubscribeToken || newUnsubToken();
+            set.newsletterConsentAt = now;
+            set.newsletterWithdrawnAt = null;
+            set.newsletterUnsubscribeToken = token;
+            set.newsletterSource = 'admin';
+            if (current.email) {
+              await db.collection('newsletter').updateOne(
+                { email: current.email },
+                { $set: { email: current.email, source: 'admin', consentAt: now, withdrawnAt: null, unsubscribeToken: token, userId: path[2], updatedAt: now }, $setOnInsert: { id: uuid(), createdAt: now } },
+                { upsert: true }
+              );
+            }
+          } else {
+            set.newsletterWithdrawnAt = now;
+            if (current.email) {
+              await db.collection('newsletter').updateOne({ email: current.email }, { $set: { withdrawnAt: now, updatedAt: now } });
+            }
+          }
+        }
+      }
       await db.collection('users').updateOne({ id: path[2] }, { $set: set });
       const u = await db.collection('users').findOne({ id: path[2] });
       if (u) { delete u._id; delete u.passwordHash; }
@@ -904,21 +1024,6 @@ export async function POST(request, { params }) {
   }
 
   try {
-const ROLE_OPTIONS = new Set(['Bartender','Barback','Waiter/Server','Hospitality student','Cocktail enthusiast','Spirits enthusiast','Beer enthusiast','Wine enthusiast','Bar manager','Other']);
-
-function sanitizeProfileField(v, max = 80) {
-  if (typeof v !== 'string') return null;
-  const t = v.trim().slice(0, max);
-  return t || null;
-}
-function sanitizeRole(v) {
-  const t = sanitizeProfileField(v, 40);
-  if (!t) return null;
-  return ROLE_OPTIONS.has(t) ? t : 'Other';
-}
-
-function sanitizeUserOut2Remove() { /* removed — using module-level sanitizeUserOut */ }
-
     if (seg === 'register') {
       // Rate limit
       const ip = ipFromRequest(request);

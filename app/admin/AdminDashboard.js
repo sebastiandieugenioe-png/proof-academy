@@ -993,8 +993,8 @@ function UsersView({ onOpen }) {
   const csvEscape = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
   const exportCsv = () => {
     if (!data) return
-    const header = ['email','name','country','city','role','newsletter','createdAt'].join(',')
-    const rows = data.users.map((u) => [u.email, u.name, u.country, u.city, u.role, !!u.newsletter, u.createdAt].map(csvEscape).join(','))
+    const header = ['email','name','country','city','role','newsletter','newsletterConsentAt','newsletterWithdrawnAt','newsletterSource','createdAt'].join(',')
+    const rows = data.users.map((u) => [u.email, u.name, u.country, u.city, u.role, !!u.newsletter, u.newsletterConsentAt || '', u.newsletterWithdrawnAt || '', u.newsletterSource || '', u.createdAt].map(csvEscape).join(','))
     const csv = [header, ...rows].join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'osc-users.csv'; a.click()
@@ -1048,35 +1048,115 @@ function UserDetail({ id, onBack }) {
   const [d, setD] = useState(null)
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
+  const [country, setCountry] = useState('')
+  const [city, setCity] = useState('')
+  const [role, setRole] = useState('')
   const [newsletter, setNewsletter] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleteText, setDeleteText] = useState('')
+  const [deleting, setDeleting] = useState(false)
   const load = useCallback(async () => {
     const r = await api(`/admin/users/${id}`)
-    setD(r); setName(r.user.name || ''); setEmail(r.user.email || ''); setNewsletter(!!r.user.newsletter)
+    setD(r)
+    setName(r.user.name || ''); setEmail(r.user.email || '')
+    setCountry(r.user.country || ''); setCity(r.user.city || ''); setRole(r.user.role || '')
+    setNewsletter(!!r.user.newsletter)
   }, [id])
   useEffect(() => { load() }, [load])
-  const save = async () => { setSaving(true); try { await api(`/admin/users/${id}`, { method: 'PATCH', body: { name, email, newsletter } }); await load() } catch (e) { alert(e.message) } finally { setSaving(false) } }
-  const del = async () => { if (!confirm(`Delete ${d.user.email} and ALL their progress? This cannot be undone.`)) return; await api(`/admin/users/${id}`, { method: 'DELETE' }); onBack() }
+  const save = async () => {
+    setSaving(true)
+    try {
+      await api(`/admin/users/${id}`, { method: 'PATCH', body: { name, email, country, city, role, newsletter } })
+      await load()
+      toast.success('Profile updated.')
+    } catch (e) { toast.error(e.message) } finally { setSaving(false) }
+  }
+  const del = async () => {
+    if (deleteText.trim().toLowerCase() !== (d?.user?.email || '').toLowerCase()) {
+      toast.error('Please type the exact email to confirm deletion.'); return
+    }
+    setDeleting(true)
+    try {
+      await api(`/admin/users/${id}`, { method: 'DELETE' })
+      toast.success(`Deleted ${d.user.email} and all associated data.`)
+      onBack()
+    } catch (e) { toast.error(e.message); setDeleting(false) }
+  }
+  const downloadExport = (format) => {
+    // GDPR Art. 15 (access) + Art. 20 (portability). Cookies flow with the browser fetch.
+    const a = document.createElement('a')
+    a.href = `/api/admin/users/${id}/export?format=${format}`
+    a.download = ''
+    a.click()
+    toast.success(`Preparing ${format.toUpperCase()} export…`)
+  }
+  const deleteComment = async (commentId) => {
+    if (!window.confirm('Delete this comment? This action cannot be undone.')) return
+    try {
+      await api(`/admin/comments/${commentId}`, { method: 'DELETE' })
+      toast.success('Comment deleted.')
+      await load()
+    } catch (e) { toast.error(e.message) }
+  }
   if (!d) return <Spinner />
+  const comments = d.comments || []
   return (
     <div className="space-y-6">
       <button onClick={onBack} className="text-sm text-slate-500 hover:text-slate-800 inline-flex items-center gap-1"><ArrowLeft className="h-4 w-4" /> All users</button>
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{d.user.name || d.user.email}</h1>
-        <p className="text-sm text-slate-500">{d.user.email} · joined {new Date(d.user.createdAt).toLocaleString()}</p>
-        <p className="text-xs text-slate-400 mt-0.5">Auth: {d.user.authMethod || d.user.provider || 'email'} · Verified: {d.user.verified === false ? 'No' : 'Yes'}</p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{d.user.name || d.user.email}</h1>
+          <p className="text-sm text-slate-500">{d.user.email} · joined {new Date(d.user.createdAt).toLocaleString()}</p>
+          <p className="text-xs text-slate-400 mt-0.5">Auth: {d.user.authMethod || d.user.provider || 'email'} · Verified: {d.user.verified === false ? 'No' : 'Yes'} · ID: <code className="font-mono">{d.user.id}</code></p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => downloadExport('json')}
+            title="GDPR Art. 20 portability — full data bundle in machine-readable JSON."
+            className="h-9 px-3 rounded-md border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-sm inline-flex items-center gap-1.5"
+          >
+            <Download className="h-3.5 w-3.5" /> Export JSON
+          </button>
+          <button
+            onClick={() => downloadExport('csv')}
+            title="GDPR Art. 15 access — flat CSV, spreadsheet-friendly."
+            className="h-9 px-3 rounded-md border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-sm inline-flex items-center gap-1.5"
+          >
+            <Download className="h-3.5 w-3.5" /> Export CSV
+          </button>
+        </div>
       </div>
-      <div className="grid gap-3 md:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-5">
         <Stat label="Courses started" value={d.stats.coursesStarted} />
         <Stat label="Lessons completed" value={d.stats.lessonsCompleted} />
         <Stat label="Cards reviewed" value={d.stats.flashcardsReviewed} />
         <Stat label="Minutes studied" value={d.stats.minutesStudied} />
+        <Stat label="Comments" value={d.stats.commentsPosted ?? comments.length} />
       </div>
       <div className="rounded-2xl border border-slate-200 bg-white p-5 space-y-3">
-        <h3 className="font-semibold text-slate-900">Edit profile</h3>
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-slate-900">Edit profile</h3>
+          <span className="text-xs text-slate-500">GDPR: <span className="font-medium text-slate-700">Rectification (Art. 16)</span></span>
+        </div>
         <div className="grid gap-3 md:grid-cols-3">
           <F label="Name"><input value={name} onChange={(e) => setName(e.target.value)} className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm" /></F>
           <F label="Email"><input value={email} onChange={(e) => setEmail(e.target.value)} className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm" /></F>
+          <F label="Role">
+            <select value={role} onChange={(e) => setRole(e.target.value)} className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm bg-white">
+              <option value="">—</option>
+              <option value="Bartender">Bartender</option>
+              <option value="Server">Server</option>
+              <option value="Manager">Manager</option>
+              <option value="Sommelier">Sommelier</option>
+              <option value="Owner">Owner</option>
+              <option value="Student">Student</option>
+              <option value="Enthusiast">Enthusiast</option>
+              <option value="Other">Other</option>
+            </select>
+          </F>
+          <F label="Country"><input value={country} onChange={(e) => setCountry(e.target.value)} maxLength={60} className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm" /></F>
+          <F label="City"><input value={city} onChange={(e) => setCity(e.target.value)} maxLength={80} className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm" /></F>
           <F label="Newsletter"><label className="inline-flex items-center gap-2 text-sm text-slate-700 mt-2"><input type="checkbox" checked={newsletter} onChange={(e) => setNewsletter(e.target.checked)} className="h-4 w-4 accent-blue-600" /> Opted in</label></F>
         </div>
         {(d.user.newsletterConsentAt || d.user.newsletterWithdrawnAt) && (
@@ -1084,13 +1164,45 @@ function UserDetail({ id, onBack }) {
             {d.user.newsletterConsentAt && <span>Consented: {new Date(d.user.newsletterConsentAt).toLocaleString()}</span>}
             {d.user.newsletterConsentAt && d.user.newsletterWithdrawnAt && <span className="mx-2">·</span>}
             {d.user.newsletterWithdrawnAt && <span>Withdrawn: {new Date(d.user.newsletterWithdrawnAt).toLocaleString()}</span>}
+            {d.user.newsletterSource && <span className="ml-2">· Source: {d.user.newsletterSource}</span>}
           </div>
         )}
-        <div className="flex justify-between">
+        <div className="flex justify-between pt-1">
           <button onClick={save} disabled={saving} className="h-9 px-4 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm inline-flex items-center gap-1.5 disabled:opacity-60">{saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><Save className="h-3.5 w-3.5" /> Save</>}</button>
-          <button onClick={del} className="h-9 px-4 rounded-md border border-red-200 text-red-600 hover:bg-red-50 text-sm inline-flex items-center gap-1.5"><Trash2 className="h-3.5 w-3.5" /> Delete account</button>
+          <button onClick={() => { setDeleteText(''); setShowDeleteConfirm(true) }} className="h-9 px-4 rounded-md border border-red-200 text-red-600 hover:bg-red-50 text-sm inline-flex items-center gap-1.5"><Trash2 className="h-3.5 w-3.5" /> Delete account</button>
         </div>
       </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="font-semibold text-slate-900">Comments <span className="text-slate-400 font-normal">({comments.length})</span></h3>
+          <span className="text-xs text-slate-500">GDPR: <span className="font-medium text-slate-700">Erasure (Art. 17)</span></span>
+        </div>
+        {comments.length === 0 ? <Empty>No comments posted.</Empty> : (
+          <div className="rounded-xl border border-slate-200 bg-white overflow-hidden divide-y divide-slate-100">
+            {comments.map((c) => (
+              <div key={c.id} className="p-4 flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs text-slate-500 mb-1">
+                    <span className="font-mono text-slate-400">{c.lessonSlug || c.courseSlug || '—'}</span>
+                    <span className="mx-2">·</span>
+                    <span>{new Date(c.createdAt).toLocaleString()}</span>
+                    {c.approved === false && <span className="ml-2 px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">Pending</span>}
+                  </div>
+                  <p className="text-sm text-slate-800 whitespace-pre-wrap break-words">{c.text}</p>
+                </div>
+                <button
+                  onClick={() => deleteComment(c.id)}
+                  className="h-8 px-3 rounded-md border border-red-200 text-red-600 hover:bg-red-50 text-xs inline-flex items-center gap-1.5 shrink-0"
+                >
+                  <Trash2 className="h-3 w-3" /> Delete
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div>
         <h3 className="font-semibold text-slate-900 mb-2">Lesson activity</h3>
         {d.progress.length === 0 && <Empty>No progress yet.</Empty>}
@@ -1113,11 +1225,66 @@ function UserDetail({ id, onBack }) {
           </table>
         </div>
       </div>
+
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => !deleting && setShowDeleteConfirm(false)}>
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="p-5 space-y-3">
+              <div className="flex items-start gap-3">
+                <div className="h-10 w-10 rounded-full bg-red-100 grid place-items-center shrink-0">
+                  <Trash2 className="h-5 w-5 text-red-700" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-lg font-semibold text-slate-900">Delete account permanently?</h3>
+                  <p className="mt-1 text-sm text-slate-600">
+                    This will permanently erase <strong className="font-medium text-slate-900">{d.user.email}</strong> and all associated data.
+                  </p>
+                </div>
+              </div>
+              <ul className="text-xs text-slate-600 space-y-1 rounded-md bg-slate-50 border border-slate-200 p-3">
+                <li>🗑️ User account and profile</li>
+                <li>🗑️ {d.progress.length} lesson-progress record{d.progress.length === 1 ? '' : 's'}</li>
+                <li>🗑️ All flashcard-review history</li>
+                <li>🗑️ {comments.length} comment{comments.length === 1 ? '' : 's'} posted by this user</li>
+                <li>⚠️ Newsletter audit doc (if any) is preserved for legal audit trail — email replaced with a hash on request.</li>
+              </ul>
+              <p className="text-xs text-slate-500">This satisfies GDPR Art. 17 (Right to erasure). The action <strong>cannot be undone</strong>.</p>
+              <div>
+                <label className="text-xs font-medium text-slate-700 block mb-1">Type <code className="font-mono">{d.user.email}</code> to confirm:</label>
+                <input
+                  autoFocus
+                  value={deleteText}
+                  onChange={(e) => setDeleteText(e.target.value)}
+                  placeholder={d.user.email}
+                  className="w-full h-10 rounded-lg border border-slate-300 px-3 text-sm font-mono"
+                  disabled={deleting}
+                />
+              </div>
+            </div>
+            <div className="border-t border-slate-200 bg-slate-50 px-4 py-3 flex items-center justify-end gap-2">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleting}
+                className="h-9 px-3 rounded-md border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-sm disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={del}
+                disabled={deleting || deleteText.trim().toLowerCase() !== (d.user.email || '').toLowerCase()}
+                className="h-9 px-4 rounded-md bg-red-600 hover:bg-red-700 text-white text-sm inline-flex items-center gap-1.5 disabled:opacity-40"
+              >
+                {deleting ? <><Loader2 className="h-4 w-4 animate-spin" /> Deleting…</> : <><Trash2 className="h-4 w-4" /> Delete permanently</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
-}
 
 /* ==================== NEWSLETTER ==================== */
+}
 function NewsletterView() {
   const [rows, setRows] = useState(null)
   useEffect(() => { api('/admin/newsletter').then(setRows) }, [])

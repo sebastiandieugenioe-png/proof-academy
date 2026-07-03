@@ -1,630 +1,686 @@
 #!/usr/bin/env python3
 """
-Backend regression test for POST /api/admin/seed-legal-pages endpoint.
-Tests the new bulk-seed endpoint for legal pages (privacy, terms, cookies, contact, data-rights, about).
+Backend regression test for SESSION 9: Admin GDPR toolkit
+Tests the three new/enhanced endpoints:
+- GET  /api/admin/users/:id/export?format=json|csv  (NEW)
+- GET  /api/admin/users/:id                          (ENHANCED)
+- PATCH /api/admin/users/:id                         (ENHANCED)
 """
 
 import requests
+import json
 import sys
-import os
-from dotenv import load_dotenv
+from datetime import datetime
 
-# Load environment variables
-load_dotenv('/app/.env')
-
-BASE_URL = os.getenv('NEXT_PUBLIC_BASE_URL', 'https://proof-academy.preview.emergentagent.com')
-API_BASE = f"{BASE_URL}/api"
+# Base URL from .env
+BASE_URL = "https://proof-academy.preview.emergentagent.com/api"
 
 # Admin credentials from test_credentials.md
 ADMIN_EMAIL = "sebastiandieugenioe@gmail.com"
 ADMIN_PASSWORD = "preview-only-change-in-prod"
 
-# Expected legal page slugs
-EXPECTED_SLUGS = ['privacy', 'terms', 'cookies', 'contact', 'data-rights', 'about']
+# Test state
+admin_session = requests.Session()
+user_session = requests.Session()
+alice_id = None
+alice_email = None
+comment_id = None
 
-def print_step(step_num, description):
-    """Print a test step header."""
+def log_step(step_num, description):
     print(f"\n{'='*80}")
     print(f"STEP {step_num}: {description}")
     print('='*80)
 
-def print_pass(message):
-    """Print a pass message."""
+def log_pass(message):
     print(f"✅ PASS: {message}")
 
-def print_fail(message, details=None):
-    """Print a fail message with optional details."""
+def log_fail(message, details=None):
     print(f"❌ FAIL: {message}")
     if details:
         print(f"   Details: {details}")
 
-def print_info(message):
-    """Print an info message."""
+def log_info(message):
     print(f"ℹ️  INFO: {message}")
 
-def validate_response_shape(data, force_expected):
-    """Validate the response shape from seed-legal-pages endpoint."""
-    errors = []
-    
-    # Check top-level fields
-    if not isinstance(data.get('ok'), bool):
-        errors.append(f"'ok' should be boolean, got {type(data.get('ok'))}")
-    if not isinstance(data.get('force'), bool):
-        errors.append(f"'force' should be boolean, got {type(data.get('force'))}")
-    if data.get('force') != force_expected:
-        errors.append(f"'force' should be {force_expected}, got {data.get('force')}")
-    
-    # Check summary object
-    summary = data.get('summary', {})
-    if not isinstance(summary, dict):
-        errors.append(f"'summary' should be dict, got {type(summary)}")
+def admin_login():
+    """Authenticate as admin and capture session cookie"""
+    log_step(0, "Admin Authentication")
+    resp = admin_session.post(f"{BASE_URL}/admin-auth", json={
+        "email": ADMIN_EMAIL,
+        "password": ADMIN_PASSWORD
+    })
+    if resp.status_code == 200:
+        log_pass(f"Admin login successful. Cookie: {admin_session.cookies.get('osc_admin')[:20]}...")
+        return True
     else:
-        for key in ['created', 'updatedMetadata', 'updatedContent', 'preserved']:
-            if not isinstance(summary.get(key), int):
-                errors.append(f"summary.{key} should be int, got {type(summary.get(key))}")
-    
-    # Check results array
-    results = data.get('results', [])
-    if not isinstance(results, list):
-        errors.append(f"'results' should be list, got {type(results)}")
-    else:
-        for i, item in enumerate(results):
-            if not isinstance(item.get('slug'), str):
-                errors.append(f"results[{i}].slug should be string, got {type(item.get('slug'))}")
-            if not isinstance(item.get('action'), str):
-                errors.append(f"results[{i}].action should be string, got {type(item.get('action'))}")
-            if 'published' in item and not isinstance(item.get('published'), bool):
-                errors.append(f"results[{i}].published should be boolean when present, got {type(item.get('published'))}")
-    
-    return errors
+        log_fail(f"Admin login failed: {resp.status_code}", resp.text)
+        return False
 
-def main():
-    """Run the comprehensive backend test suite."""
-    session = requests.Session()
-    test_results = {
-        'total': 9,
-        'passed': 0,
-        'failed': 0,
-        'details': []
+def test_step_1_auth_guard():
+    """Step 1: Auth guard on export endpoint"""
+    log_step(1, "Auth guard on export endpoint")
+    
+    # Test without admin cookie
+    resp = requests.get(f"{BASE_URL}/admin/users/some-fake-id/export")
+    if resp.status_code == 401:
+        log_pass("Export without admin cookie returns 401")
+    else:
+        log_fail(f"Expected 401, got {resp.status_code}", resp.text)
+        return False
+    
+    # Test with admin cookie but invalid id
+    resp = admin_session.get(f"{BASE_URL}/admin/users/invalid-id-12345/export")
+    if resp.status_code == 404:
+        log_pass("Export with invalid user id returns 404")
+    else:
+        log_fail(f"Expected 404, got {resp.status_code}", resp.text)
+        return False
+    
+    return True
+
+def test_step_2_prepare_user():
+    """Step 2: Create test user 'GDPR Alice' and post a comment"""
+    global alice_id, alice_email, comment_id
+    log_step(2, "Prepare test user 'GDPR Alice'")
+    
+    # Generate unique email
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    alice_email = f"gdpr-alice-{timestamp}@test.example"
+    
+    # Register user
+    register_data = {
+        "email": alice_email,
+        "password": "TestPassword123!",
+        "confirmPassword": "TestPassword123!",
+        "name": "GDPR Alice",
+        "country": "Italy",
+        "city": "Milan",
+        "role": "Bartender",
+        "newsletter": True
     }
     
-    privacy_page_id = None  # Will store the privacy page ID for later tests
+    resp = user_session.post(f"{BASE_URL}/register", json=register_data)
+    if resp.status_code != 200:
+        log_fail(f"User registration failed: {resp.status_code}", resp.text)
+        return False
+    
+    data = resp.json()
+    alice_id = data.get('user', {}).get('id')
+    if not alice_id:
+        log_fail("No user id in registration response", resp.text)
+        return False
+    
+    log_pass(f"User 'GDPR Alice' created with id: {alice_id}")
+    log_info(f"Email: {alice_email}")
+    
+    # Verify user session cookie
+    if not user_session.cookies.get('osc_user'):
+        log_fail("No user session cookie after registration")
+        return False
+    
+    log_pass("User session cookie captured")
+    
+    # Try to post a comment
+    comment_data = {
+        "courseSlug": "alcohol-fundamentals",
+        "lessonSlug": "what-is-alcohol",
+        "text": "This is a test comment from GDPR Alice for GDPR compliance testing."
+    }
+    
+    resp = user_session.post(f"{BASE_URL}/comments", json=comment_data)
+    if resp.status_code == 200:
+        data = resp.json()
+        comment_id = data.get('comment', {}).get('id')
+        log_pass(f"Comment posted successfully. Comment id: {comment_id}")
+    else:
+        log_info(f"Comment posting failed ({resp.status_code}). Will continue without comment. Response: {resp.text[:200]}")
+        comment_id = None
+    
+    return True
+
+def test_step_3_json_export():
+    """Step 3: Test JSON export"""
+    log_step(3, "JSON export (GET /api/admin/users/:id/export)")
+    
+    resp = admin_session.get(f"{BASE_URL}/admin/users/{alice_id}/export")
+    
+    # Check HTTP 200
+    if resp.status_code != 200:
+        log_fail(f"Expected 200, got {resp.status_code}", resp.text)
+        return False
+    log_pass("HTTP 200 OK")
+    
+    # Check Content-Type
+    content_type = resp.headers.get('Content-Type', '')
+    if 'application/json' in content_type:
+        log_pass(f"Content-Type includes 'application/json': {content_type}")
+    else:
+        log_fail(f"Content-Type should include 'application/json', got: {content_type}")
+        return False
+    
+    # Check Content-Disposition
+    content_disp = resp.headers.get('Content-Disposition', '')
+    if 'attachment' in content_disp and 'gdpr-export-' in content_disp and '.json' in content_disp:
+        log_pass(f"Content-Disposition correct: {content_disp}")
+    else:
+        log_fail(f"Content-Disposition incorrect: {content_disp}")
+        return False
+    
+    # Parse JSON
+    try:
+        data = resp.json()
+    except:
+        log_fail("Failed to parse JSON response", resp.text[:500])
+        return False
+    
+    # Check top-level keys
+    required_keys = ['exportedAt', 'exportedBy', 'format', 'gdprNote', 'user', 'progress', 'flashcardReviews', 'comments', 'newsletterAudit']
+    for key in required_keys:
+        if key in data:
+            log_pass(f"Key '{key}' present")
+        else:
+            log_fail(f"Key '{key}' missing")
+            return False
+    
+    # Check exportedBy
+    if data.get('exportedBy') == 'admin':
+        log_pass("exportedBy === 'admin'")
+    else:
+        log_fail(f"exportedBy should be 'admin', got: {data.get('exportedBy')}")
+    
+    # Check format
+    if data.get('format') == 'gdpr-portability-v1':
+        log_pass("format === 'gdpr-portability-v1'")
+    else:
+        log_fail(f"format should be 'gdpr-portability-v1', got: {data.get('format')}")
+    
+    # Check gdprNote is non-empty
+    if data.get('gdprNote') and len(data.get('gdprNote')) > 0:
+        log_pass(f"gdprNote is non-empty ({len(data.get('gdprNote'))} chars)")
+    else:
+        log_fail("gdprNote is empty or missing")
+    
+    # Check user object
+    user = data.get('user', {})
+    
+    # passwordHash must NOT be present
+    if 'passwordHash' not in user:
+        log_pass("user.passwordHash NOT present (correctly stripped)")
+    else:
+        log_fail("user.passwordHash IS present (SECURITY ISSUE!)")
+        return False
+    
+    # newsletterUnsubscribeToken must NOT be present
+    if 'newsletterUnsubscribeToken' not in user:
+        log_pass("user.newsletterUnsubscribeToken NOT present (correctly stripped)")
+    else:
+        log_fail("user.newsletterUnsubscribeToken IS present (SECURITY ISSUE!)")
+        return False
+    
+    # _id must NOT be present
+    if '_id' not in user:
+        log_pass("user._id NOT present (correctly stripped)")
+    else:
+        log_fail("user._id IS present")
+    
+    # Check user fields
+    if user.get('email') == alice_email:
+        log_pass(f"user.email === '{alice_email}'")
+    else:
+        log_fail(f"user.email mismatch. Expected '{alice_email}', got '{user.get('email')}'")
+    
+    if user.get('newsletter') == True:
+        log_pass("user.newsletter === true")
+    else:
+        log_fail(f"user.newsletter should be true, got: {user.get('newsletter')}")
+    
+    if user.get('newsletterConsentAt'):
+        log_pass(f"user.newsletterConsentAt is set: {user.get('newsletterConsentAt')}")
+    else:
+        log_fail("user.newsletterConsentAt is missing or null")
+    
+    # Check newsletterAudit array
+    newsletter_audit = data.get('newsletterAudit', [])
+    if isinstance(newsletter_audit, list) and len(newsletter_audit) >= 1:
+        log_pass(f"newsletterAudit is an array with {len(newsletter_audit)} entry/entries")
+        # Check if any entry matches alice's email
+        matching = [n for n in newsletter_audit if n.get('email') == alice_email]
+        if matching:
+            log_pass(f"newsletterAudit contains entry for {alice_email}")
+        else:
+            log_fail(f"newsletterAudit does not contain entry for {alice_email}")
+    else:
+        log_fail(f"newsletterAudit should be an array with >= 1 entry, got: {newsletter_audit}")
+    
+    log_info(f"Export bundle summary: {len(data.get('progress', []))} progress, {len(data.get('flashcardReviews', []))} reviews, {len(data.get('comments', []))} comments")
+    
+    return True
+
+def test_step_4_csv_export():
+    """Step 4: Test CSV export"""
+    log_step(4, "CSV export (GET /api/admin/users/:id/export?format=csv)")
+    
+    resp = admin_session.get(f"{BASE_URL}/admin/users/{alice_id}/export?format=csv")
+    
+    # Check HTTP 200
+    if resp.status_code != 200:
+        log_fail(f"Expected 200, got {resp.status_code}", resp.text)
+        return False
+    log_pass("HTTP 200 OK")
+    
+    # Check Content-Type
+    content_type = resp.headers.get('Content-Type', '')
+    if 'text/csv' in content_type:
+        log_pass(f"Content-Type includes 'text/csv': {content_type}")
+    else:
+        log_fail(f"Content-Type should include 'text/csv', got: {content_type}")
+        return False
+    
+    # Check Content-Disposition
+    content_disp = resp.headers.get('Content-Disposition', '')
+    if '.csv' in content_disp:
+        log_pass(f"Content-Disposition ends with '.csv': {content_disp}")
+    else:
+        log_fail(f"Content-Disposition should end with '.csv': {content_disp}")
+        return False
+    
+    # Check CSV content
+    csv_text = resp.text
+    lines = csv_text.split('\n')
+    
+    # First line should be header
+    if lines[0] == 'section,field,value':
+        log_pass("CSV header correct: 'section,field,value'")
+    else:
+        log_fail(f"CSV header incorrect. Expected 'section,field,value', got: '{lines[0]}'")
+        return False
+    
+    # Check for user email row
+    user_email_row = f'user,email,{alice_email}'
+    if user_email_row in csv_text:
+        log_pass(f"CSV contains row: '{user_email_row}'")
+    else:
+        log_fail(f"CSV should contain row: '{user_email_row}'")
+        log_info(f"First 10 lines:\n" + '\n'.join(lines[:10]))
+    
+    # Check for newsletter row
+    if 'user,newsletter,true' in csv_text or 'user,newsletter,True' in csv_text:
+        log_pass("CSV contains 'user,newsletter,true'")
+    else:
+        log_fail("CSV should contain 'user,newsletter,true'")
+    
+    # Check for newsletterAudit row
+    if 'newsletterAudit[0],email,' in csv_text:
+        log_pass("CSV contains at least one 'newsletterAudit[0],email,...' row")
+    else:
+        log_fail("CSV should contain at least one 'newsletterAudit[0],email,...' row")
+    
+    log_info(f"CSV has {len(lines)} lines")
+    
+    return True
+
+def test_step_5_enhanced_detail():
+    """Step 5: Enhanced detail response"""
+    log_step(5, "Enhanced detail response (GET /api/admin/users/:id)")
+    
+    resp = admin_session.get(f"{BASE_URL}/admin/users/{alice_id}")
+    
+    if resp.status_code != 200:
+        log_fail(f"Expected 200, got {resp.status_code}", resp.text)
+        return False
+    log_pass("HTTP 200 OK")
     
     try:
-        # =====================================================================
-        # STEP 1: Auth guard - POST without cookie should return 401
-        # =====================================================================
-        print_step(1, "Auth guard - POST without admin cookie")
-        
-        try:
-            resp = requests.post(f"{API_BASE}/admin/seed-legal-pages", json={})
-            print_info(f"Status: {resp.status_code}")
-            
-            if resp.status_code == 401:
-                data = resp.json()
-                if 'error' in data and 'Admin authentication required' in data['error']:
-                    print_pass("Auth guard working - 401 with correct error message")
-                    test_results['passed'] += 1
-                    test_results['details'].append("Step 1: PASS - Auth guard working")
-                else:
-                    print_fail("Got 401 but error message incorrect", data)
-                    test_results['failed'] += 1
-                    test_results['details'].append(f"Step 1: FAIL - Wrong error message: {data}")
-            else:
-                print_fail(f"Expected 401, got {resp.status_code}", resp.text[:200])
-                test_results['failed'] += 1
-                test_results['details'].append(f"Step 1: FAIL - Expected 401, got {resp.status_code}")
-        except Exception as e:
-            print_fail(f"Exception during auth guard test: {e}")
-            test_results['failed'] += 1
-            test_results['details'].append(f"Step 1: FAIL - Exception: {e}")
-        
-        # =====================================================================
-        # STEP 2: Login as admin
-        # =====================================================================
-        print_step(2, "Login as admin")
-        
-        try:
-            resp = session.post(f"{API_BASE}/admin-auth", json={
-                'email': ADMIN_EMAIL,
-                'password': ADMIN_PASSWORD
-            })
-            print_info(f"Status: {resp.status_code}")
-            
-            if resp.status_code == 200:
-                data = resp.json()
-                if data.get('ok'):
-                    # Check for osc_admin cookie
-                    if 'osc_admin' in session.cookies:
-                        print_pass("Admin login successful, osc_admin cookie captured")
-                        test_results['passed'] += 1
-                        test_results['details'].append("Step 2: PASS - Admin login successful")
-                    else:
-                        print_fail("Login returned 200 but no osc_admin cookie set")
-                        test_results['failed'] += 1
-                        test_results['details'].append("Step 2: FAIL - No cookie set")
-                else:
-                    print_fail("Login returned 200 but ok=false", data)
-                    test_results['failed'] += 1
-                    test_results['details'].append(f"Step 2: FAIL - ok=false: {data}")
-            else:
-                print_fail(f"Login failed with status {resp.status_code}", resp.text[:200])
-                test_results['failed'] += 1
-                test_results['details'].append(f"Step 2: FAIL - Status {resp.status_code}")
-                return  # Can't continue without login
-        except Exception as e:
-            print_fail(f"Exception during login: {e}")
-            test_results['failed'] += 1
-            test_results['details'].append(f"Step 2: FAIL - Exception: {e}")
-            return
-        
-        # =====================================================================
-        # STEP 3: Baseline - Check current pages
-        # =====================================================================
-        print_step(3, "Baseline - Check current list of pages")
-        
-        try:
-            resp = session.get(f"{API_BASE}/admin/pages")
-            print_info(f"Status: {resp.status_code}")
-            
-            if resp.status_code == 200:
-                pages = resp.json()  # Returns array directly
-                existing_slugs = [p['slug'] for p in pages if p['slug'] in EXPECTED_SLUGS]
-                print_info(f"Found {len(pages)} total pages, {len(existing_slugs)} legal pages already exist: {existing_slugs}")
-                print_pass(f"Baseline check complete - {len(existing_slugs)} legal pages exist")
-                test_results['passed'] += 1
-                test_results['details'].append(f"Step 3: PASS - Baseline: {len(existing_slugs)} legal pages exist")
-            else:
-                print_fail(f"Failed to get admin pages, status {resp.status_code}", resp.text[:200])
-                test_results['failed'] += 1
-                test_results['details'].append(f"Step 3: FAIL - Status {resp.status_code}")
-        except Exception as e:
-            print_fail(f"Exception during baseline check: {e}")
-            test_results['failed'] += 1
-            test_results['details'].append(f"Step 3: FAIL - Exception: {e}")
-        
-        # =====================================================================
-        # STEP 4: First run (no force)
-        # =====================================================================
-        print_step(4, "First run - POST with force=false")
-        
-        try:
-            resp = session.post(f"{API_BASE}/admin/seed-legal-pages", json={'force': False})
-            print_info(f"Status: {resp.status_code}")
-            
-            if resp.status_code == 200:
-                data = resp.json()
-                print_info(f"Response: {data}")
-                
-                # Validate response shape
-                shape_errors = validate_response_shape(data, force_expected=False)
-                if shape_errors:
-                    print_fail("Response shape validation failed", shape_errors)
-                    test_results['failed'] += 1
-                    test_results['details'].append(f"Step 4: FAIL - Shape errors: {shape_errors}")
-                else:
-                    # Check results
-                    results = data.get('results', [])
-                    result_slugs = [r['slug'] for r in results]
-                    
-                    # Verify all 6 slugs present
-                    if set(result_slugs) == set(EXPECTED_SLUGS):
-                        print_pass(f"All 6 expected slugs present: {result_slugs}")
-                        
-                        # Verify summary counts add up to 6
-                        summary = data.get('summary', {})
-                        total = summary.get('created', 0) + summary.get('updatedMetadata', 0) + summary.get('updatedContent', 0) + summary.get('preserved', 0)
-                        
-                        if total == 6:
-                            print_pass(f"Summary counts add up to 6: created={summary.get('created')}, updatedMetadata={summary.get('updatedMetadata')}, updatedContent={summary.get('updatedContent')}, preserved={summary.get('preserved')}")
-                            
-                            # Now verify all pages are accessible
-                            all_accessible = True
-                            for slug in EXPECTED_SLUGS:
-                                page_resp = session.get(f"{API_BASE}/pages/{slug}")
-                                if page_resp.status_code != 200:
-                                    print_fail(f"Page /{slug} not accessible (status {page_resp.status_code})")
-                                    all_accessible = False
-                                else:
-                                    page_data = page_resp.json()
-                                    if not page_data.get('published'):
-                                        print_fail(f"Page /{slug} exists but published={page_data.get('published')}")
-                                        all_accessible = False
-                            
-                            if all_accessible:
-                                print_pass("All 6 pages accessible via GET /api/pages/{slug} with published=true")
-                                test_results['passed'] += 1
-                                test_results['details'].append(f"Step 4: PASS - All 6 pages seeded and accessible")
-                            else:
-                                test_results['failed'] += 1
-                                test_results['details'].append("Step 4: FAIL - Some pages not accessible")
-                        else:
-                            print_fail(f"Summary counts don't add up to 6, got {total}")
-                            test_results['failed'] += 1
-                            test_results['details'].append(f"Step 4: FAIL - Summary total={total}, expected 6")
-                    else:
-                        print_fail(f"Expected slugs {EXPECTED_SLUGS}, got {result_slugs}")
-                        test_results['failed'] += 1
-                        test_results['details'].append(f"Step 4: FAIL - Wrong slugs: {result_slugs}")
-            else:
-                print_fail(f"Expected 200, got {resp.status_code}", resp.text[:200])
-                test_results['failed'] += 1
-                test_results['details'].append(f"Step 4: FAIL - Status {resp.status_code}")
-        except Exception as e:
-            print_fail(f"Exception during first run: {e}")
-            test_results['failed'] += 1
-            test_results['details'].append(f"Step 4: FAIL - Exception: {e}")
-        
-        # =====================================================================
-        # STEP 5: Idempotency - Re-run with force=false
-        # =====================================================================
-        print_step(5, "Idempotency - Re-run with force=false")
-        
-        try:
-            resp = session.post(f"{API_BASE}/admin/seed-legal-pages", json={'force': False})
-            print_info(f"Status: {resp.status_code}")
-            
-            if resp.status_code == 200:
-                data = resp.json()
-                print_info(f"Response: {data}")
-                
-                summary = data.get('summary', {})
-                if summary.get('created') == 0:
-                    print_pass("No new pages created (created=0)")
-                    
-                    # Check for duplicates
-                    resp_pages = session.get(f"{API_BASE}/admin/pages")
-                    if resp_pages.status_code == 200:
-                        pages = resp_pages.json()  # Returns array directly
-                        slug_counts = {}
-                        for p in pages:
-                            if p['slug'] in EXPECTED_SLUGS:
-                                slug_counts[p['slug']] = slug_counts.get(p['slug'], 0) + 1
-                        
-                        duplicates = [slug for slug, count in slug_counts.items() if count > 1]
-                        if not duplicates:
-                            print_pass("No duplicate slugs found")
-                            test_results['passed'] += 1
-                            test_results['details'].append("Step 5: PASS - Idempotency verified, no duplicates")
-                        else:
-                            print_fail(f"Found duplicate slugs: {duplicates}")
-                            test_results['failed'] += 1
-                            test_results['details'].append(f"Step 5: FAIL - Duplicates: {duplicates}")
-                    else:
-                        print_fail(f"Failed to get pages for duplicate check, status {resp_pages.status_code}")
-                        test_results['failed'] += 1
-                        test_results['details'].append(f"Step 5: FAIL - Can't check duplicates")
-                else:
-                    print_fail(f"Expected created=0, got {summary.get('created')}")
-                    test_results['failed'] += 1
-                    test_results['details'].append(f"Step 5: FAIL - created={summary.get('created')}, expected 0")
-            else:
-                print_fail(f"Expected 200, got {resp.status_code}", resp.text[:200])
-                test_results['failed'] += 1
-                test_results['details'].append(f"Step 5: FAIL - Status {resp.status_code}")
-        except Exception as e:
-            print_fail(f"Exception during idempotency test: {e}")
-            test_results['failed'] += 1
-            test_results['details'].append(f"Step 5: FAIL - Exception: {e}")
-        
-        # =====================================================================
-        # STEP 6: Preserve user edits (default behaviour)
-        # =====================================================================
-        print_step(6, "Preserve user edits - PATCH privacy page, then seed with force=false")
-        
-        try:
-            # First, get the privacy page ID
-            resp_pages = session.get(f"{API_BASE}/admin/pages")
-            if resp_pages.status_code == 200:
-                pages = resp_pages.json()  # Returns array directly
-                privacy_page = next((p for p in pages if p['slug'] == 'privacy'), None)
-                
-                if privacy_page:
-                    privacy_page_id = privacy_page['id']
-                    print_info(f"Found privacy page with id={privacy_page_id}")
-                    
-                    # PATCH the privacy page with custom content and published=false
-                    custom_content = '<h2>User edit — do not overwrite</h2><p>Manual body.</p>'
-                    patch_resp = session.patch(f"{API_BASE}/admin/pages/{privacy_page_id}", json={
-                        'contentHtml': custom_content,
-                        'published': False
-                    })
-                    
-                    if patch_resp.status_code == 200:
-                        print_pass("Privacy page patched with custom content and published=false")
-                        
-                        # Verify public endpoint returns 404 (unpublished)
-                        public_resp = session.get(f"{API_BASE}/pages/privacy")
-                        if public_resp.status_code == 404:
-                            print_pass("GET /api/pages/privacy returns 404 (unpublished)")
-                        else:
-                            print_fail(f"Expected 404 for unpublished page, got {public_resp.status_code}")
-                        
-                        # Verify admin endpoint shows custom content
-                        admin_resp = session.get(f"{API_BASE}/admin/pages/{privacy_page_id}")
-                        if admin_resp.status_code == 200:
-                            admin_data = admin_resp.json()
-                            if 'User edit' in admin_data.get('contentHtml', ''):
-                                print_pass("Admin endpoint shows custom content with 'User edit'")
-                                
-                                # Now seed with force=false
-                                seed_resp = session.post(f"{API_BASE}/admin/seed-legal-pages", json={'force': False})
-                                if seed_resp.status_code == 200:
-                                    seed_data = seed_resp.json()
-                                    print_info(f"Seed response: {seed_data}")
-                                    
-                                    # Check privacy result
-                                    privacy_result = next((r for r in seed_data.get('results', []) if r['slug'] == 'privacy'), None)
-                                    if privacy_result:
-                                        action = privacy_result.get('action')
-                                        if action in ['preserved', 'updated-metadata']:
-                                            print_pass(f"Privacy page action='{action}' (not 'updated-content' or 'created')")
-                                            
-                                            # Verify content still contains "User edit"
-                                            verify_resp = session.get(f"{API_BASE}/admin/pages/{privacy_page_id}")
-                                            if verify_resp.status_code == 200:
-                                                verify_data = verify_resp.json()
-                                                if 'User edit — do not overwrite' in verify_data.get('contentHtml', ''):
-                                                    print_pass("Content still contains 'User edit — do not overwrite'")
-                                                    
-                                                    if verify_data.get('published') == False:
-                                                        print_pass("published still false")
-                                                        test_results['passed'] += 1
-                                                        test_results['details'].append("Step 6: PASS - User edits preserved")
-                                                    else:
-                                                        print_fail(f"published should be false, got {verify_data.get('published')}")
-                                                        test_results['failed'] += 1
-                                                        test_results['details'].append("Step 6: FAIL - published changed")
-                                                else:
-                                                    print_fail("Content no longer contains 'User edit — do not overwrite'")
-                                                    test_results['failed'] += 1
-                                                    test_results['details'].append("Step 6: FAIL - Content overwritten")
-                                            else:
-                                                print_fail(f"Failed to verify content, status {verify_resp.status_code}")
-                                                test_results['failed'] += 1
-                                                test_results['details'].append("Step 6: FAIL - Can't verify")
-                                        else:
-                                            print_fail(f"Expected action 'preserved' or 'updated-metadata', got '{action}'")
-                                            test_results['failed'] += 1
-                                            test_results['details'].append(f"Step 6: FAIL - Wrong action: {action}")
-                                    else:
-                                        print_fail("Privacy page not in results")
-                                        test_results['failed'] += 1
-                                        test_results['details'].append("Step 6: FAIL - Privacy not in results")
-                                else:
-                                    print_fail(f"Seed failed with status {seed_resp.status_code}")
-                                    test_results['failed'] += 1
-                                    test_results['details'].append(f"Step 6: FAIL - Seed status {seed_resp.status_code}")
-                            else:
-                                print_fail("Admin endpoint doesn't show custom content")
-                                test_results['failed'] += 1
-                                test_results['details'].append("Step 6: FAIL - Custom content not saved")
-                        else:
-                            print_fail(f"Failed to get admin page, status {admin_resp.status_code}")
-                            test_results['failed'] += 1
-                            test_results['details'].append(f"Step 6: FAIL - Admin get failed")
-                    else:
-                        print_fail(f"PATCH failed with status {patch_resp.status_code}", patch_resp.text[:200])
-                        test_results['failed'] += 1
-                        test_results['details'].append(f"Step 6: FAIL - PATCH failed")
-                else:
-                    print_fail("Privacy page not found")
-                    test_results['failed'] += 1
-                    test_results['details'].append("Step 6: FAIL - Privacy page not found")
-            else:
-                print_fail(f"Failed to get pages, status {resp_pages.status_code}")
-                test_results['failed'] += 1
-                test_results['details'].append(f"Step 6: FAIL - Can't get pages")
-        except Exception as e:
-            print_fail(f"Exception during preserve user edits test: {e}")
-            test_results['failed'] += 1
-            test_results['details'].append(f"Step 6: FAIL - Exception: {e}")
-        
-        # =====================================================================
-        # STEP 7: Force overwrite (still preserves published state)
-        # =====================================================================
-        print_step(7, "Force overwrite - POST with force=true")
-        
-        try:
-            if privacy_page_id:
-                # Seed with force=true
-                resp = session.post(f"{API_BASE}/admin/seed-legal-pages", json={'force': True})
-                print_info(f"Status: {resp.status_code}")
-                
-                if resp.status_code == 200:
-                    data = resp.json()
-                    print_info(f"Response: {data}")
-                    
-                    # Verify force=true in response
-                    if data.get('force') == True:
-                        print_pass("Response has force=true")
-                        
-                        # Check privacy result
-                        privacy_result = next((r for r in data.get('results', []) if r['slug'] == 'privacy'), None)
-                        if privacy_result and privacy_result.get('action') == 'updated-content':
-                            print_pass("Privacy page action='updated-content'")
-                            
-                            # Verify content no longer contains "User edit"
-                            verify_resp = session.get(f"{API_BASE}/admin/pages/{privacy_page_id}")
-                            if verify_resp.status_code == 200:
-                                verify_data = verify_resp.json()
-                                if 'User edit — do not overwrite' not in verify_data.get('contentHtml', ''):
-                                    print_pass("Content no longer contains 'User edit — do not overwrite' (overwritten)")
-                                    
-                                    if verify_data.get('published') == False:
-                                        print_pass("published still false (preserved)")
-                                        
-                                        # Verify public endpoint still returns 404
-                                        public_resp = session.get(f"{API_BASE}/pages/privacy")
-                                        if public_resp.status_code == 404:
-                                            print_pass("GET /api/pages/privacy still returns 404 (still unpublished)")
-                                            test_results['passed'] += 1
-                                            test_results['details'].append("Step 7: PASS - Force overwrite working, published state preserved")
-                                        else:
-                                            print_fail(f"Expected 404, got {public_resp.status_code}")
-                                            test_results['failed'] += 1
-                                            test_results['details'].append(f"Step 7: FAIL - Public endpoint status {public_resp.status_code}")
-                                    else:
-                                        print_fail(f"published should still be false, got {verify_data.get('published')}")
-                                        test_results['failed'] += 1
-                                        test_results['details'].append("Step 7: FAIL - published changed")
-                                else:
-                                    print_fail("Content still contains 'User edit — do not overwrite' (not overwritten)")
-                                    test_results['failed'] += 1
-                                    test_results['details'].append("Step 7: FAIL - Content not overwritten")
-                            else:
-                                print_fail(f"Failed to verify content, status {verify_resp.status_code}")
-                                test_results['failed'] += 1
-                                test_results['details'].append(f"Step 7: FAIL - Verify failed")
-                        else:
-                            print_fail(f"Expected action='updated-content', got {privacy_result}")
-                            test_results['failed'] += 1
-                            test_results['details'].append(f"Step 7: FAIL - Wrong action")
-                    else:
-                        print_fail(f"Expected force=true, got {data.get('force')}")
-                        test_results['failed'] += 1
-                        test_results['details'].append(f"Step 7: FAIL - force={data.get('force')}")
-                else:
-                    print_fail(f"Expected 200, got {resp.status_code}", resp.text[:200])
-                    test_results['failed'] += 1
-                    test_results['details'].append(f"Step 7: FAIL - Status {resp.status_code}")
-            else:
-                print_fail("No privacy_page_id from previous step")
-                test_results['failed'] += 1
-                test_results['details'].append("Step 7: FAIL - No privacy_page_id")
-        except Exception as e:
-            print_fail(f"Exception during force overwrite test: {e}")
-            test_results['failed'] += 1
-            test_results['details'].append(f"Step 7: FAIL - Exception: {e}")
-        
-        # =====================================================================
-        # STEP 8: Restore state for the user
-        # =====================================================================
-        print_step(8, "Restore state - Set privacy published=true and verify SSR")
-        
-        try:
-            if privacy_page_id:
-                # PATCH privacy to set published=true
-                patch_resp = session.patch(f"{API_BASE}/admin/pages/{privacy_page_id}", json={
-                    'published': True
-                })
-                
-                if patch_resp.status_code == 200:
-                    print_pass("Privacy page set to published=true")
-                    
-                    # Verify GET /api/pages/privacy returns 200
-                    api_resp = session.get(f"{API_BASE}/pages/privacy")
-                    if api_resp.status_code == 200:
-                        print_pass("GET /api/pages/privacy returns 200")
-                        
-                        # Verify SSR GET /privacy returns 200 with correct title
-                        ssr_resp = session.get(f"{BASE_URL}/privacy")
-                        if ssr_resp.status_code == 200:
-                            html = ssr_resp.text
-                            if '<title>' in html and 'Privacy Policy' in html:
-                                print_pass("GET /privacy (SSR) returns 200 with <title> containing 'Privacy Policy'")
-                                
-                                # Spot-check other SSR pages
-                                other_slugs = ['terms', 'cookies', 'contact', 'data-rights', 'about']
-                                all_ok = True
-                                for slug in other_slugs:
-                                    import time
-                                    time.sleep(0.5)  # Small delay to avoid overwhelming the server
-                                    check_resp = session.get(f"{BASE_URL}/{slug}")
-                                    if check_resp.status_code != 200:
-                                        print_fail(f"SSR GET /{slug} returned {check_resp.status_code}")
-                                        all_ok = False
-                                
-                                if all_ok:
-                                    print_pass("All 6 SSR pages return 200")
-                                    test_results['passed'] += 1
-                                    test_results['details'].append("Step 8: PASS - State restored, all SSR pages working")
-                                else:
-                                    test_results['failed'] += 1
-                                    test_results['details'].append("Step 8: FAIL - Some SSR pages failed")
-                            else:
-                                print_fail("SSR page doesn't contain expected title")
-                                test_results['failed'] += 1
-                                test_results['details'].append("Step 8: FAIL - SSR title missing")
-                        else:
-                            print_fail(f"SSR GET /privacy returned {ssr_resp.status_code}")
-                            test_results['failed'] += 1
-                            test_results['details'].append(f"Step 8: FAIL - SSR status {ssr_resp.status_code}")
-                    else:
-                        print_fail(f"GET /api/pages/privacy returned {api_resp.status_code}")
-                        test_results['failed'] += 1
-                        test_results['details'].append(f"Step 8: FAIL - API status {api_resp.status_code}")
-                else:
-                    print_fail(f"PATCH failed with status {patch_resp.status_code}")
-                    test_results['failed'] += 1
-                    test_results['details'].append(f"Step 8: FAIL - PATCH failed")
-            else:
-                print_fail("No privacy_page_id from previous step")
-                test_results['failed'] += 1
-                test_results['details'].append("Step 8: FAIL - No privacy_page_id")
-        except Exception as e:
-            print_fail(f"Exception during restore state test: {e}")
-            test_results['failed'] += 1
-            test_results['details'].append(f"Step 8: FAIL - Exception: {e}")
-        
-        # =====================================================================
-        # STEP 9: Response shape validation (already done in step 4, but verify again)
-        # =====================================================================
-        print_step(9, "Response shape validation - Verify all POST calls return correct shape")
-        
-        try:
-            # Do one final call to verify shape
-            resp = session.post(f"{API_BASE}/admin/seed-legal-pages", json={'force': False})
-            if resp.status_code == 200:
-                data = resp.json()
-                shape_errors = validate_response_shape(data, force_expected=False)
-                
-                if not shape_errors:
-                    print_pass("Response shape validation passed")
-                    print_info(f"  - ok: {type(data.get('ok')).__name__} = {data.get('ok')}")
-                    print_info(f"  - force: {type(data.get('force')).__name__} = {data.get('force')}")
-                    print_info(f"  - summary: {data.get('summary')}")
-                    print_info(f"  - results: {len(data.get('results', []))} items")
-                    test_results['passed'] += 1
-                    test_results['details'].append("Step 9: PASS - Response shape valid")
-                else:
-                    print_fail("Response shape validation failed", shape_errors)
-                    test_results['failed'] += 1
-                    test_results['details'].append(f"Step 9: FAIL - Shape errors: {shape_errors}")
-            else:
-                print_fail(f"Final call failed with status {resp.status_code}")
-                test_results['failed'] += 1
-                test_results['details'].append(f"Step 9: FAIL - Status {resp.status_code}")
-        except Exception as e:
-            print_fail(f"Exception during response shape validation: {e}")
-            test_results['failed'] += 1
-            test_results['details'].append(f"Step 9: FAIL - Exception: {e}")
-        
-    except Exception as e:
-        print(f"\n❌ CRITICAL ERROR: {e}")
-        import traceback
-        traceback.print_exc()
-        return 1
+        data = resp.json()
+    except:
+        log_fail("Failed to parse JSON response", resp.text[:500])
+        return False
     
-    finally:
-        # Print summary
-        print("\n" + "="*80)
-        print("TEST SUMMARY")
-        print("="*80)
-        print(f"Total tests: {test_results['total']}")
-        print(f"Passed: {test_results['passed']}")
-        print(f"Failed: {test_results['failed']}")
-        print(f"Success rate: {test_results['passed']}/{test_results['total']} ({100*test_results['passed']//test_results['total']}%)")
-        print("\nDetails:")
-        for detail in test_results['details']:
-            print(f"  {detail}")
-        
-        if test_results['failed'] > 0:
-            print("\n❌ SOME TESTS FAILED")
-            return 1
+    # Check user object
+    if 'user' in data:
+        log_pass("'user' object present")
+        user = data['user']
+        if 'passwordHash' not in user:
+            log_pass("user.passwordHash NOT present (correctly stripped)")
         else:
-            print("\n✅ ALL TESTS PASSED")
-            return 0
+            log_fail("user.passwordHash IS present (SECURITY ISSUE!)")
+            return False
+    else:
+        log_fail("'user' object missing")
+        return False
+    
+    # Check stats.commentsPosted
+    stats = data.get('stats', {})
+    if 'commentsPosted' in stats:
+        comments_posted = stats['commentsPosted']
+        if isinstance(comments_posted, int) and comments_posted >= 0:
+            log_pass(f"stats.commentsPosted is integer >= 0: {comments_posted}")
+        else:
+            log_fail(f"stats.commentsPosted should be integer >= 0, got: {comments_posted}")
+    else:
+        log_fail("stats.commentsPosted missing")
+        return False
+    
+    # Check comments array
+    if 'comments' in data:
+        comments = data['comments']
+        if isinstance(comments, list):
+            log_pass(f"'comments' is an array with {len(comments)} entries")
+        else:
+            log_fail(f"'comments' should be an array, got: {type(comments)}")
+            return False
+    else:
+        log_fail("'comments' array missing")
+        return False
+    
+    # Check newsletterAudit array
+    if 'newsletterAudit' in data:
+        newsletter_audit = data['newsletterAudit']
+        if isinstance(newsletter_audit, list) and len(newsletter_audit) >= 1:
+            log_pass(f"'newsletterAudit' is an array with {len(newsletter_audit)} entry/entries")
+        else:
+            log_fail(f"'newsletterAudit' should be an array with >= 1 entry, got: {newsletter_audit}")
+            return False
+    else:
+        log_fail("'newsletterAudit' array missing")
+        return False
+    
+    return True
 
-if __name__ == '__main__':
-    sys.exit(main())
+def test_step_6_rectification():
+    """Step 6: Rectification via PATCH"""
+    log_step(6, "Rectification via PATCH (GDPR Art. 16)")
+    
+    # PATCH with new country/city/role
+    patch_data = {
+        "country": "Spain",
+        "city": "Barcelona",
+        "role": "Bar manager"
+    }
+    
+    resp = admin_session.patch(f"{BASE_URL}/admin/users/{alice_id}", json=patch_data)
+    
+    if resp.status_code != 200:
+        log_fail(f"PATCH failed: {resp.status_code}", resp.text)
+        return False
+    log_pass("PATCH returned 200")
+    
+    try:
+        data = resp.json()
+    except:
+        log_fail("Failed to parse PATCH response", resp.text[:500])
+        return False
+    
+    # Check returned user reflects changes
+    user = data.get('user', {})
+    if user.get('country') == 'Spain':
+        log_pass("Returned user.country === 'Spain'")
+    else:
+        log_fail(f"Expected country 'Spain', got: {user.get('country')}")
+    
+    if user.get('city') == 'Barcelona':
+        log_pass("Returned user.city === 'Barcelona'")
+    else:
+        log_fail(f"Expected city 'Barcelona', got: {user.get('city')}")
+    
+    if user.get('role') == 'Bar manager':
+        log_pass("Returned user.role === 'Bar manager'")
+    else:
+        log_fail(f"Expected role 'Bar manager', got: {user.get('role')}")
+    
+    # Verify with GET
+    resp = admin_session.get(f"{BASE_URL}/admin/users/{alice_id}")
+    if resp.status_code != 200:
+        log_fail(f"GET after PATCH failed: {resp.status_code}", resp.text)
+        return False
+    
+    data = resp.json()
+    user = data.get('user', {})
+    
+    if user.get('country') == 'Spain' and user.get('city') == 'Barcelona' and user.get('role') == 'Bar manager':
+        log_pass("GET confirms all changes persisted correctly")
+    else:
+        log_fail(f"GET shows incorrect values: country={user.get('country')}, city={user.get('city')}, role={user.get('role')}")
+        return False
+    
+    return True
+
+def test_step_7_newsletter_toggle():
+    """Step 7: Newsletter toggle by admin keeps audit trail"""
+    log_step(7, "Newsletter toggle by admin preserves audit trail")
+    
+    # Get current state
+    resp = admin_session.get(f"{BASE_URL}/admin/users/{alice_id}")
+    if resp.status_code != 200:
+        log_fail(f"GET failed: {resp.status_code}", resp.text)
+        return False
+    
+    data = resp.json()
+    user = data.get('user', {})
+    original_consent_at = user.get('newsletterConsentAt')
+    
+    if not original_consent_at:
+        log_fail("Original newsletterConsentAt is missing")
+        return False
+    log_info(f"Original newsletterConsentAt: {original_consent_at}")
+    
+    # Toggle newsletter OFF
+    resp = admin_session.patch(f"{BASE_URL}/admin/users/{alice_id}", json={"newsletter": False})
+    if resp.status_code != 200:
+        log_fail(f"PATCH newsletter=false failed: {resp.status_code}", resp.text)
+        return False
+    log_pass("PATCH newsletter=false returned 200")
+    
+    # Verify state after toggle OFF
+    resp = admin_session.get(f"{BASE_URL}/admin/users/{alice_id}")
+    if resp.status_code != 200:
+        log_fail(f"GET after toggle OFF failed: {resp.status_code}", resp.text)
+        return False
+    
+    data = resp.json()
+    user = data.get('user', {})
+    
+    if user.get('newsletter') == False:
+        log_pass("user.newsletter === false")
+    else:
+        log_fail(f"user.newsletter should be false, got: {user.get('newsletter')}")
+        return False
+    
+    if user.get('newsletterConsentAt') == original_consent_at:
+        log_pass(f"user.newsletterConsentAt STILL SET (preserved): {user.get('newsletterConsentAt')}")
+    else:
+        log_fail(f"user.newsletterConsentAt changed! Original: {original_consent_at}, Now: {user.get('newsletterConsentAt')}")
+    
+    if user.get('newsletterWithdrawnAt'):
+        log_pass(f"user.newsletterWithdrawnAt IS SET: {user.get('newsletterWithdrawnAt')}")
+    else:
+        log_fail("user.newsletterWithdrawnAt should be set after withdrawal")
+        return False
+    
+    # Check newsletterAudit
+    newsletter_audit = data.get('newsletterAudit', [])
+    if newsletter_audit and newsletter_audit[0].get('withdrawnAt'):
+        log_pass(f"newsletterAudit[0].withdrawnAt IS SET: {newsletter_audit[0].get('withdrawnAt')}")
+    else:
+        log_fail("newsletterAudit[0].withdrawnAt should be set")
+    
+    # Toggle newsletter back ON
+    resp = admin_session.patch(f"{BASE_URL}/admin/users/{alice_id}", json={"newsletter": True})
+    if resp.status_code != 200:
+        log_fail(f"PATCH newsletter=true failed: {resp.status_code}", resp.text)
+        return False
+    log_pass("PATCH newsletter=true returned 200")
+    
+    # Verify state after toggle ON
+    resp = admin_session.get(f"{BASE_URL}/admin/users/{alice_id}")
+    if resp.status_code != 200:
+        log_fail(f"GET after toggle ON failed: {resp.status_code}", resp.text)
+        return False
+    
+    data = resp.json()
+    user = data.get('user', {})
+    
+    if user.get('newsletter') == True:
+        log_pass("user.newsletter === true")
+    else:
+        log_fail(f"user.newsletter should be true, got: {user.get('newsletter')}")
+        return False
+    
+    new_consent_at = user.get('newsletterConsentAt')
+    if new_consent_at and new_consent_at != original_consent_at:
+        log_pass(f"user.newsletterConsentAt UPDATED to newer date: {new_consent_at}")
+    else:
+        log_fail(f"user.newsletterConsentAt should be updated. Original: {original_consent_at}, Now: {new_consent_at}")
+    
+    if user.get('newsletterWithdrawnAt') is None:
+        log_pass("user.newsletterWithdrawnAt === null (cleared)")
+    else:
+        log_fail(f"user.newsletterWithdrawnAt should be null, got: {user.get('newsletterWithdrawnAt')}")
+    
+    if user.get('newsletterSource') == 'admin':
+        log_pass("user.newsletterSource === 'admin'")
+    else:
+        log_fail(f"user.newsletterSource should be 'admin', got: {user.get('newsletterSource')}")
+    
+    return True
+
+def test_step_8_comment_erasure():
+    """Step 8: Comment-level erasure"""
+    log_step(8, "Comment-level erasure (DELETE /api/admin/comments/:id)")
+    
+    if not comment_id:
+        log_info("SKIPPED: No comment was created in step 2")
+        return True
+    
+    # Delete the comment
+    resp = admin_session.delete(f"{BASE_URL}/admin/comments/{comment_id}")
+    if resp.status_code != 200:
+        log_fail(f"DELETE comment failed: {resp.status_code}", resp.text)
+        return False
+    
+    data = resp.json()
+    if data.get('ok') == True:
+        log_pass(f"DELETE comment returned {{ok: true}}")
+    else:
+        log_fail(f"DELETE comment should return {{ok: true}}, got: {data}")
+        return False
+    
+    # Verify comment is gone from user detail
+    resp = admin_session.get(f"{BASE_URL}/admin/users/{alice_id}")
+    if resp.status_code != 200:
+        log_fail(f"GET user after comment delete failed: {resp.status_code}", resp.text)
+        return False
+    
+    data = resp.json()
+    comments = data.get('comments', [])
+    
+    # Check if comment_id is still in the list
+    comment_ids = [c.get('id') for c in comments]
+    if comment_id not in comment_ids:
+        log_pass(f"Comment {comment_id} no longer in user's comments array")
+    else:
+        log_fail(f"Comment {comment_id} still present in user's comments array")
+        return False
+    
+    return True
+
+def test_step_9_account_erasure():
+    """Step 9: Account erasure (DELETE /api/admin/users/:id)"""
+    log_step(9, "Account erasure (GDPR Art. 17)")
+    
+    # Delete the user
+    resp = admin_session.delete(f"{BASE_URL}/admin/users/{alice_id}")
+    if resp.status_code != 200:
+        log_fail(f"DELETE user failed: {resp.status_code}", resp.text)
+        return False
+    
+    data = resp.json()
+    if data.get('ok') == True:
+        log_pass(f"DELETE user returned {{ok: true}}")
+    else:
+        log_fail(f"DELETE user should return {{ok: true}}, got: {data}")
+        return False
+    
+    # Verify user is gone
+    resp = admin_session.get(f"{BASE_URL}/admin/users/{alice_id}")
+    if resp.status_code == 404:
+        log_pass(f"GET /api/admin/users/{alice_id} returns 404 (user deleted)")
+    else:
+        log_fail(f"GET should return 404, got: {resp.status_code}", resp.text)
+        return False
+    
+    # Verify user not in search results
+    resp = admin_session.get(f"{BASE_URL}/admin/users?q={alice_email}")
+    if resp.status_code == 200:
+        data = resp.json()
+        users = data.get('users', [])
+        matching = [u for u in users if u.get('email') == alice_email]
+        if len(matching) == 0:
+            log_pass(f"User search for '{alice_email}' returns 0 results")
+        else:
+            log_fail(f"User search should return 0 results, found {len(matching)}")
+            return False
+    else:
+        log_fail(f"User search failed: {resp.status_code}", resp.text)
+        return False
+    
+    log_info("Account erasure complete. Cascading deletes (progress, reviews, comments) are handled by the backend.")
+    
+    return True
+
+def main():
+    print("="*80)
+    print("SESSION 9: Admin GDPR Toolkit Backend Test")
+    print("="*80)
+    print(f"Base URL: {BASE_URL}")
+    print(f"Admin: {ADMIN_EMAIL}")
+    print("="*80)
+    
+    # Admin login
+    if not admin_login():
+        print("\n❌ FATAL: Admin login failed. Cannot continue.")
+        sys.exit(1)
+    
+    # Run all test steps
+    results = []
+    
+    results.append(("Step 1: Auth guard", test_step_1_auth_guard()))
+    results.append(("Step 2: Prepare user", test_step_2_prepare_user()))
+    
+    if not results[-1][1]:
+        print("\n❌ FATAL: Cannot continue without test user.")
+        sys.exit(1)
+    
+    results.append(("Step 3: JSON export", test_step_3_json_export()))
+    results.append(("Step 4: CSV export", test_step_4_csv_export()))
+    results.append(("Step 5: Enhanced detail", test_step_5_enhanced_detail()))
+    results.append(("Step 6: Rectification", test_step_6_rectification()))
+    results.append(("Step 7: Newsletter toggle", test_step_7_newsletter_toggle()))
+    results.append(("Step 8: Comment erasure", test_step_8_comment_erasure()))
+    results.append(("Step 9: Account erasure", test_step_9_account_erasure()))
+    
+    # Summary
+    print("\n" + "="*80)
+    print("TEST SUMMARY")
+    print("="*80)
+    
+    passed = sum(1 for _, result in results if result)
+    total = len(results)
+    
+    for step_name, result in results:
+        status = "✅ PASS" if result else "❌ FAIL"
+        print(f"{status}: {step_name}")
+    
+    print("="*80)
+    print(f"TOTAL: {passed}/{total} tests passed ({100*passed//total}%)")
+    print("="*80)
+    
+    if passed == total:
+        print("\n🎉 ALL TESTS PASSED!")
+        sys.exit(0)
+    else:
+        print(f"\n⚠️  {total - passed} test(s) failed.")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()
