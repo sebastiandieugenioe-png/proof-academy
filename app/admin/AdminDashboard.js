@@ -1079,6 +1079,13 @@ function UserDetail({ id, onBack }) {
           <F label="Email"><input value={email} onChange={(e) => setEmail(e.target.value)} className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm" /></F>
           <F label="Newsletter"><label className="inline-flex items-center gap-2 text-sm text-slate-700 mt-2"><input type="checkbox" checked={newsletter} onChange={(e) => setNewsletter(e.target.checked)} className="h-4 w-4 accent-blue-600" /> Opted in</label></F>
         </div>
+        {(d.user.newsletterConsentAt || d.user.newsletterWithdrawnAt) && (
+          <div className="text-xs text-slate-500 -mt-1">
+            {d.user.newsletterConsentAt && <span>Consented: {new Date(d.user.newsletterConsentAt).toLocaleString()}</span>}
+            {d.user.newsletterConsentAt && d.user.newsletterWithdrawnAt && <span className="mx-2">·</span>}
+            {d.user.newsletterWithdrawnAt && <span>Withdrawn: {new Date(d.user.newsletterWithdrawnAt).toLocaleString()}</span>}
+          </div>
+        )}
         <div className="flex justify-between">
           <button onClick={save} disabled={saving} className="h-9 px-4 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm inline-flex items-center gap-1.5 disabled:opacity-60">{saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><Save className="h-3.5 w-3.5" /> Save</>}</button>
           <button onClick={del} className="h-9 px-4 rounded-md border border-red-200 text-red-600 hover:bg-red-50 text-sm inline-flex items-center gap-1.5"><Trash2 className="h-3.5 w-3.5" /> Delete account</button>
