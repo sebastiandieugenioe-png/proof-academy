@@ -6,7 +6,7 @@ import {
   ArrowLeft, ChevronDown, ChevronRight, Check, X, Trash2, Send, Undo2, Eye,
   Loader2, LogOut, MessageSquare, Users as UsersIcon, Mail, BookOpen, Plus,
   BarChart3, TrendingUp, Search, Download, Save, AlertCircle, Filter,
-  ImageIcon, Upload, Link2, RefreshCcw, FileText, Globe, Settings, Copy,
+  ImageIcon, Upload, Link2, RefreshCcw, RefreshCw, FileText, Globe, Settings, Copy,
 } from 'lucide-react'
 
 const api = async (path, opts = {}) => {
@@ -1267,6 +1267,11 @@ function PagesManager() {
   )
 }
 
+// Slugs that have a built-in default we can re-sync from /app/lib/legal-pages.js.
+// Keep in sync with getLegalPages(). Used by PageEditor to conditionally show the
+// "Sync from default" button.
+const BUILTIN_LEGAL_SLUGS = new Set(['privacy', 'terms', 'cookies', 'contact', 'data-rights', 'about'])
+
 function PageEditor({ id, onBack, onDeleted }) {
   const [loading, setLoading] = useState(!!id)
   const [saving, setSaving] = useState(false)
@@ -1279,6 +1284,8 @@ function PageEditor({ id, onBack, onDeleted }) {
   const [pageId, setPageId] = useState(id)
   const [showPreview, setShowPreview] = useState(false)
   const [pristineHtml, setPristineHtml] = useState('')
+  const [showSyncConfirm, setShowSyncConfirm] = useState(false)
+  const [syncing, setSyncing] = useState(false)
 
   useEffect(() => {
     if (!id) { setLoading(false); return }
@@ -1318,6 +1325,36 @@ function PageEditor({ id, onBack, onDeleted }) {
     try { await api(`/admin/pages/${pageId}`, { method: 'DELETE' }); toast.success('Page deleted.'); onDeleted?.() } catch (e) { toast.error(e.message) }
   }
 
+  // Sync only THIS page from its built-in default (see /app/lib/legal-pages.js).
+  // Never touches any other page. Published/draft state is preserved by the API.
+  // Requires the current slug to be one of BUILTIN_LEGAL_SLUGS.
+  const canSync = pageId && BUILTIN_LEGAL_SLUGS.has(slug)
+  const runSyncThisPage = async () => {
+    if (!canSync) return
+    setSyncing(true)
+    try {
+      const res = await api('/admin/seed-legal-pages', { method: 'POST', body: { slug, force: true } })
+      const r = (res?.results || [])[0]
+      // Reload the page from the DB so the editor reflects the newly-seeded HTML.
+      const fresh = await api(`/admin/pages/${pageId}`)
+      setTitle(fresh.title || ''); setSlug(fresh.slug || ''); setSeoTitle(fresh.seoTitle || '')
+      setSeoDescription(fresh.seoDescription || ''); setContentHtml(fresh.contentHtml || '')
+      setPristineHtml(fresh.contentHtml || ''); setPublished(!!fresh.published)
+      setShowSyncConfirm(false)
+      if (r?.action === 'updated-content') {
+        toast.success(`Synced /${slug} from built-in default. Published state preserved.`)
+      } else if (r?.action === 'created') {
+        toast.success(`Created /${slug} from built-in default.`)
+      } else {
+        toast.success(`/${slug} already matches the built-in default.`)
+      }
+    } catch (e) {
+      toast.error(e.message || 'Sync failed')
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   if (loading) return <Spinner />
 
   return (
@@ -1335,6 +1372,16 @@ function PageEditor({ id, onBack, onDeleted }) {
           <button onClick={togglePublish} disabled={saving} className={`h-9 px-3 rounded-md text-sm inline-flex items-center gap-1.5 ${published ? 'border border-slate-200 bg-white hover:bg-slate-50 text-slate-700' : 'bg-purple-600 hover:bg-purple-700 text-white'} disabled:opacity-60`}>
             {published ? <><Undo2 className="h-3.5 w-3.5" /> Unpublish</> : <><Send className="h-3.5 w-3.5" /> Publish</>}
           </button>
+          {canSync && (
+            <button
+              onClick={() => setShowSyncConfirm(true)}
+              disabled={saving || syncing}
+              title="Overwrite this page's content with the built-in default (published/draft state is preserved)."
+              className="h-9 px-3 rounded-md border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800 text-sm inline-flex items-center gap-1.5 disabled:opacity-60"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} /> Sync this page
+            </button>
+          )}
           <button onClick={() => save()} disabled={saving} className="h-9 px-4 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm inline-flex items-center gap-1.5 disabled:opacity-60">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Save className="h-4 w-4" /> Save</>}</button>
           {pageId && <button onClick={del} className="h-9 px-3 rounded-md border border-red-200 bg-white hover:bg-red-50 text-red-600 text-sm inline-flex items-center gap-1.5"><Trash2 className="h-3.5 w-3.5" /> Delete</button>}
         </div>
@@ -1368,6 +1415,59 @@ function PageEditor({ id, onBack, onDeleted }) {
       {showPreview && (
         <PagePreviewModal title={title} slug={slug} html={contentHtml} onClose={() => setShowPreview(false)} />
       )}
+
+      {showSyncConfirm && (
+        <SyncConfirmModal
+          slug={slug}
+          published={published}
+          working={syncing}
+          onConfirm={runSyncThisPage}
+          onClose={() => !syncing && setShowSyncConfirm(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+function SyncConfirmModal({ slug, published, working, onConfirm, onClose }) {
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="p-5 space-y-3">
+          <div className="flex items-start gap-3">
+            <div className="h-10 w-10 rounded-full bg-amber-100 grid place-items-center shrink-0">
+              <RefreshCw className="h-5 w-5 text-amber-700" />
+            </div>
+            <div className="min-w-0">
+              <h3 className="text-lg font-semibold text-slate-900">Sync <code className="text-base font-mono bg-slate-100 px-1.5 py-0.5 rounded">/{slug}</code> from the built-in default?</h3>
+              <p className="mt-1 text-sm text-slate-600">
+                This will <strong className="font-medium text-slate-900">replace the current content</strong> of this page with the latest built-in default from the code base.
+              </p>
+            </div>
+          </div>
+          <ul className="text-xs text-slate-600 space-y-1 rounded-md bg-slate-50 border border-slate-200 p-3">
+            <li>✅ Only <code className="font-mono">/{slug}</code> is affected — no other pages are touched.</li>
+            <li>✅ Published/draft state is preserved (currently <strong>{published ? 'Published' : 'Draft'}</strong>).</li>
+            <li>⚠️ Any manual edits you made to <code className="font-mono">/{slug}</code> will be overwritten.</li>
+          </ul>
+        </div>
+        <div className="border-t border-slate-200 bg-slate-50 px-4 py-3 flex items-center justify-end gap-2">
+          <button
+            onClick={onClose}
+            disabled={working}
+            className="h-9 px-3 rounded-md border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-sm disabled:opacity-60"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={working}
+            className="h-9 px-4 rounded-md bg-amber-600 hover:bg-amber-700 text-white text-sm inline-flex items-center gap-1.5 disabled:opacity-60"
+          >
+            {working ? <><Loader2 className="h-4 w-4 animate-spin" /> Syncing…</> : <><RefreshCw className="h-4 w-4" /> Overwrite with default</>}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

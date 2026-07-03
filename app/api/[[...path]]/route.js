@@ -1389,14 +1389,20 @@ function sanitizeUserOut2Remove() { /* removed — using module-level sanitizeUs
     // Pages CMS — one-click seed of legal/info pages.
     // Idempotent: creates missing pages, updates metadata by default, preserves
     // published state + user-edited content. Pass { force: true } to overwrite content.
+    // Pass { slug: '<one-of-the-6>' } to restrict the operation to a single page.
     if (seg === 'admin/seed-legal-pages') {
       const force = !!(body && body.force);
+      const onlySlug = typeof body?.slug === 'string' ? body.slug.trim().toLowerCase() : '';
       const db = await getDb();
       const now = new Date();
       const results = [];
       const summary = { created: 0, updatedMetadata: 0, updatedContent: 0, preserved: 0 };
       const legal = getLegalPages();
-      for (const p of legal) {
+      const scoped = onlySlug ? legal.filter((p) => p.slug === onlySlug) : legal;
+      if (onlySlug && scoped.length === 0) {
+        return err(`Unknown built-in slug: ${onlySlug}. Valid: ${legal.map((p) => p.slug).join(', ')}`, 400);
+      }
+      for (const p of scoped) {
         try {
           const existing = await db.collection('pages').findOne({ slug: p.slug });
           if (!existing) {
