@@ -117,6 +117,22 @@ function Overview() {
           <Stat label="Course completion rate" value={`${data.learning.completionRate}%`} />
         </div>
       </div>
+      {data.deletions && (
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2 flex items-center gap-2">
+            Deletions <span className="text-[10px] text-slate-400 font-normal normal-case">· anonymised · GDPR Art. 17</span>
+          </div>
+          <div className="grid gap-3 md:grid-cols-4">
+            <Stat label="Total deleted accounts" value={data.deletions.total} />
+            <Stat label="Self-service deletions" value={data.deletions.selfService} accent />
+            <Stat label="Admin deletions" value={data.deletions.admin} />
+            <Stat label="Deleted in last 30 days" value={data.deletions.last30d} />
+          </div>
+          <p className="mt-2 text-[11px] text-slate-500">
+            Aggregate counters only — no personal data is stored. Each deletion writes a one-way hashed audit row for legal accountability.
+          </p>
+        </div>
+      )}
       {ver && (
         <div className="pt-4 border-t border-slate-100 text-[11px] font-mono text-slate-400 flex flex-wrap gap-x-4 gap-y-1">
           <span>Build: <span className="text-slate-500">{ver.version}</span></span>

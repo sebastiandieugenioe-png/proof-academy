@@ -56,6 +56,54 @@ function attachUserSession(res, userId) {
   return res;
 }
 
+// Clear the user session cookie on a NextResponse (used after self-service account deletion).
+function clearUserSession(res) {
+  res.cookies.set({ ...USER_COOKIE.options, name: USER_COOKIE.name, value: '', maxAge: 0 });
+  return res;
+}
+
+// Shared user-erasure routine used by both admin-delete and self-service delete.
+// Cascades to all personal-data collections and writes an anonymised audit doc so
+// the admin overview can show total-deleted-accounts WITHOUT retaining PII.
+//   - Deletion timestamp is stored.
+//   - `userHash` is a one-way SHA-256 of the user id salted with USER_SESSION_SECRET —
+//     useful only for de-duplication, never reversible to the original id/email.
+//   - Method: 'self-service' | 'admin' | 'unsubscribe-cascade'.
+async function eraseUserData(db, userId, { method = 'self-service', actorEmail = null } = {}) {
+  const salt = process.env.USER_SESSION_SECRET || 'osc-fallback-salt';
+  const userHash = crypto.createHash('sha256').update(`${salt}:${userId}`).digest('hex');
+  const now = new Date();
+  // Also strip the newsletter subscription email — we replace it with the hash so
+  // the audit trail keeps its shape without retaining any personal data.
+  const user = await db.collection('users').findOne({ id: userId }, { projection: { email: 1 } });
+  const email = user?.email || null;
+  await Promise.all([
+    db.collection('users').deleteOne({ id: userId }),
+    db.collection('progress').deleteMany({ userId }),
+    db.collection('reviews').deleteMany({ userId }),
+    db.collection('comments').deleteMany({ userId }),
+  ]);
+  if (email) {
+    // Newsletter audit doc: anonymise (drop token + email → hash) but keep the
+    // consentAt/withdrawnAt row for legal accountability.
+    await db.collection('newsletter').updateMany(
+      { email },
+      {
+        $set: { email: `deleted:${userHash.slice(0, 16)}`, withdrawnAt: now, deletedAt: now, unsubscribeToken: null, source: 'account-deleted', updatedAt: now },
+        $unset: { userId: '' },
+      }
+    );
+  }
+  await db.collection('deletions_audit').insertOne({
+    id: uuid(),
+    userHash,
+    method,
+    actorEmail: method === 'admin' ? (actorEmail || null) : null,
+    deletedAt: now,
+  });
+  return { ok: true, userHash };
+}
+
 // 429 response helper
 function tooMany(retryAfterMs) {
   const r = rateLimitResponse(retryAfterMs);
@@ -521,7 +569,7 @@ export async function GET(request, { params }) {
       const now = new Date();
       const d7 = new Date(now - 7 * 86400e3);
       const d30 = new Date(now - 30 * 86400e3);
-      const [total, last7d, last30d, newsletter, lessonsCompleted, cardsReviewed, activeIds, activeIds7d, avgQuizAgg, courseAgg] = await Promise.all([
+      const [total, last7d, last30d, newsletter, lessonsCompleted, cardsReviewed, activeIds, activeIds7d, avgQuizAgg, courseAgg, deletionsTotal, deletionsSelf, deletionsAdmin, deletionsLast30d] = await Promise.all([
         db.collection('users').countDocuments({}),
         db.collection('users').countDocuments({ createdAt: { $gte: d7 } }),
         db.collection('users').countDocuments({ createdAt: { $gte: d30 } }),
@@ -538,6 +586,10 @@ export async function GET(request, { params }) {
           { $group: { _id: { u: '$userId', c: '$courseSlug' }, done: { $max: { $cond: ['$completed', 1, 0] } } } },
           { $group: { _id: '$_id.c', started: { $sum: 1 }, completed: { $sum: '$done' } } },
         ]).toArray(),
+        db.collection('deletions_audit').countDocuments({}),
+        db.collection('deletions_audit').countDocuments({ method: 'self-service' }),
+        db.collection('deletions_audit').countDocuments({ method: 'admin' }),
+        db.collection('deletions_audit').countDocuments({ deletedAt: { $gte: d30 } }),
       ]);
       const courseStats = new Map();
       for (const c of courseAgg) courseStats.set(c._id, c);
@@ -552,6 +604,12 @@ export async function GET(request, { params }) {
           avgQuizScore: avgQuizAgg[0]?.avg ? Math.round(avgQuizAgg[0].avg * 10) / 10 : null,
           quizzesTaken: avgQuizAgg[0]?.count || 0,
           completionRate,
+        },
+        deletions: {
+          total: deletionsTotal,
+          selfService: deletionsSelf,
+          admin: deletionsAdmin,
+          last30d: deletionsLast30d,
         },
       });
     }
@@ -898,13 +956,7 @@ export async function DELETE(request, { params }) {
     if (path[0] === 'admin' && path[1] === 'users' && path[2]) {
       if (!isSafeId(path[2])) return err('Invalid user id', 400);
       const db = await getDb();
-      const uid = path[2];
-      await Promise.all([
-        db.collection('users').deleteOne({ id: uid }),
-        db.collection('progress').deleteMany({ userId: uid }),
-        db.collection('reviews').deleteMany({ userId: uid }),
-        db.collection('comments').deleteMany({ userId: uid }),
-      ]);
+      await eraseUserData(db, path[2], { method: 'admin', actorEmail: null });
       return NextResponse.json({ ok: true });
     }
     if (path[0] === 'admin' && path[1] === 'comments' && path[2]) {
@@ -1142,6 +1194,28 @@ export async function POST(request, { params }) {
 
     if (seg === 'auth-legacy-disabled') {
       return err('Deprecated', 410);
+    }
+
+    // GDPR Art. 17 — Right to erasure. Self-service account deletion.
+    // Requires the user's session AND an explicit type-to-confirm value of exactly
+    // "DELETE" in the body to prevent accidental / CSRF-style deletion. Idempotent
+    // on repeat calls (session is cleared, so the second call returns 401 anyway).
+    if (seg === 'me/delete') {
+      const userId = requireUser(request);
+      const ip = ipFromRequest(request);
+      const rl = rateLimit(`medel:${ip}`, { max: 5, windowMs: 60 * 60 * 1000 });
+      if (!rl.allowed) return tooMany(rl.retryAfterMs);
+      const confirmation = typeof body?.confirmation === 'string' ? body.confirmation.trim() : '';
+      if (confirmation !== 'DELETE') {
+        return err('Type DELETE in the confirmation field to confirm account deletion.', 400);
+      }
+      const db = await getDb();
+      const exists = await db.collection('users').findOne({ id: userId }, { projection: { id: 1 } });
+      if (!exists) return err('Account no longer exists', 404);
+      await eraseUserData(db, userId, { method: 'self-service' });
+      const res = json({ ok: true, deleted: true });
+      clearUserSession(res);
+      return res;
     }
 
     if (seg === 'me/update') {

@@ -5,7 +5,7 @@ import {
   GlassWater, Flame, Sparkles, ChevronRight, ChevronLeft, Check, X,
   BookOpen, Brain, Layers, Target, Loader2, LogOut, User as UserIcon,
   Home, Wrench, ArrowRight, PartyPopper, Repeat, TrendingUp,
-  Zap, StopCircle, Timer, Award, Smartphone,
+  Zap, StopCircle, Timer, Award, Smartphone, Trash2, AlertTriangle,
 } from 'lucide-react'
 import PublicFooter from '@/components/PublicFooter'
 
@@ -822,10 +822,29 @@ const ProfileView = ({ user, setUser, onNav }) => {
   const [role, setRole] = useState(user?.role || '')
   const [saved, setSaved] = useState(false)
   const [stats, setStats] = useState(null)
+  const [showDelete, setShowDelete] = useState(false)
+  const [deleteText, setDeleteText] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const [deleteErr, setDeleteErr] = useState('')
   useEffect(() => { if (user) api('/stats').then(setStats) }, [user])
   const save = async () => {
     const { user: u } = await api('/me/update', { method: 'POST', body: { name, newsletter, country, city, role } })
     setUser(u); setSaved(true); setTimeout(() => setSaved(false), 1500)
+  }
+  const doDelete = async () => {
+    setDeleteErr('')
+    if (deleteText.trim() !== 'DELETE') { setDeleteErr('Please type DELETE (all uppercase) to confirm.'); return }
+    setDeleting(true)
+    try {
+      await api('/me/delete', { method: 'POST', body: { confirmation: 'DELETE' } })
+      // Full page navigation clears client-side state and forces a fresh auth check.
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login?deleted=1'
+      }
+    } catch (e) {
+      setDeleteErr(e.message || 'Deletion failed. Please try again in a moment.')
+      setDeleting(false)
+    }
   }
   return (
     <div className="max-w-2xl mx-auto space-y-8">
@@ -896,6 +915,87 @@ const ProfileView = ({ user, setUser, onNav }) => {
           <div><div className="text-2xl font-semibold text-slate-900">{stats?.minutesStudied ?? 0}m</div><div className="text-xs text-slate-500 uppercase tracking-wide mt-1">Time</div></div>
         </div>
       </div>
+
+      {/* GDPR Art. 17 — self-service Right to erasure. Visually separated + danger-styled. */}
+      <div className="rounded-2xl border-2 border-red-200 bg-red-50/50 p-6">
+        <div className="flex items-start gap-3">
+          <div className="h-9 w-9 rounded-full bg-red-100 grid place-items-center shrink-0">
+            <AlertTriangle className="h-5 w-5 text-red-700" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h3 className="font-semibold text-red-900">Danger zone — Delete my account</h3>
+            <p className="mt-1 text-sm text-red-800/90 leading-relaxed">
+              This will permanently erase your account, your learning progress, every flashcard review, all comments you have posted, and your newsletter preferences. Some anonymised statistics may be retained (with no personal data). This action is <strong className="font-semibold">permanent and cannot be undone</strong>.
+            </p>
+            <p className="mt-2 text-xs text-red-700/80">
+              Want a copy of your data first? Email <a href="mailto:privacy@onlinespiritsclub.com" className="underline">privacy@onlinespiritsclub.com</a> from this address and we&rsquo;ll send you a GDPR data export within 30 days.
+            </p>
+            <button
+              type="button"
+              onClick={() => { setDeleteText(''); setDeleteErr(''); setShowDelete(true) }}
+              className="mt-4 h-10 px-4 rounded-lg border border-red-300 bg-white hover:bg-red-100 text-red-700 text-sm font-medium inline-flex items-center gap-2"
+            >
+              <Trash2 className="h-4 w-4" /> Delete my account
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {showDelete && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => !deleting && setShowDelete(false)}>
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="p-5 space-y-3">
+              <div className="flex items-start gap-3">
+                <div className="h-10 w-10 rounded-full bg-red-100 grid place-items-center shrink-0">
+                  <AlertTriangle className="h-5 w-5 text-red-700" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-lg font-semibold text-slate-900">Delete your account?</h3>
+                  <p className="mt-1 text-sm text-slate-700">
+                    <strong className="font-medium">This action is permanent and cannot be undone.</strong>
+                  </p>
+                </div>
+              </div>
+              <ul className="text-xs text-slate-600 space-y-1 rounded-md bg-slate-50 border border-slate-200 p-3">
+                <li>🗑️ Your account &amp; profile ({user?.email})</li>
+                <li>🗑️ Every lesson progress record</li>
+                <li>🗑️ All flashcard-review history</li>
+                <li>🗑️ Every comment you have posted</li>
+                <li>🗑️ Newsletter subscription and preferences</li>
+                <li>⚠️ A one-way hashed audit row is retained (no personal data) to prove consent was withdrawn — as required by GDPR accountability.</li>
+              </ul>
+              <div>
+                <label className="text-xs font-medium text-slate-700 block mb-1">Type <code className="font-mono px-1 rounded bg-slate-100">DELETE</code> to confirm:</label>
+                <input
+                  autoFocus
+                  value={deleteText}
+                  onChange={(e) => setDeleteText(e.target.value)}
+                  placeholder="DELETE"
+                  className="w-full h-10 rounded-lg border border-slate-300 px-3 text-sm font-mono uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-red-500"
+                  disabled={deleting}
+                />
+              </div>
+              {deleteErr && <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md p-2">{deleteErr}</div>}
+            </div>
+            <div className="border-t border-slate-200 bg-slate-50 px-4 py-3 flex items-center justify-end gap-2">
+              <button
+                onClick={() => setShowDelete(false)}
+                disabled={deleting}
+                className="h-10 px-3 rounded-md border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-sm disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={doDelete}
+                disabled={deleting || deleteText.trim() !== 'DELETE'}
+                className="h-10 px-4 rounded-md bg-red-600 hover:bg-red-700 text-white text-sm inline-flex items-center gap-1.5 disabled:opacity-40"
+              >
+                {deleting ? <><Loader2 className="h-4 w-4 animate-spin" /> Deleting…</> : <><Trash2 className="h-4 w-4" /> Delete permanently</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

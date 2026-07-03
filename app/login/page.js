@@ -90,6 +90,11 @@ function LoginInner() {
           <div className="rounded-2xl border border-slate-200 bg-white p-6 md:p-8 shadow-sm">
             <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Welcome back</h1>
             <p className="mt-1.5 text-sm text-slate-600">Log in to continue learning.</p>
+            {sp?.get('deleted') === '1' && (
+              <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800 text-sm px-3 py-2">
+                Your account and all associated data have been permanently deleted. Thanks for being with us — feel free to sign up again any time.
+              </div>
+            )}
             <form onSubmit={submit} className="mt-6 space-y-3.5">
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1">Email</label>
