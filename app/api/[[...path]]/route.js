@@ -9,6 +9,8 @@ import { checkPassword, isAdminEmail, makeSessionToken, getAdminSessionFromReque
 import { uploadImage, uploadImageFromUrl, fetchImageBuffer, deleteImage, MAX_UPLOAD_BYTES, ALLOWED_MIME } from '@/lib/image-storage';
 import { sanitizeContentHtml, htmlToPlainText } from '@/lib/sanitize';
 import { getLegalPages } from '@/lib/legal-pages';
+import { sendTransactionalEmail, templates as emailTemplates, mailerStatus } from '@/lib/mailer';
+import { issueToken, verifyAndConsumeToken, hashToken } from '@/lib/auth-tokens';
 import { getUserIdFromRequest, makeUserSessionToken, USER_COOKIE, USER_COOKIE_CLEAR } from '@/lib/user-session';
 import { isSafeId, assertSafeId, isSafeSlug, assertSafeSlug, isSafeEmail, assertSafeEmail } from '@/lib/validators';
 import { rateLimit, ipFromRequest, rateLimitResponse } from '@/lib/rate-limit';
@@ -151,6 +153,7 @@ const RESERVED_SLUGS = new Set([
 // so course slugs can be more flexible. But pages sit at site root, so we forbid clashes with the SPA.
 const RESERVED_PAGE_SLUGS = new Set([
   'admin', 'api', 'learn', 'p', 'unsubscribe',
+  'verify-email', 'forgot-password', 'reset-password',
   'manifest.json', 'sitemap.xml', 'robots.txt', 'favicon.ico', 'placeholder-lesson.svg',
   '_next', 'assets', 'static', 'images',
 ]);
@@ -611,6 +614,7 @@ export async function GET(request, { params }) {
           admin: deletionsAdmin,
           last30d: deletionsLast30d,
         },
+        mailer: mailerStatus(),
       });
     }
 
@@ -1118,8 +1122,13 @@ export async function POST(request, { params }) {
       const user = {
         id: uuid(), email, name, provider: 'email',
         authMethod: 'password',
-        verified: true,
+        // NEW: email verification is required before the user can log in.
+        // Legacy accounts already in the DB stay untouched — the migration path
+        // is: users without emailVerified === false are treated as verified.
+        emailVerified: false,
+        emailVerifiedAt: null,
         passwordHash,
+        passwordLastChangedAt: now,
         newsletter,
         newsletterConsentAt: newsletter ? now : null,
         newsletterWithdrawnAt: null,
@@ -1148,8 +1157,165 @@ export async function POST(request, { params }) {
           { upsert: true }
         );
       }
-      const res = json({ user: sanitizeUserOut(user) });
+      // Issue a verification token + send the email. Both are fire-and-forget from
+      // the API's perspective — if Resend is unconfigured the mailer returns
+      // { skipped:true } and registration still succeeds.
+      const { token: verifyRawToken } = await issueToken(db, { userId: user.id, purpose: 'verify_email' });
+      const base = process.env.NEXT_PUBLIC_BASE_URL || '';
+      const verifyUrl = `${base}/verify-email?token=${encodeURIComponent(verifyRawToken)}`;
+      const mailRes = await sendTransactionalEmail({
+        to: email,
+        ...emailTemplates.verification({ name, url: verifyUrl }),
+      });
+      // Return success WITHOUT logging the user in. They must verify first.
+      // The client-side register page interprets emailVerified:false and shows
+      // a "check your email" screen.
+      return json({
+        ok: true,
+        emailVerified: false,
+        emailSent: !!mailRes?.ok,
+        emailSkipped: !!mailRes?.skipped,
+        user: sanitizeUserOut(user),
+      });
+    }
+
+    // ===================================================================
+    // EMAIL VERIFICATION / PASSWORD RESET / CHANGE PASSWORD
+    // ===================================================================
+
+    // Consume a verification link (raw token in body). Logs the user in on success.
+    if (seg === 'auth/verify-email') {
+      const ip = ipFromRequest(request);
+      const rl = rateLimit(`verifyemail:${ip}`, { max: 30, windowMs: 15 * 60 * 1000 });
+      if (!rl.allowed) return tooMany(rl.retryAfterMs);
+      const rawToken = typeof body.token === 'string' ? body.token : '';
+      if (!rawToken) return err('Missing verification token', 400);
+      const db = await getDb();
+      const consumed = await verifyAndConsumeToken(db, { token: rawToken, purpose: 'verify_email' });
+      if (!consumed) return err('This verification link is invalid or has expired. Please request a new one.', 400);
+      const now = new Date();
+      const upd = await db.collection('users').findOneAndUpdate(
+        { id: consumed.userId },
+        { $set: { emailVerified: true, emailVerifiedAt: now, updatedAt: now } },
+        { returnDocument: 'after' }
+      );
+      const user = upd?.value || upd;
+      if (!user) return err('Account not found', 404);
+      // Log the user in — the verification link itself is proof of email possession,
+      // so we can safely mint a session. (Same UX as most SaaS: click link, land in app.)
+      const res = json({ ok: true, user: sanitizeUserOut(user) });
       attachUserSession(res, user.id);
+      return res;
+    }
+
+    // Public: send a fresh verification email. Rate-limited per email + per IP.
+    // Response is intentionally generic so it can't be used to probe accounts.
+    if (seg === 'auth/resend-verification') {
+      const ip = ipFromRequest(request);
+      const rlIp = rateLimit(`resendv:${ip}`, { max: 5, windowMs: 60 * 60 * 1000 });
+      if (!rlIp.allowed) return tooMany(rlIp.retryAfterMs);
+      const email = (body.email || '').trim().toLowerCase();
+      if (!isSafeEmail(email)) {
+        return json({ ok: true }); // generic response even for malformed emails
+      }
+      const rlEmail = rateLimit(`resendv:e:${email}`, { max: 3, windowMs: 60 * 60 * 1000 });
+      if (!rlEmail.allowed) return tooMany(rlEmail.retryAfterMs);
+      const db = await getDb();
+      const user = await db.collection('users').findOne({ email });
+      // Only re-send if the user actually exists AND is still unverified.
+      if (user && user.emailVerified === false && user.passwordHash) {
+        const { token } = await issueToken(db, { userId: user.id, purpose: 'verify_email' });
+        const base = process.env.NEXT_PUBLIC_BASE_URL || '';
+        const url = `${base}/verify-email?token=${encodeURIComponent(token)}`;
+        await sendTransactionalEmail({ to: email, ...emailTemplates.verification({ name: user.name, url }) });
+      }
+      return json({ ok: true });
+    }
+
+    // Public: request a password reset email. Always returns generic { ok:true } to
+    // prevent email enumeration — the client can't tell whether an account exists.
+    if (seg === 'auth/forgot-password') {
+      const ip = ipFromRequest(request);
+      const rlIp = rateLimit(`fp:${ip}`, { max: 5, windowMs: 60 * 60 * 1000 });
+      if (!rlIp.allowed) return tooMany(rlIp.retryAfterMs);
+      const email = (body.email || '').trim().toLowerCase();
+      if (!isSafeEmail(email)) return json({ ok: true });
+      const rlEmail = rateLimit(`fp:e:${email}`, { max: 3, windowMs: 60 * 60 * 1000 });
+      if (!rlEmail.allowed) return json({ ok: true }); // still generic (don't leak rate-limit status)
+      const db = await getDb();
+      const user = await db.collection('users').findOne({ email });
+      if (user && user.passwordHash) {
+        const { token } = await issueToken(db, { userId: user.id, purpose: 'password_reset' });
+        const base = process.env.NEXT_PUBLIC_BASE_URL || '';
+        const url = `${base}/reset-password?token=${encodeURIComponent(token)}`;
+        await sendTransactionalEmail({ to: email, ...emailTemplates.passwordReset({ name: user.name, url }) });
+      }
+      return json({ ok: true });
+    }
+
+    // Public: consume a password-reset token + set a new password. Kills the current
+    // session cookie so the user is forced to sign in fresh with the new password
+    // (which also proves possession of both email + new password).
+    if (seg === 'auth/reset-password') {
+      const ip = ipFromRequest(request);
+      const rl = rateLimit(`rp:${ip}`, { max: 10, windowMs: 60 * 60 * 1000 });
+      if (!rl.allowed) return tooMany(rl.retryAfterMs);
+      const rawToken = typeof body.token === 'string' ? body.token : '';
+      const password = body.password;
+      const confirmPassword = body.confirmPassword;
+      if (!rawToken) return err('Missing token', 400);
+      const pwErr = validatePassword(password);
+      if (pwErr) return err(pwErr);
+      if (password !== confirmPassword) return err('Passwords do not match');
+      const db = await getDb();
+      const consumed = await verifyAndConsumeToken(db, { token: rawToken, purpose: 'password_reset' });
+      if (!consumed) return err('This reset link is invalid or has expired. Please request a new one.', 400);
+      const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+      const now = new Date();
+      const upd = await db.collection('users').findOneAndUpdate(
+        { id: consumed.userId },
+        { $set: { passwordHash, passwordLastChangedAt: now, emailVerified: true, emailVerifiedAt: (await db.collection('users').findOne({ id: consumed.userId }))?.emailVerifiedAt || now, updatedAt: now } },
+        { returnDocument: 'after' }
+      );
+      const user = upd?.value || upd;
+      if (user) {
+        // Fire a "your password was changed" notice so we surface unauthorised resets.
+        sendTransactionalEmail({ to: user.email, ...emailTemplates.passwordChanged({ name: user.name }) }).catch(() => {});
+      }
+      const res = json({ ok: true });
+      clearUserSession(res); // force re-login
+      return res;
+    }
+
+    // Authenticated: change password from within the profile.
+    // Requires knowledge of the current password. On success we rotate the session
+    // cookie (mint a fresh token) so the current tab keeps working, but any OTHER
+    // sessions the user has open will keep the OLD token — those are handled by
+    // the `me` GET endpoint which invalidates when passwordLastChangedAt is set.
+    if (seg === 'me/change-password') {
+      const userId = requireUser(request);
+      const ip = ipFromRequest(request);
+      const rl = rateLimit(`cp:${ip}`, { max: 8, windowMs: 60 * 60 * 1000 });
+      if (!rl.allowed) return tooMany(rl.retryAfterMs);
+      const currentPassword = body.currentPassword;
+      const newPassword = body.newPassword;
+      const confirmNewPassword = body.confirmNewPassword;
+      if (typeof currentPassword !== 'string' || !currentPassword) return err('Current password is required');
+      const pwErr = validatePassword(newPassword);
+      if (pwErr) return err(pwErr);
+      if (newPassword !== confirmNewPassword) return err('Passwords do not match');
+      if (newPassword === currentPassword) return err('Your new password must be different from the current one.');
+      const db = await getDb();
+      const user = await db.collection('users').findOne({ id: userId });
+      if (!user || !user.passwordHash) return err('Account not found', 404);
+      const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+      if (!ok) return err('Current password is incorrect.', 401);
+      const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+      const now = new Date();
+      await db.collection('users').updateOne({ id: userId }, { $set: { passwordHash, passwordLastChangedAt: now, updatedAt: now } });
+      sendTransactionalEmail({ to: user.email, ...emailTemplates.passwordChanged({ name: user.name }) }).catch(() => {});
+      const res = json({ ok: true, passwordLastChangedAt: now });
+      attachUserSession(res, userId); // rotate current session
       return res;
     }
 
@@ -1174,6 +1340,15 @@ export async function POST(request, { params }) {
       if (!user || !user.passwordHash) return err('Invalid email or password', 401);
       const ok = await bcrypt.compare(password, user.passwordHash);
       if (!ok) return err('Invalid email or password', 401);
+      // Block unverified accounts (registered AFTER we shipped email verification).
+      // Legacy accounts pre-dating verification never had `emailVerified` set — treat
+      // those as verified (they've been signing in successfully for weeks).
+      if (user.emailVerified === false) {
+        return NextResponse.json(
+          { error: 'Please verify your email before logging in.', code: 'EMAIL_NOT_VERIFIED', email: user.email },
+          { status: 403 }
+        );
+      }
       const res = json({ user: sanitizeUserOut(user) });
       attachUserSession(res, user.id);
       return res;
@@ -1501,6 +1676,38 @@ export async function POST(request, { params }) {
 
     // Update course metadata (title, slug, tagline/description, category, level).
     // Slug renames create a 301 alias and migrate all progress/reviews.
+    // Admin: manually mark a user as email-verified (support workflow).
+    if (path[0] === 'admin' && path[1] === 'users' && path[2] && path[3] === 'mark-verified') {
+      if (!isSafeId(path[2])) return err('Invalid user id', 400);
+      const db = await getDb();
+      const now = new Date();
+      const r = await db.collection('users').updateOne(
+        { id: path[2] },
+        { $set: { emailVerified: true, emailVerifiedAt: now, updatedAt: now } }
+      );
+      if (!r.matchedCount) return err('User not found', 404);
+      return json({ ok: true, emailVerifiedAt: now });
+    }
+
+    // Admin: trigger a fresh verification email for a user (support workflow).
+    // Bypasses the per-email/IP rate limits that the public resend endpoint has,
+    // since only authenticated admins can call this.
+    if (path[0] === 'admin' && path[1] === 'users' && path[2] && path[3] === 'resend-verification') {
+      if (!isSafeId(path[2])) return err('Invalid user id', 400);
+      const db = await getDb();
+      const user = await db.collection('users').findOne({ id: path[2] });
+      if (!user) return err('User not found', 404);
+      if (user.emailVerified) return err('This user is already verified.', 400);
+      const { token } = await issueToken(db, { userId: user.id, purpose: 'verify_email' });
+      const base = process.env.NEXT_PUBLIC_BASE_URL || '';
+      const url = `${base}/verify-email?token=${encodeURIComponent(token)}`;
+      const mail = await sendTransactionalEmail({
+        to: user.email,
+        ...emailTemplates.verification({ name: user.name, url }),
+      });
+      return json({ ok: true, emailSent: !!mail?.ok, emailSkipped: !!mail?.skipped, error: mail?.message || null });
+    }
+
     if (seg === 'admin/course-meta') {
       const { originalSlug, title, slug: newSlug, tagline, category, level } = body || {};
       if (!isSafeSlug(originalSlug)) return err('Invalid originalSlug');

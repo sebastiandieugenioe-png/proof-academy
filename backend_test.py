@@ -1,590 +1,971 @@
 #!/usr/bin/env python3
 """
-Backend regression test for SESSION 10: Self-service account deletion (GDPR Art. 17)
-Tests the new self-service deletion feature:
-- POST /api/me/delete (user-facing self-service erasure)
-- eraseUserData() helper (shared by admin and self-service)
-- Admin overview deletions block
+SESSION 11 - Email verification + password management backend regression test
+Tests T1-T10 as specified in /app/test_result.md
 """
 
 import requests
-import json
-import sys
-from datetime import datetime
 import time
+import hashlib
+import secrets
+from pymongo import MongoClient
+from datetime import datetime, timedelta
+import os
 
-# Base URL from .env
-BASE_URL = "https://proof-academy.preview.emergentagent.com/api"
+# Configuration
+BASE_URL = os.getenv('NEXT_PUBLIC_BASE_URL', 'https://proof-academy.preview.emergentagent.com')
+API_URL = f"{BASE_URL}/api"
+MONGO_URL = os.getenv('MONGO_URL', 'mongodb://localhost:27017')
+DB_NAME = os.getenv('DB_NAME', 'osc_db')
+ADMIN_EMAIL = 'sebastiandieugenioe@gmail.com'
+ADMIN_PASSWORD = 'preview-only-change-in-prod'
 
-# Admin credentials from test_credentials.md
-ADMIN_EMAIL = "sebastiandieugenioe@gmail.com"
-ADMIN_PASSWORD = "preview-only-change-in-prod"
+# MongoDB connection
+mongo_client = MongoClient(MONGO_URL)
+db = mongo_client[DB_NAME]
 
 # Test state
-admin_session = requests.Session()
-test_users = []  # List of (session, user_id, email) tuples
+test_users = []
+test_results = {
+    'T1': {'passed': 0, 'failed': 0, 'details': []},
+    'T2': {'passed': 0, 'failed': 0, 'details': []},
+    'T3': {'passed': 0, 'failed': 0, 'details': []},
+    'T4': {'passed': 0, 'failed': 0, 'details': []},
+    'T5': {'passed': 0, 'failed': 0, 'details': []},
+    'T6': {'passed': 0, 'failed': 0, 'details': []},
+    'T7': {'passed': 0, 'failed': 0, 'details': []},
+    'T8': {'passed': 0, 'failed': 0, 'details': []},
+    'T9': {'passed': 0, 'failed': 0, 'details': []},
+    'T10': {'passed': 0, 'failed': 0, 'details': []},
+}
 
-def log_step(step_num, description):
-    print(f"\n{'='*80}")
-    print(f"STEP {step_num}: {description}")
-    print('='*80)
+def log_pass(test_id, msg):
+    """Log a passing test"""
+    test_results[test_id]['passed'] += 1
+    test_results[test_id]['details'].append(f"✅ {msg}")
+    print(f"✅ {test_id}: {msg}")
 
-def log_pass(message):
-    print(f"✅ PASS: {message}")
+def log_fail(test_id, msg):
+    """Log a failing test"""
+    test_results[test_id]['failed'] += 1
+    test_results[test_id]['details'].append(f"❌ {msg}")
+    print(f"❌ {test_id}: {msg}")
 
-def log_fail(message, details=None):
-    print(f"❌ FAIL: {message}")
-    if details:
-        print(f"   Details: {details}")
+def generate_test_token():
+    """Generate a raw token and its SHA-256 hash"""
+    raw = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(raw.encode()).hexdigest()
+    return raw, token_hash
 
-def log_info(message):
-    print(f"ℹ️  INFO: {message}")
+def insert_known_token(user_id, purpose, raw_token):
+    """Insert a known token into the database for testing"""
+    token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+    now = datetime.utcnow()
+    expires_at = now + timedelta(hours=1)
+    
+    # Invalidate any existing tokens for this user/purpose
+    db.auth_tokens.update_many(
+        {'userId': user_id, 'purpose': purpose, 'usedAt': None},
+        {'$set': {'usedAt': now}}
+    )
+    
+    # Insert new token
+    token_doc = {
+        'id': secrets.token_urlsafe(16),
+        'userId': user_id,
+        'purpose': purpose,
+        'tokenHash': token_hash,
+        'createdAt': now,
+        'expiresAt': expires_at,
+        'usedAt': None
+    }
+    db.auth_tokens.insert_one(token_doc)
+    return raw_token
+
+def register_user(email, password='testpass123', name='Test User', newsletter=False):
+    """Register a new user"""
+    payload = {
+        'email': email,
+        'password': password,
+        'confirmPassword': password,
+        'name': name,
+        'country': 'Ireland',
+        'city': 'Dublin',
+        'role': 'Bartender',
+        'newsletter': newsletter
+    }
+    resp = requests.post(f"{API_URL}/register", json=payload)
+    return resp
 
 def admin_login():
-    """Authenticate as admin and capture session cookie"""
-    log_step(0, "Admin Authentication")
-    resp = admin_session.post(f"{BASE_URL}/admin-auth", json={
-        "email": ADMIN_EMAIL,
-        "password": ADMIN_PASSWORD
-    })
-    if resp.status_code == 200:
-        log_pass(f"Admin login successful")
-        return True
-    else:
-        log_fail(f"Admin login failed: {resp.status_code}", resp.text)
-        return False
-
-def create_test_user(name_suffix, newsletter=True):
-    """Create a test user and return (session, user_id, email)"""
-    timestamp = datetime.now().strftime("%Y%m%d%H%M%S%f")
-    email = f"test-delete-{name_suffix}-{timestamp}@test.example"
-    
+    """Login as admin and return session"""
     session = requests.Session()
-    register_data = {
-        "email": email,
-        "password": "TestPassword123!",
-        "confirmPassword": "TestPassword123!",
-        "name": f"Test User {name_suffix}",
-        "country": "Ireland",
-        "city": "Dublin",
-        "role": "Bartender",
-        "newsletter": newsletter
-    }
-    
-    resp = session.post(f"{BASE_URL}/register", json=register_data)
-    if resp.status_code != 200:
-        log_fail(f"User registration failed: {resp.status_code}", resp.text)
-        return None
-    
-    data = resp.json()
-    user_id = data.get('user', {}).get('id')
-    if not user_id:
-        log_fail("No user id in registration response", resp.text)
-        return None
-    
-    log_info(f"Created user '{name_suffix}': {email} (id: {user_id})")
-    return (session, user_id, email)
-
-def test_step_1_auth_guard():
-    """Step 1: Auth guard - POST /api/me/delete WITHOUT osc_user cookie → 401"""
-    log_step(1, "Auth guard")
-    
-    # Test without any cookie
-    resp = requests.post(f"{BASE_URL}/me/delete", json={"confirmation": "DELETE"})
-    if resp.status_code == 401:
-        data = resp.json()
-        if 'error' in data:
-            log_pass(f"POST /api/me/delete without cookie returns 401 with error: '{data['error']}'")
-            return True
-        else:
-            log_fail("401 response should contain 'error' field", resp.text)
-            return False
-    else:
-        log_fail(f"Expected 401, got {resp.status_code}", resp.text)
-        return False
-
-def test_step_2_missing_wrong_confirmation():
-    """Step 2: Missing / wrong confirmation"""
-    log_step(2, "Missing / wrong confirmation")
-    
-    # Create user A
-    user_a = create_test_user("A", newsletter=False)
-    if not user_a:
-        return False
-    
-    session_a, user_a_id, user_a_email = user_a
-    test_users.append(user_a)
-    
-    # Test 1: Empty body
-    resp = session_a.post(f"{BASE_URL}/me/delete", json={})
-    if resp.status_code == 400:
-        data = resp.json()
-        if 'error' in data and 'DELETE' in data['error']:
-            log_pass(f"Empty body returns 400 with error mentioning DELETE: '{data['error']}'")
-        else:
-            log_fail(f"400 error should mention DELETE, got: '{data.get('error')}'")
-            return False
-    else:
-        log_fail(f"Expected 400, got {resp.status_code}", resp.text)
-        return False
-    
-    # Test 2: Lowercase 'delete'
-    resp = session_a.post(f"{BASE_URL}/me/delete", json={"confirmation": "delete"})
-    if resp.status_code == 400:
-        log_pass("Lowercase 'delete' returns 400")
-    else:
-        log_fail(f"Expected 400, got {resp.status_code}", resp.text)
-        return False
-    
-    # Test 3: Wrong string 'D3L3T3'
-    resp = session_a.post(f"{BASE_URL}/me/delete", json={"confirmation": "D3L3T3"})
-    if resp.status_code == 400:
-        log_pass("Wrong confirmation 'D3L3T3' returns 400")
-    else:
-        log_fail(f"Expected 400, got {resp.status_code}", resp.text)
-        return False
-    
-    # Verify user A still exists
-    resp = admin_session.get(f"{BASE_URL}/admin/users?q={user_a_email}")
-    if resp.status_code == 200:
-        data = resp.json()
-        users = data.get('users', [])
-        matching = [u for u in users if u.get('email') == user_a_email]
-        if len(matching) == 1:
-            log_pass(f"User A still exists after failed deletion attempts")
-            return True
-        else:
-            log_fail(f"User A should still exist, found {len(matching)} matches")
-            return False
-    else:
-        log_fail(f"Admin user search failed: {resp.status_code}", resp.text)
-        return False
-
-def test_step_3_happy_path():
-    """Step 3: Happy path - full deletion flow"""
-    log_step(3, "Happy path - full deletion flow")
-    
-    # Create user B
-    user_b = create_test_user("B-Erase-Bob", newsletter=True)
-    if not user_b:
-        return False
-    
-    session_b, user_b_id, user_b_email = user_b
-    test_users.append(user_b)
-    
-    # Post a comment as user B
-    comment_data = {
-        "courseSlug": "alcohol-fundamentals",
-        "lessonSlug": "what-is-alcohol",
-        "text": "Test comment from user B for deletion testing."
-    }
-    
-    resp = session_b.post(f"{BASE_URL}/comments", json=comment_data)
-    comment_id = None
-    if resp.status_code == 200:
-        data = resp.json()
-        comment_id = data.get('comment', {}).get('id')
-        log_pass(f"Comment posted successfully. Comment id: {comment_id}")
-    else:
-        log_info(f"Comment posting failed ({resp.status_code}). Will continue without comment.")
-    
-    # Delete account with correct confirmation
-    resp = session_b.post(f"{BASE_URL}/me/delete", json={"confirmation": "DELETE"})
-    
-    # Check response
-    if resp.status_code != 200:
-        log_fail(f"Expected 200, got {resp.status_code}", resp.text)
-        return False
-    
-    data = resp.json()
-    if data.get('ok') == True and data.get('deleted') == True:
-        log_pass(f"POST /api/me/delete returns {{ok: true, deleted: true}}")
-    else:
-        log_fail(f"Expected {{ok: true, deleted: true}}, got: {data}")
-        return False
-    
-    # Check Set-Cookie header clears osc_user
-    set_cookie = resp.headers.get('Set-Cookie', '')
-    if 'osc_user=' in set_cookie and ('Max-Age=0' in set_cookie or 'max-age=0' in set_cookie or set_cookie.count('osc_user=;') > 0 or 'osc_user=,' in set_cookie):
-        log_pass(f"Response Set-Cookie clears osc_user cookie")
-    else:
-        log_info(f"Set-Cookie header: {set_cookie}")
-        log_fail("Response should clear osc_user cookie with Max-Age=0 or empty value")
-        # Don't fail the test for this, as cookie clearing might work differently
-    
-    # Follow-up GET /api/me should return 401
-    resp = session_b.get(f"{BASE_URL}/me")
-    if resp.status_code == 401:
-        log_pass("Follow-up GET /api/me returns 401 (session cleared)")
-    else:
-        log_fail(f"Expected 401, got {resp.status_code}", resp.text)
-        return False
-    
-    # Admin search should return 0 results
-    resp = admin_session.get(f"{BASE_URL}/admin/users?q={user_b_email}")
-    if resp.status_code == 200:
-        data = resp.json()
-        users = data.get('users', [])
-        matching = [u for u in users if u.get('email') == user_b_email]
-        if len(matching) == 0:
-            log_pass(f"Admin search for '{user_b_email}' returns 0 results")
-        else:
-            log_fail(f"Admin search should return 0 results, found {len(matching)}")
-            return False
-    else:
-        log_fail(f"Admin user search failed: {resp.status_code}", resp.text)
-        return False
-    
-    # Check comment is gone
-    if comment_id:
-        resp = admin_session.get(f"{BASE_URL}/admin/comments")
-        if resp.status_code == 200:
-            data = resp.json()
-            comments = data if isinstance(data, list) else []
-            comment_ids = [c.get('id') for c in comments]
-            if comment_id not in comment_ids:
-                log_pass(f"Comment {comment_id} no longer present in admin comments")
-            else:
-                log_fail(f"Comment {comment_id} still present in admin comments")
-                return False
-        else:
-            log_info(f"Could not verify comment deletion: {resp.status_code}")
-    
-    # Login attempt should fail
-    resp = requests.post(f"{BASE_URL}/login", json={
-        "email": user_b_email,
-        "password": "TestPassword123!"
+    resp = session.post(f"{API_URL}/admin-auth", json={
+        'email': ADMIN_EMAIL,
+        'password': ADMIN_PASSWORD
     })
-    if resp.status_code == 401:
-        log_pass(f"Login attempt with deleted account returns 401")
-    else:
-        log_fail(f"Login should return 401, got {resp.status_code}", resp.text)
-        return False
-    
-    return True
-
-def test_step_4_newsletter_anonymisation():
-    """Step 4: Newsletter anonymisation"""
-    log_step(4, "Newsletter anonymisation")
-    
-    # Create user C with newsletter
-    user_c = create_test_user("C", newsletter=True)
-    if not user_c:
-        return False
-    
-    session_c, user_c_id, user_c_email = user_c
-    test_users.append(user_c)
-    
-    log_info(f"User C email before deletion: {user_c_email}")
-    
-    # Delete account
-    resp = session_c.post(f"{BASE_URL}/me/delete", json={"confirmation": "DELETE"})
-    if resp.status_code != 200:
-        log_fail(f"Deletion failed: {resp.status_code}", resp.text)
-        return False
-    
-    log_pass("User C deleted successfully")
-    
-    # Test newsletter unsubscribe endpoint with original email
-    # According to spec: POST /api/newsletter/unsubscribe { email: original } → 200 { email: null }
-    resp = requests.post(f"{BASE_URL}/newsletter/unsubscribe", json={"email": user_c_email})
     if resp.status_code == 200:
-        data = resp.json()
-        if data.get('email') is None or data.get('email') == '':
-            log_pass(f"POST /api/newsletter/unsubscribe with original email returns {{email: null}} (anonymised)")
-        else:
-            log_fail(f"Expected {{email: null}}, got: {data}")
-            return False
-    else:
-        log_info(f"Newsletter unsubscribe returned {resp.status_code}: {resp.text[:200]}")
-        log_info("This endpoint might not exist or work as expected. Checking via admin newsletter list instead.")
-        
-        # Alternative: check admin newsletter list
-        resp = admin_session.get(f"{BASE_URL}/admin/newsletter")
-        if resp.status_code == 200:
-            data = resp.json()
-            newsletters = data if isinstance(data, list) else []
-            
-            # Check no newsletter doc contains original email
-            matching_original = [n for n in newsletters if n.get('email') == user_c_email]
-            if len(matching_original) == 0:
-                log_pass(f"No newsletter doc contains original email '{user_c_email}'")
+        return session
+    return None
+
+def cleanup_test_users():
+    """Delete all test users created during testing"""
+    print("\n🧹 CLEANUP: Deleting test users...")
+    admin_session = admin_login()
+    if not admin_session:
+        print("❌ Failed to login as admin for cleanup")
+        return
+    
+    for user_id in test_users:
+        try:
+            resp = admin_session.delete(f"{API_URL}/admin/users/{user_id}")
+            if resp.status_code == 200:
+                print(f"✅ Deleted user {user_id}")
             else:
-                log_fail(f"Found {len(matching_original)} newsletter docs with original email (should be 0)")
-                return False
-            
-            # Check for anonymised entry (email starting with 'deleted:')
-            deleted_entries = [n for n in newsletters if n.get('email', '').startswith('deleted:') and n.get('deletedAt') and n.get('withdrawnAt')]
-            if len(deleted_entries) > 0:
-                log_pass(f"Found {len(deleted_entries)} anonymised newsletter entry/entries (email starts with 'deleted:', deletedAt and withdrawnAt set)")
-                # Check unsubscribeToken is null
-                if deleted_entries[0].get('unsubscribeToken') is None:
-                    log_pass("Anonymised entry has unsubscribeToken: null")
-                else:
-                    log_info(f"Anonymised entry unsubscribeToken: {deleted_entries[0].get('unsubscribeToken')}")
-            else:
-                log_info("Could not find anonymised newsletter entry (might have been cleaned up)")
-        else:
-            log_info(f"Could not access admin newsletter list: {resp.status_code}")
+                print(f"⚠️  Failed to delete user {user_id}: {resp.status_code}")
+        except Exception as e:
+            print(f"⚠️  Error deleting user {user_id}: {e}")
     
-    return True
+    # Also clean up auth_tokens for test users
+    try:
+        result = db.auth_tokens.delete_many({'userId': {'$in': test_users}})
+        print(f"✅ Deleted {result.deleted_count} auth_tokens")
+    except Exception as e:
+        print(f"⚠️  Error deleting auth_tokens: {e}")
 
-def test_step_5_admin_overview_counter():
-    """Step 5: Admin overview counter"""
-    log_step(5, "Admin overview counter")
-    
-    # Get baseline
-    resp = admin_session.get(f"{BASE_URL}/admin/overview")
-    if resp.status_code != 200:
-        log_fail(f"GET /api/admin/overview failed: {resp.status_code}", resp.text)
-        return False
-    
-    data = resp.json()
-    deletions_before = data.get('deletions', {})
-    total_before = deletions_before.get('total', 0)
-    self_service_before = deletions_before.get('selfService', 0)
-    last30d_before = deletions_before.get('last30d', 0)
-    
-    log_info(f"Baseline deletions: total={total_before}, selfService={self_service_before}, last30d={last30d_before}")
-    
-    # Create and delete 2 users (D and E)
-    user_d = create_test_user("D", newsletter=True)
-    if not user_d:
-        return False
-    session_d, user_d_id, user_d_email = user_d
-    test_users.append(user_d)
-    
-    user_e = create_test_user("E", newsletter=False)
-    if not user_e:
-        return False
-    session_e, user_e_id, user_e_email = user_e
-    test_users.append(user_e)
-    
-    # Delete both
-    resp = session_d.post(f"{BASE_URL}/me/delete", json={"confirmation": "DELETE"})
-    if resp.status_code != 200:
-        log_fail(f"User D deletion failed: {resp.status_code}", resp.text)
-        return False
-    log_pass("User D deleted")
-    
-    resp = session_e.post(f"{BASE_URL}/me/delete", json={"confirmation": "DELETE"})
-    if resp.status_code != 200:
-        log_fail(f"User E deletion failed: {resp.status_code}", resp.text)
-        return False
-    log_pass("User E deleted")
-    
-    # Get updated counts
-    resp = admin_session.get(f"{BASE_URL}/admin/overview")
-    if resp.status_code != 200:
-        log_fail(f"GET /api/admin/overview failed: {resp.status_code}", resp.text)
-        return False
-    
-    data = resp.json()
-    deletions_after = data.get('deletions', {})
-    total_after = deletions_after.get('total', 0)
-    self_service_after = deletions_after.get('selfService', 0)
-    last30d_after = deletions_after.get('last30d', 0)
-    
-    log_info(f"After deletions: total={total_after}, selfService={self_service_after}, last30d={last30d_after}")
-    
-    # We deleted user B (step 3), user C (step 4), user D, and user E = 4 self-service deletions
-    # But user A is still alive
-    expected_increment = 4  # B, C, D, E
-    
-    if total_after >= total_before + expected_increment:
-        log_pass(f"deletions.total incremented by at least {expected_increment} (from {total_before} to {total_after})")
-    else:
-        log_fail(f"deletions.total should be at least {total_before + expected_increment}, got {total_after}")
-        return False
-    
-    if self_service_after >= self_service_before + expected_increment:
-        log_pass(f"deletions.selfService incremented by at least {expected_increment} (from {self_service_before} to {self_service_after})")
-    else:
-        log_fail(f"deletions.selfService should be at least {self_service_before + expected_increment}, got {self_service_after}")
-        return False
-    
-    if last30d_after >= last30d_before + expected_increment:
-        log_pass(f"deletions.last30d incremented by at least {expected_increment} (from {last30d_before} to {last30d_after})")
-    else:
-        log_fail(f"deletions.last30d should be at least {last30d_before + expected_increment}, got {last30d_after}")
-        return False
-    
-    return True
-
-def test_step_6_rate_limit():
-    """Step 6: Rate limit (5 per hour per IP)"""
-    log_step(6, "Rate limit (5 per hour per IP)")
-    
-    log_info("Creating 6 users and attempting to delete all in a burst...")
-    
-    rate_limit_users = []
-    for i in range(6):
-        user = create_test_user(f"RateLimit{i}", newsletter=False)
-        if not user:
-            log_fail(f"Failed to create rate limit test user {i}")
-            return False
-        rate_limit_users.append(user)
-        test_users.append(user)
-    
-    log_pass(f"Created {len(rate_limit_users)} users for rate limit test")
-    
-    # Try to delete all 6 in quick succession
-    deletion_results = []
-    for i, (session, user_id, email) in enumerate(rate_limit_users):
-        resp = session.post(f"{BASE_URL}/me/delete", json={"confirmation": "DELETE"})
-        deletion_results.append((i, resp.status_code, resp.headers.get('Retry-After')))
-        log_info(f"User {i}: status={resp.status_code}, Retry-After={resp.headers.get('Retry-After')}")
-        time.sleep(0.1)  # Small delay to avoid overwhelming the server
-    
-    # Check if at least one got 429
-    got_429 = any(status == 429 for _, status, _ in deletion_results)
-    
-    if got_429:
-        log_pass("At least one deletion attempt returned 429 (rate limited)")
-        # Check for Retry-After header
-        retry_after_headers = [retry for _, status, retry in deletion_results if status == 429 and retry]
-        if retry_after_headers:
-            log_pass(f"429 response includes Retry-After header: {retry_after_headers[0]}")
-        else:
-            log_info("429 response did not include Retry-After header (optional)")
-        return True
-    else:
-        log_info("No 429 responses received. This might be expected if:")
-        log_info("  - The IP has not hit the limit yet (shared with previous tests)")
-        log_info("  - The rate limit window has reset")
-        log_info("  - The test environment has different rate limit settings")
-        successful_deletions = sum(1 for _, status, _ in deletion_results if status == 200)
-        log_info(f"Successful deletions: {successful_deletions}/6")
-        return True  # Don't fail the test as per instructions
-
-def test_step_7_admin_delete():
-    """Step 7: Admin delete still works + counts correctly"""
-    log_step(7, "Admin delete still works + counts correctly")
-    
-    # Get baseline
-    resp = admin_session.get(f"{BASE_URL}/admin/overview")
-    if resp.status_code != 200:
-        log_fail(f"GET /api/admin/overview failed: {resp.status_code}", resp.text)
-        return False
-    
-    data = resp.json()
-    deletions_before = data.get('deletions', {})
-    admin_before = deletions_before.get('admin', 0)
-    
-    log_info(f"Baseline deletions.admin: {admin_before}")
-    
-    # Create user F
-    user_f = create_test_user("F-AdminDelete", newsletter=False)
-    if not user_f:
-        return False
-    
-    session_f, user_f_id, user_f_email = user_f
-    test_users.append(user_f)
-    
-    # Admin deletes user F
-    resp = admin_session.delete(f"{BASE_URL}/admin/users/{user_f_id}")
-    if resp.status_code != 200:
-        log_fail(f"Admin DELETE failed: {resp.status_code}", resp.text)
-        return False
-    
-    data = resp.json()
-    if data.get('ok') == True:
-        log_pass(f"Admin DELETE /api/admin/users/{user_f_id} returns {{ok: true}}")
-    else:
-        log_fail(f"Expected {{ok: true}}, got: {data}")
-        return False
-    
-    # Verify user is gone
-    resp = admin_session.get(f"{BASE_URL}/admin/users?q={user_f_email}")
-    if resp.status_code == 200:
-        data = resp.json()
-        users = data.get('users', [])
-        matching = [u for u in users if u.get('email') == user_f_email]
-        if len(matching) == 0:
-            log_pass(f"User F no longer in admin user list")
-        else:
-            log_fail(f"User F should be deleted, found {len(matching)} matches")
-            return False
-    else:
-        log_fail(f"Admin user search failed: {resp.status_code}", resp.text)
-        return False
-    
-    # Check counter incremented
-    resp = admin_session.get(f"{BASE_URL}/admin/overview")
-    if resp.status_code != 200:
-        log_fail(f"GET /api/admin/overview failed: {resp.status_code}", resp.text)
-        return False
-    
-    data = resp.json()
-    deletions_after = data.get('deletions', {})
-    admin_after = deletions_after.get('admin', 0)
-    
-    log_info(f"After admin deletion: deletions.admin={admin_after}")
-    
-    if admin_after == admin_before + 1:
-        log_pass(f"deletions.admin incremented by 1 (from {admin_before} to {admin_after})")
-        return True
-    else:
-        log_fail(f"deletions.admin should be {admin_before + 1}, got {admin_after}")
-        return False
-
-def test_step_8_cleanup():
-    """Step 8: Cleanup"""
-    log_step(8, "Cleanup")
-    
-    log_info("All test users have been deleted by the tests themselves.")
-    log_info("No additional cleanup needed.")
-    log_pass("Cleanup complete")
-    
-    return True
-
-def main():
+def print_summary():
+    """Print test summary"""
+    print("\n" + "="*80)
+    print("TEST SUMMARY - SESSION 11: Email Verification + Password Management")
     print("="*80)
-    print("SESSION 10: Self-service Account Deletion Backend Test")
+    
+    total_passed = 0
+    total_failed = 0
+    
+    for test_id in sorted(test_results.keys()):
+        result = test_results[test_id]
+        passed = result['passed']
+        failed = result['failed']
+        total_passed += passed
+        total_failed += failed
+        
+        status = "✅ PASS" if failed == 0 else "❌ FAIL"
+        print(f"\n{test_id}: {status} ({passed} passed, {failed} failed)")
+        for detail in result['details']:
+            print(f"  {detail}")
+    
+    print("\n" + "="*80)
+    print(f"TOTAL: {total_passed} passed, {total_failed} failed")
+    if total_failed == 0:
+        print("🎉 ALL TESTS PASSED!")
+    else:
+        print(f"⚠️  {total_failed} TESTS FAILED")
+    print("="*80)
+
+# ============================================================================
+# T1: Register creates unverified user
+# ============================================================================
+def test_t1_register_unverified():
+    print("\n" + "="*80)
+    print("T1: Register creates unverified user")
+    print("="*80)
+    
+    ts = int(time.time())
+    email = f"t1-{ts}@example.test"
+    
+    try:
+        # Register user
+        resp = register_user(email, newsletter=False)
+        
+        if resp.status_code == 200:
+            log_pass('T1', f"Register returned 200")
+            data = resp.json()
+            
+            # Check response structure
+            if data.get('ok') == True:
+                log_pass('T1', "Response has ok:true")
+            else:
+                log_fail('T1', f"Expected ok:true, got {data.get('ok')}")
+            
+            if data.get('emailVerified') == False:
+                log_pass('T1', "emailVerified:false")
+            else:
+                log_fail('T1', f"Expected emailVerified:false, got {data.get('emailVerified')}")
+            
+            if data.get('emailSkipped') == True:
+                log_pass('T1', "emailSkipped:true (RESEND unconfigured)")
+            else:
+                log_fail('T1', f"Expected emailSkipped:true, got {data.get('emailSkipped')}")
+            
+            # Check NO session cookie
+            if 'osc_user' not in resp.cookies:
+                log_pass('T1', "No osc_user cookie set (user not logged in)")
+            else:
+                log_fail('T1', "osc_user cookie was set (should not be)")
+            
+            # Try GET /api/me without cookie
+            me_resp = requests.get(f"{API_URL}/me")
+            if me_resp.status_code == 401:
+                log_pass('T1', "GET /api/me without cookie returns 401")
+            else:
+                log_fail('T1', f"GET /api/me returned {me_resp.status_code}, expected 401")
+            
+            # Verify DB state
+            user = db.users.find_one({'email': email})
+            if user:
+                test_users.append(user['id'])
+                
+                if user.get('emailVerified') == False:
+                    log_pass('T1', "DB: emailVerified:false")
+                else:
+                    log_fail('T1', f"DB: emailVerified should be false, got {user.get('emailVerified')}")
+                
+                if user.get('emailVerifiedAt') is None:
+                    log_pass('T1', "DB: emailVerifiedAt:null")
+                else:
+                    log_fail('T1', f"DB: emailVerifiedAt should be null, got {user.get('emailVerifiedAt')}")
+                
+                if user.get('passwordLastChangedAt'):
+                    log_pass('T1', "DB: passwordLastChangedAt is set")
+                else:
+                    log_fail('T1', "DB: passwordLastChangedAt is missing")
+                
+                # Check auth_tokens
+                token = db.auth_tokens.find_one({'userId': user['id'], 'purpose': 'verify_email', 'usedAt': None})
+                if token:
+                    log_pass('T1', "DB: verify_email token exists")
+                    
+                    if token.get('expiresAt') and token['expiresAt'] > datetime.utcnow():
+                        log_pass('T1', "DB: token expiresAt > now")
+                    else:
+                        log_fail('T1', "DB: token expiresAt is invalid")
+                else:
+                    log_fail('T1', "DB: verify_email token not found")
+            else:
+                log_fail('T1', f"User {email} not found in DB")
+        else:
+            log_fail('T1', f"Register failed with status {resp.status_code}: {resp.text}")
+    
+    except Exception as e:
+        log_fail('T1', f"Exception: {e}")
+
+# ============================================================================
+# T2: Login blocked for unverified
+# ============================================================================
+def test_t2_login_blocked():
+    print("\n" + "="*80)
+    print("T2: Login blocked for unverified")
+    print("="*80)
+    
+    # Get the T1 user
+    ts = int(time.time())
+    # Find the most recent t1 user
+    user = db.users.find_one({'email': {'$regex': '^t1-.*@example.test$'}}, sort=[('createdAt', -1)])
+    
+    if not user:
+        log_fail('T2', "T1 user not found in DB")
+        return
+    
+    try:
+        resp = requests.post(f"{API_URL}/login", json={
+            'email': user['email'],
+            'password': 'testpass123'
+        })
+        
+        if resp.status_code == 403:
+            log_pass('T2', "Login returned 403 (blocked)")
+            data = resp.json()
+            
+            if data.get('code') == 'EMAIL_NOT_VERIFIED':
+                log_pass('T2', "Response code:'EMAIL_NOT_VERIFIED'")
+            else:
+                log_fail('T2', f"Expected code:'EMAIL_NOT_VERIFIED', got {data.get('code')}")
+            
+            if 'Please verify your email' in data.get('error', ''):
+                log_pass('T2', "Error message mentions verification")
+            else:
+                log_fail('T2', f"Error message: {data.get('error')}")
+            
+            if data.get('email') == user['email']:
+                log_pass('T2', "Response includes user email")
+            else:
+                log_fail('T2', f"Expected email:{user['email']}, got {data.get('email')}")
+            
+            # Check NO session cookie
+            if 'osc_user' not in resp.cookies:
+                log_pass('T2', "No osc_user cookie set")
+            else:
+                log_fail('T2', "osc_user cookie was set (should not be)")
+        else:
+            log_fail('T2', f"Login returned {resp.status_code}, expected 403: {resp.text}")
+    
+    except Exception as e:
+        log_fail('T2', f"Exception: {e}")
+
+# ============================================================================
+# T3: Verify email happy path
+# ============================================================================
+def test_t3_verify_email():
+    print("\n" + "="*80)
+    print("T3: Verify email happy path")
+    print("="*80)
+    
+    # Get the T1 user
+    user = db.users.find_one({'email': {'$regex': '^t1-.*@example.test$'}}, sort=[('createdAt', -1)])
+    
+    if not user:
+        log_fail('T3', "T1 user not found in DB")
+        return
+    
+    try:
+        # Generate and insert a known token
+        raw_token = secrets.token_urlsafe(32)
+        insert_known_token(user['id'], 'verify_email', raw_token)
+        log_pass('T3', f"Inserted known token for user {user['email']}")
+        
+        # Verify email with the token
+        session = requests.Session()
+        resp = session.post(f"{API_URL}/auth/verify-email", json={'token': raw_token})
+        
+        if resp.status_code == 200:
+            log_pass('T3', "verify-email returned 200")
+            data = resp.json()
+            
+            if data.get('ok') == True:
+                log_pass('T3', "Response has ok:true")
+            else:
+                log_fail('T3', f"Expected ok:true, got {data.get('ok')}")
+            
+            # Check session cookie is set
+            if 'osc_user' in session.cookies:
+                log_pass('T3', "osc_user cookie set (user logged in)")
+            else:
+                log_fail('T3', "osc_user cookie not set")
+            
+            # GET /api/me with the session
+            me_resp = session.get(f"{API_URL}/me")
+            if me_resp.status_code == 200:
+                log_pass('T3', "GET /api/me with session returns 200")
+                me_data = me_resp.json()
+                
+                if me_data.get('emailVerified') == True:
+                    log_pass('T3', "emailVerified:true in /me response")
+                else:
+                    log_fail('T3', f"Expected emailVerified:true, got {me_data.get('emailVerified')}")
+                
+                if me_data.get('emailVerifiedAt'):
+                    log_pass('T3', "emailVerifiedAt is set")
+                else:
+                    log_fail('T3', "emailVerifiedAt is missing")
+            else:
+                log_fail('T3', f"GET /api/me returned {me_resp.status_code}")
+            
+            # Try to use the same token again (should fail - single use)
+            resp2 = requests.post(f"{API_URL}/auth/verify-email", json={'token': raw_token})
+            if resp2.status_code == 400:
+                log_pass('T3', "Reusing token returns 400 (single-use)")
+            else:
+                log_fail('T3', f"Reusing token returned {resp2.status_code}, expected 400")
+            
+            # Try with bogus token
+            resp3 = requests.post(f"{API_URL}/auth/verify-email", json={'token': 'bogus-not-real-token'})
+            if resp3.status_code == 400:
+                log_pass('T3', "Bogus token returns 400")
+            else:
+                log_fail('T3', f"Bogus token returned {resp3.status_code}, expected 400")
+        else:
+            log_fail('T3', f"verify-email failed with status {resp.status_code}: {resp.text}")
+    
+    except Exception as e:
+        log_fail('T3', f"Exception: {e}")
+
+# ============================================================================
+# T4: Login now works
+# ============================================================================
+def test_t4_login_works():
+    print("\n" + "="*80)
+    print("T4: Login now works")
+    print("="*80)
+    
+    # Get the T1 user (now verified)
+    user = db.users.find_one({'email': {'$regex': '^t1-.*@example.test$'}}, sort=[('createdAt', -1)])
+    
+    if not user:
+        log_fail('T4', "T1 user not found in DB")
+        return
+    
+    try:
+        session = requests.Session()
+        resp = session.post(f"{API_URL}/login", json={
+            'email': user['email'],
+            'password': 'testpass123'
+        })
+        
+        if resp.status_code == 200:
+            log_pass('T4', "Login returned 200")
+            data = resp.json()
+            
+            if data.get('user'):
+                log_pass('T4', "Response includes user object")
+            else:
+                log_fail('T4', "Response missing user object")
+            
+            if 'osc_user' in session.cookies:
+                log_pass('T4', "osc_user cookie set")
+            else:
+                log_fail('T4', "osc_user cookie not set")
+        else:
+            log_fail('T4', f"Login failed with status {resp.status_code}: {resp.text}")
+    
+    except Exception as e:
+        log_fail('T4', f"Exception: {e}")
+
+# ============================================================================
+# T5: Resend verification (generic + rate limit)
+# ============================================================================
+def test_t5_resend_verification():
+    print("\n" + "="*80)
+    print("T5: Resend verification (generic + rate limit)")
+    print("="*80)
+    
+    ts = int(time.time())
+    email = f"t5-{ts}@example.test"
+    
+    try:
+        # Register a fresh unverified user
+        resp = register_user(email, newsletter=False)
+        if resp.status_code == 200:
+            log_pass('T5', f"Registered user {email}")
+            user = db.users.find_one({'email': email})
+            if user:
+                test_users.append(user['id'])
+        else:
+            log_fail('T5', f"Failed to register user: {resp.status_code}")
+            return
+        
+        # Resend verification for existing user
+        resp1 = requests.post(f"{API_URL}/auth/resend-verification", json={'email': email})
+        if resp1.status_code == 200:
+            log_pass('T5', "Resend for existing user returns 200")
+            data1 = resp1.json()
+            if data1.get('ok') == True:
+                log_pass('T5', "Response has ok:true")
+            else:
+                log_fail('T5', f"Expected ok:true, got {data1.get('ok')}")
+            
+            # Check that a new token was created
+            token = db.auth_tokens.find_one({'userId': user['id'], 'purpose': 'verify_email', 'usedAt': None})
+            if token:
+                log_pass('T5', "New verify_email token exists in DB")
+            else:
+                log_fail('T5', "New verify_email token not found")
+        else:
+            log_fail('T5', f"Resend returned {resp1.status_code}")
+        
+        # Resend for non-existent user (should still return 200 - generic)
+        nobody_email = f"nobody-{ts}@example.test"
+        resp2 = requests.post(f"{API_URL}/auth/resend-verification", json={'email': nobody_email})
+        if resp2.status_code == 200:
+            log_pass('T5', "Resend for non-existent user returns 200 (generic)")
+        else:
+            log_fail('T5', f"Resend for non-existent returned {resp2.status_code}, expected 200")
+        
+        # Resend with invalid email (should still return 200 - generic)
+        resp3 = requests.post(f"{API_URL}/auth/resend-verification", json={'email': 'not an email'})
+        if resp3.status_code == 200:
+            log_pass('T5', "Resend with invalid email returns 200 (generic)")
+        else:
+            log_fail('T5', f"Resend with invalid email returned {resp3.status_code}, expected 200")
+        
+        # Test rate limit (3/hr per email)
+        # We've already sent 1, send 3 more quickly
+        rate_limited = False
+        for i in range(3):
+            resp = requests.post(f"{API_URL}/auth/resend-verification", json={'email': email})
+            if resp.status_code == 429:
+                rate_limited = True
+                log_pass('T5', f"Rate limit hit on attempt {i+2} (429)")
+                break
+            time.sleep(0.1)
+        
+        if not rate_limited:
+            log_fail('T5', "Rate limit not triggered after 4 requests (expected 3/hr)")
+    
+    except Exception as e:
+        log_fail('T5', f"Exception: {e}")
+
+# ============================================================================
+# T6: Forgot password (generic + rate limit)
+# ============================================================================
+def test_t6_forgot_password():
+    print("\n" + "="*80)
+    print("T6: Forgot password (generic + rate limit)")
+    print("="*80)
+    
+    ts = int(time.time())
+    email = f"t6-{ts}@example.test"
+    
+    try:
+        # Register and verify a user
+        resp = register_user(email, newsletter=False)
+        if resp.status_code == 200:
+            log_pass('T6', f"Registered user {email}")
+            user = db.users.find_one({'email': email})
+            if user:
+                test_users.append(user['id'])
+                
+                # Verify the user using T3 technique
+                raw_token = secrets.token_urlsafe(32)
+                insert_known_token(user['id'], 'verify_email', raw_token)
+                verify_resp = requests.post(f"{API_URL}/auth/verify-email", json={'token': raw_token})
+                if verify_resp.status_code == 200:
+                    log_pass('T6', "User verified")
+                else:
+                    log_fail('T6', f"Verification failed: {verify_resp.status_code}")
+                    return
+        else:
+            log_fail('T6', f"Failed to register user: {resp.status_code}")
+            return
+        
+        # Request password reset for existing user
+        resp1 = requests.post(f"{API_URL}/auth/forgot-password", json={'email': email})
+        if resp1.status_code == 200:
+            log_pass('T6', "Forgot password for existing user returns 200")
+            data1 = resp1.json()
+            if data1.get('ok') == True:
+                log_pass('T6', "Response has ok:true")
+            else:
+                log_fail('T6', f"Expected ok:true, got {data1.get('ok')}")
+            
+            # Check that a password_reset token was created
+            token = db.auth_tokens.find_one({'userId': user['id'], 'purpose': 'password_reset', 'usedAt': None})
+            if token:
+                log_pass('T6', "password_reset token exists in DB")
+                
+                # Check expiresAt is within 1 hour
+                expires_in = (token['expiresAt'] - datetime.utcnow()).total_seconds()
+                if 0 < expires_in <= 3600:
+                    log_pass('T6', f"Token expiresAt within 1h ({expires_in:.0f}s)")
+                else:
+                    log_fail('T6', f"Token expiresAt not within 1h: {expires_in:.0f}s")
+            else:
+                log_fail('T6', "password_reset token not found")
+        else:
+            log_fail('T6', f"Forgot password returned {resp1.status_code}")
+        
+        # Request for non-existent user (should still return 200 - generic)
+        nobody_email = f"nobody-{ts}@example.test"
+        resp2 = requests.post(f"{API_URL}/auth/forgot-password", json={'email': nobody_email})
+        if resp2.status_code == 200:
+            log_pass('T6', "Forgot password for non-existent user returns 200 (generic)")
+        else:
+            log_fail('T6', f"Forgot password for non-existent returned {resp2.status_code}, expected 200")
+        
+        # Test rate limit - fire multiple times for the same email
+        # The response should STILL be 200 even when rate-limited (no enumeration)
+        for i in range(3):
+            resp = requests.post(f"{API_URL}/auth/forgot-password", json={'email': email})
+            if resp.status_code == 200:
+                if i == 2:
+                    log_pass('T6', "Rate-limited requests still return 200 (no enumeration)")
+            else:
+                log_fail('T6', f"Request {i+1} returned {resp.status_code}, expected 200 even when rate-limited")
+            time.sleep(0.1)
+    
+    except Exception as e:
+        log_fail('T6', f"Exception: {e}")
+
+# ============================================================================
+# T7: Reset password happy path
+# ============================================================================
+def test_t7_reset_password():
+    print("\n" + "="*80)
+    print("T7: Reset password happy path")
+    print("="*80)
+    
+    # Get the T6 user
+    user = db.users.find_one({'email': {'$regex': '^t6-.*@example.test$'}}, sort=[('createdAt', -1)])
+    
+    if not user:
+        log_fail('T7', "T6 user not found in DB")
+        return
+    
+    try:
+        # Generate and insert a known password_reset token
+        raw_token = secrets.token_urlsafe(32)
+        insert_known_token(user['id'], 'password_reset', raw_token)
+        log_pass('T7', f"Inserted known password_reset token for {user['email']}")
+        
+        # Reset password
+        resp = requests.post(f"{API_URL}/auth/reset-password", json={
+            'token': raw_token,
+            'password': 'newpass456',
+            'confirmPassword': 'newpass456'
+        })
+        
+        if resp.status_code == 200:
+            log_pass('T7', "reset-password returned 200")
+            data = resp.json()
+            
+            if data.get('ok') == True:
+                log_pass('T7', "Response has ok:true")
+            else:
+                log_fail('T7', f"Expected ok:true, got {data.get('ok')}")
+            
+            # Check that osc_user cookie is cleared (Max-Age=0)
+            set_cookie = resp.headers.get('Set-Cookie', '')
+            if 'osc_user' in set_cookie and ('Max-Age=0' in set_cookie or 'max-age=0' in set_cookie):
+                log_pass('T7', "osc_user cookie cleared (Max-Age=0)")
+            else:
+                log_fail('T7', f"osc_user cookie not properly cleared: {set_cookie}")
+            
+            # Try to login with OLD password (should fail)
+            resp_old = requests.post(f"{API_URL}/login", json={
+                'email': user['email'],
+                'password': 'testpass123'
+            })
+            if resp_old.status_code == 401:
+                log_pass('T7', "Login with old password returns 401")
+            else:
+                log_fail('T7', f"Login with old password returned {resp_old.status_code}, expected 401")
+            
+            # Login with NEW password (should work)
+            session = requests.Session()
+            resp_new = session.post(f"{API_URL}/login", json={
+                'email': user['email'],
+                'password': 'newpass456'
+            })
+            if resp_new.status_code == 200:
+                log_pass('T7', "Login with new password returns 200")
+            else:
+                log_fail('T7', f"Login with new password returned {resp_new.status_code}")
+            
+            # Try to reuse the same token (should fail - single use)
+            resp2 = requests.post(f"{API_URL}/auth/reset-password", json={
+                'token': raw_token,
+                'password': 'anotherpass',
+                'confirmPassword': 'anotherpass'
+            })
+            if resp2.status_code == 400:
+                log_pass('T7', "Reusing token returns 400 (single-use)")
+            else:
+                log_fail('T7', f"Reusing token returned {resp2.status_code}, expected 400")
+            
+            # Try with short password (validation)
+            raw_token2 = secrets.token_urlsafe(32)
+            insert_known_token(user['id'], 'password_reset', raw_token2)
+            resp3 = requests.post(f"{API_URL}/auth/reset-password", json={
+                'token': raw_token2,
+                'password': 'short',
+                'confirmPassword': 'short'
+            })
+            if resp3.status_code == 400:
+                log_pass('T7', "Short password returns 400 (validation)")
+            else:
+                log_fail('T7', f"Short password returned {resp3.status_code}, expected 400")
+        else:
+            log_fail('T7', f"reset-password failed with status {resp.status_code}: {resp.text}")
+    
+    except Exception as e:
+        log_fail('T7', f"Exception: {e}")
+
+# ============================================================================
+# T8: Change password (authenticated)
+# ============================================================================
+def test_t8_change_password():
+    print("\n" + "="*80)
+    print("T8: Change password (authenticated)")
+    print("="*80)
+    
+    # Get the T6 user (now with password 'newpass456')
+    user = db.users.find_one({'email': {'$regex': '^t6-.*@example.test$'}}, sort=[('createdAt', -1)])
+    
+    if not user:
+        log_fail('T8', "T6 user not found in DB")
+        return
+    
+    try:
+        # Login as T6 user
+        session = requests.Session()
+        login_resp = session.post(f"{API_URL}/login", json={
+            'email': user['email'],
+            'password': 'newpass456'
+        })
+        
+        if login_resp.status_code != 200:
+            log_fail('T8', f"Failed to login: {login_resp.status_code}")
+            return
+        
+        log_pass('T8', "Logged in as T6 user")
+        
+        # Change password
+        resp = session.post(f"{API_URL}/me/change-password", json={
+            'currentPassword': 'newpass456',
+            'newPassword': 'finalpass789',
+            'confirmNewPassword': 'finalpass789'
+        })
+        
+        if resp.status_code == 200:
+            log_pass('T8', "change-password returned 200")
+            data = resp.json()
+            
+            if data.get('ok') == True:
+                log_pass('T8', "Response has ok:true")
+            else:
+                log_fail('T8', f"Expected ok:true, got {data.get('ok')}")
+            
+            # Check that osc_user cookie is REFRESHED (new token)
+            set_cookie = resp.headers.get('Set-Cookie', '')
+            if 'osc_user' in set_cookie and 'Max-Age=0' not in set_cookie:
+                log_pass('T8', "osc_user cookie refreshed (new token)")
+            else:
+                log_fail('T8', f"osc_user cookie not refreshed: {set_cookie}")
+            
+            # Verify the session still works
+            me_resp = session.get(f"{API_URL}/me")
+            if me_resp.status_code == 200:
+                log_pass('T8', "Session still valid after password change")
+            else:
+                log_fail('T8', f"Session invalid after password change: {me_resp.status_code}")
+        else:
+            log_fail('T8', f"change-password failed: {resp.status_code} - {resp.text}")
+        
+        # Test with wrong current password
+        resp2 = session.post(f"{API_URL}/me/change-password", json={
+            'currentPassword': 'wrongpass',
+            'newPassword': 'anotherpass',
+            'confirmNewPassword': 'anotherpass'
+        })
+        if resp2.status_code == 401:
+            log_pass('T8', "Wrong current password returns 401")
+        else:
+            log_fail('T8', f"Wrong current password returned {resp2.status_code}, expected 401")
+        
+        # Test unauthenticated (no cookie)
+        resp3 = requests.post(f"{API_URL}/me/change-password", json={
+            'currentPassword': 'finalpass789',
+            'newPassword': 'anotherpass',
+            'confirmNewPassword': 'anotherpass'
+        })
+        if resp3.status_code == 401:
+            log_pass('T8', "Unauthenticated request returns 401")
+        else:
+            log_fail('T8', f"Unauthenticated request returned {resp3.status_code}, expected 401")
+        
+        # Test with short password (validation)
+        resp4 = session.post(f"{API_URL}/me/change-password", json={
+            'currentPassword': 'finalpass789',
+            'newPassword': 'short',
+            'confirmNewPassword': 'short'
+        })
+        if resp4.status_code == 400:
+            log_pass('T8', "Short password returns 400 (validation)")
+        else:
+            log_fail('T8', f"Short password returned {resp4.status_code}, expected 400")
+        
+        # Test with same password as current
+        resp5 = session.post(f"{API_URL}/me/change-password", json={
+            'currentPassword': 'finalpass789',
+            'newPassword': 'finalpass789',
+            'confirmNewPassword': 'finalpass789'
+        })
+        if resp5.status_code == 400:
+            log_pass('T8', "Same password as current returns 400")
+        else:
+            log_fail('T8', f"Same password returned {resp5.status_code}, expected 400")
+    
+    except Exception as e:
+        log_fail('T8', f"Exception: {e}")
+
+# ============================================================================
+# T9: Admin verify controls
+# ============================================================================
+def test_t9_admin_verify():
+    print("\n" + "="*80)
+    print("T9: Admin verify controls")
+    print("="*80)
+    
+    ts = int(time.time())
+    email_t9 = f"t9-{ts}@example.test"
+    email_t9b = f"t9b-{ts}@example.test"
+    
+    try:
+        # Register unverified t9 user
+        resp = register_user(email_t9, newsletter=False)
+        if resp.status_code == 200:
+            log_pass('T9', f"Registered user {email_t9}")
+            user_t9 = db.users.find_one({'email': email_t9})
+            if user_t9:
+                test_users.append(user_t9['id'])
+        else:
+            log_fail('T9', f"Failed to register t9: {resp.status_code}")
+            return
+        
+        # Admin login
+        admin_session = admin_login()
+        if not admin_session:
+            log_fail('T9', "Failed to login as admin")
+            return
+        
+        log_pass('T9', "Logged in as admin")
+        
+        # Mark t9 as verified
+        resp1 = admin_session.post(f"{API_URL}/admin/users/{user_t9['id']}/mark-verified")
+        if resp1.status_code == 200:
+            log_pass('T9', "mark-verified returned 200")
+            data1 = resp1.json()
+            
+            if data1.get('emailVerifiedAt'):
+                log_pass('T9', "Response includes emailVerifiedAt")
+            else:
+                log_fail('T9', "Response missing emailVerifiedAt")
+            
+            # Verify in DB
+            user_t9_updated = db.users.find_one({'id': user_t9['id']})
+            if user_t9_updated and user_t9_updated.get('emailVerified') == True:
+                log_pass('T9', "DB: emailVerified:true after mark-verified")
+            else:
+                log_fail('T9', "DB: emailVerified not set to true")
+        else:
+            log_fail('T9', f"mark-verified failed: {resp1.status_code} - {resp1.text}")
+        
+        # Register unverified t9b user
+        resp2 = register_user(email_t9b, newsletter=False)
+        if resp2.status_code == 200:
+            log_pass('T9', f"Registered user {email_t9b}")
+            user_t9b = db.users.find_one({'email': email_t9b})
+            if user_t9b:
+                test_users.append(user_t9b['id'])
+        else:
+            log_fail('T9', f"Failed to register t9b: {resp2.status_code}")
+            return
+        
+        # Admin resend verification for t9b
+        resp3 = admin_session.post(f"{API_URL}/admin/users/{user_t9b['id']}/resend-verification")
+        if resp3.status_code == 200:
+            log_pass('T9', "resend-verification returned 200")
+            data3 = resp3.json()
+            
+            if data3.get('emailSent') == False:
+                log_pass('T9', "emailSent:false (RESEND unconfigured)")
+            else:
+                log_fail('T9', f"Expected emailSent:false, got {data3.get('emailSent')}")
+            
+            if data3.get('emailSkipped') == True:
+                log_pass('T9', "emailSkipped:true (RESEND unconfigured)")
+            else:
+                log_fail('T9', f"Expected emailSkipped:true, got {data3.get('emailSkipped')}")
+            
+            if data3.get('error') is None:
+                log_pass('T9', "error:null")
+            else:
+                log_fail('T9', f"Expected error:null, got {data3.get('error')}")
+        else:
+            log_fail('T9', f"resend-verification failed: {resp3.status_code} - {resp3.text}")
+        
+        # Try to resend for ALREADY verified user (t9)
+        resp4 = admin_session.post(f"{API_URL}/admin/users/{user_t9['id']}/resend-verification")
+        if resp4.status_code == 400:
+            log_pass('T9', "resend-verification for verified user returns 400")
+            data4 = resp4.json()
+            if 'already verified' in data4.get('error', '').lower():
+                log_pass('T9', "Error message mentions 'already verified'")
+            else:
+                log_fail('T9', f"Error message: {data4.get('error')}")
+        else:
+            log_fail('T9', f"resend-verification for verified user returned {resp4.status_code}, expected 400")
+    
+    except Exception as e:
+        log_fail('T9', f"Exception: {e}")
+
+# ============================================================================
+# T10: Admin overview mailer status
+# ============================================================================
+def test_t10_admin_overview():
+    print("\n" + "="*80)
+    print("T10: Admin overview mailer status")
+    print("="*80)
+    
+    try:
+        # Admin login
+        admin_session = admin_login()
+        if not admin_session:
+            log_fail('T10', "Failed to login as admin")
+            return
+        
+        log_pass('T10', "Logged in as admin")
+        
+        # GET /api/admin/overview
+        resp = admin_session.get(f"{API_URL}/admin/overview")
+        if resp.status_code == 200:
+            log_pass('T10', "GET /admin/overview returned 200")
+            data = resp.json()
+            
+            mailer = data.get('mailer')
+            if mailer:
+                log_pass('T10', "Response includes mailer object")
+                
+                if mailer.get('provider') == 'resend':
+                    log_pass('T10', "mailer.provider:'resend'")
+                else:
+                    log_fail('T10', f"Expected provider:'resend', got {mailer.get('provider')}")
+                
+                if mailer.get('configured') == False:
+                    log_pass('T10', "mailer.configured:false")
+                else:
+                    log_fail('T10', f"Expected configured:false, got {mailer.get('configured')}")
+                
+                if mailer.get('hasKey') == False:
+                    log_pass('T10', "mailer.hasKey:false")
+                else:
+                    log_fail('T10', f"Expected hasKey:false, got {mailer.get('hasKey')}")
+                
+                if mailer.get('hasFrom') == False:
+                    log_pass('T10', "mailer.hasFrom:false")
+                else:
+                    log_fail('T10', f"Expected hasFrom:false, got {mailer.get('hasFrom')}")
+                
+                if mailer.get('from') is None:
+                    log_pass('T10', "mailer.from:null")
+                else:
+                    log_fail('T10', f"Expected from:null, got {mailer.get('from')}")
+            else:
+                log_fail('T10', "Response missing mailer object")
+        else:
+            log_fail('T10', f"GET /admin/overview failed: {resp.status_code} - {resp.text}")
+    
+    except Exception as e:
+        log_fail('T10', f"Exception: {e}")
+
+# ============================================================================
+# MAIN
+# ============================================================================
+if __name__ == '__main__':
+    print("\n" + "="*80)
+    print("SESSION 11: Email Verification + Password Management Backend Test")
     print("="*80)
     print(f"Base URL: {BASE_URL}")
-    print(f"Admin: {ADMIN_EMAIL}")
+    print(f"API URL: {API_URL}")
+    print(f"MongoDB: {MONGO_URL}/{DB_NAME}")
     print("="*80)
     
-    # Admin login
-    if not admin_login():
-        print("\n❌ FATAL: Admin login failed. Cannot continue.")
-        sys.exit(1)
-    
-    # Run all test steps
-    results = []
-    
-    results.append(("Step 1: Auth guard", test_step_1_auth_guard()))
-    results.append(("Step 2: Missing/wrong confirmation", test_step_2_missing_wrong_confirmation()))
-    results.append(("Step 3: Happy path", test_step_3_happy_path()))
-    results.append(("Step 4: Newsletter anonymisation", test_step_4_newsletter_anonymisation()))
-    results.append(("Step 5: Admin overview counter", test_step_5_admin_overview_counter()))
-    results.append(("Step 6: Rate limit", test_step_6_rate_limit()))
-    results.append(("Step 7: Admin delete still works", test_step_7_admin_delete()))
-    results.append(("Step 8: Cleanup", test_step_8_cleanup()))
-    
-    # Summary
-    print("\n" + "="*80)
-    print("TEST SUMMARY")
-    print("="*80)
-    
-    passed = sum(1 for _, result in results if result)
-    total = len(results)
-    
-    for step_name, result in results:
-        status = "✅ PASS" if result else "❌ FAIL"
-        print(f"{status}: {step_name}")
-    
-    print("="*80)
-    print(f"TOTAL: {passed}/{total} tests passed ({100*passed//total}%)")
-    print("="*80)
-    
-    if passed == total:
-        print("\n🎉 ALL TESTS PASSED!")
-        sys.exit(0)
-    else:
-        print(f"\n⚠️  {total - passed} test(s) failed.")
-        sys.exit(1)
-
-if __name__ == "__main__":
-    main()
+    try:
+        # Run all tests
+        test_t1_register_unverified()
+        test_t2_login_blocked()
+        test_t3_verify_email()
+        test_t4_login_works()
+        test_t5_resend_verification()
+        test_t6_forgot_password()
+        test_t7_reset_password()
+        test_t8_change_password()
+        test_t9_admin_verify()
+        test_t10_admin_overview()
+        
+        # Print summary
+        print_summary()
+        
+    finally:
+        # Cleanup
+        cleanup_test_users()
+        mongo_client.close()

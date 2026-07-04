@@ -59,6 +59,8 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [name, setName] = useState('')
+  const [sentTo, setSentTo] = useState('')      // set after successful register \u2192 shows "check your email"
+  const [emailSkipped, setEmailSkipped] = useState(false)  // provider unconfigured warning
 
   useEffect(() => {
     // Purge any legacy client-side id from pre-cookie installs.
@@ -80,8 +82,10 @@ export default function RegisterPage() {
     if (password.length < 8) { setError('Password must be at least 8 characters.'); return }
     setLoading(true)
     try {
-      await api('/register', { method: 'POST', body: { email, password, confirmPassword, name, country, city, role, newsletter } })
-      router.replace('/')
+      const res = await api('/register', { method: 'POST', body: { email, password, confirmPassword, name, country, city, role, newsletter } })
+      // Registration no longer logs you in \u2014 you must verify your email first.
+      setSentTo(email.trim().toLowerCase())
+      setEmailSkipped(!!res?.emailSkipped)
     } catch (e) {
       if (e.status === 409) setError('This email is already registered. Please log in or contact support.')
       else if (e.status === 429) setError('Too many attempts. Please try again in a few minutes.')
@@ -89,7 +93,41 @@ export default function RegisterPage() {
     } finally { setLoading(false) }
   }
 
+  const resend = async () => {
+    setError('')
+    try {
+      await api('/auth/resend-verification', { method: 'POST', body: { email: sentTo } })
+      setError('')
+    } catch { /* generic response either way */ }
+  }
+
   if (checking) return <AuthShell title="…"><div className="grid place-items-center py-8"><Loader2 className="h-6 w-6 animate-spin text-slate-400" /></div></AuthShell>
+
+  if (sentTo) {
+    return (
+      <AuthShell title="Please check your email" subtitle="We sent a verification link to your inbox.">
+        <div className="mt-6 space-y-4">
+          <div className="rounded-lg border border-blue-100 bg-blue-50 p-4">
+            <p className="text-sm text-blue-900">
+              We just emailed a verification link to <strong className="font-medium">{sentTo}</strong>. Click the link within 24 hours to activate your account.
+            </p>
+          </div>
+          {emailSkipped && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+              <strong>Admin note:</strong> The email provider is not configured in this environment — no email was actually sent. Configure <code>RESEND_API_KEY</code> and <code>EMAIL_FROM</code>, or ask an admin to manually verify this account.
+            </div>
+          )}
+          <p className="text-xs text-slate-500">
+            Not in your inbox? Check the spam folder, or{' '}
+            <button type="button" onClick={resend} className="text-blue-700 hover:underline">resend the verification email</button>.
+          </p>
+          <div className="pt-2 text-sm text-slate-500 text-center">
+            Already verified? <Link href="/login" className="text-blue-700 hover:underline">Log in</Link>
+          </div>
+        </div>
+      </AuthShell>
+    )
+  }
 
   return (
     <AuthShell title="Create your account" subtitle="Free forever. Learn spirits, cocktails and hospitality with evidence-based lessons.">

@@ -133,6 +133,28 @@ function Overview() {
           </p>
         </div>
       )}
+      {data.mailer && (
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Email delivery</div>
+          <div className={`rounded-xl border p-4 text-sm ${data.mailer.configured ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
+            {data.mailer.configured ? (
+              <>
+                <div className="font-medium">Resend is configured.</div>
+                <div className="mt-1 text-xs">FROM: <code className="font-mono">{data.mailer.from}</code></div>
+              </>
+            ) : (
+              <>
+                <div className="font-medium">Email provider is NOT configured.</div>
+                <div className="mt-1 text-xs">
+                  {!data.mailer.hasKey && <>Missing <code className="font-mono">RESEND_API_KEY</code>. </>}
+                  {!data.mailer.hasFrom && <>Missing or malformed <code className="font-mono">EMAIL_FROM</code>. </>}
+                  Verification / password-reset / password-change emails will be skipped. Configure env vars in Emergent then redeploy.
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
       {ver && (
         <div className="pt-4 border-t border-slate-100 text-[11px] font-mono text-slate-400 flex flex-wrap gap-x-4 gap-y-1">
           <span>Build: <span className="text-slate-500">{ver.version}</span></span>
@@ -1124,7 +1146,35 @@ function UserDetail({ id, onBack }) {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{d.user.name || d.user.email}</h1>
           <p className="text-sm text-slate-500">{d.user.email} · joined {new Date(d.user.createdAt).toLocaleString()}</p>
-          <p className="text-xs text-slate-400 mt-0.5">Auth: {d.user.authMethod || d.user.provider || 'email'} · Verified: {d.user.verified === false ? 'No' : 'Yes'} · ID: <code className="font-mono">{d.user.id}</code></p>
+          <p className="text-xs text-slate-400 mt-0.5">Auth: {d.user.authMethod || d.user.provider || 'email'} · ID: <code className="font-mono">{d.user.id}</code></p>
+          <div className="text-xs mt-1.5 flex flex-wrap items-center gap-2">
+            {d.user.emailVerified === false ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-medium">Email not verified</span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-medium">
+                Email verified{d.user.emailVerifiedAt ? ` · ${new Date(d.user.emailVerifiedAt).toLocaleDateString()}` : ''}
+              </span>
+            )}
+            {d.user.passwordLastChangedAt && (
+              <span className="text-slate-500">Password changed: {new Date(d.user.passwordLastChangedAt).toLocaleDateString()}</span>
+            )}
+          </div>
+          {d.user.emailVerified === false && (
+            <div className="mt-2 flex items-center gap-2">
+              <button
+                onClick={async () => { try { await api(`/admin/users/${id}/mark-verified`, { method: 'POST' }); toast.success('Marked as verified.'); await load() } catch (e) { toast.error(e.message) } }}
+                className="h-8 px-3 rounded-md border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs inline-flex items-center gap-1.5"
+              >
+                <Check className="h-3.5 w-3.5" /> Mark verified
+              </button>
+              <button
+                onClick={async () => { try { const r = await api(`/admin/users/${id}/resend-verification`, { method: 'POST' }); if (r.emailSkipped) toast.error('Email provider not configured (RESEND_API_KEY / EMAIL_FROM). Nothing was sent.'); else if (r.error) toast.error(r.error); else toast.success('Verification email sent.') } catch (e) { toast.error(e.message) } }}
+                className="h-8 px-3 rounded-md border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs inline-flex items-center gap-1.5"
+              >
+                <Mail className="h-3.5 w-3.5" /> Resend verification email
+              </button>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <button

@@ -814,6 +814,56 @@ const StudyView = ({ user, onNav }) => {
   )
 }
 
+const ChangePasswordCard = () => {
+  const [current, setCurrent] = useState('')
+  const [next, setNext] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState(null)   // {type:'ok'|'err', text}
+  const submit = async (e) => {
+    e.preventDefault(); setMsg(null)
+    if (next.length < 8) { setMsg({ type: 'err', text: 'New password must be at least 8 characters.' }); return }
+    if (next !== confirm) { setMsg({ type: 'err', text: 'New password and confirmation do not match.' }); return }
+    if (next === current) { setMsg({ type: 'err', text: 'Please choose a password different from your current one.' }); return }
+    setBusy(true)
+    try {
+      await api('/me/change-password', { method: 'POST', body: { currentPassword: current, newPassword: next, confirmNewPassword: confirm } })
+      setMsg({ type: 'ok', text: 'Password updated. You\u2019ll stay signed in on this device. A confirmation email has been sent.' })
+      setCurrent(''); setNext(''); setConfirm('')
+    } catch (err) {
+      setMsg({ type: 'err', text: err?.message || 'Could not update your password. Please try again.' })
+    } finally { setBusy(false) }
+  }
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-6">
+      <h3 className="font-semibold text-slate-900">Change password</h3>
+      <p className="text-sm text-slate-500 mt-1">Minimum 8 characters. We&rsquo;ll email you a confirmation for every password change.</p>
+      <form onSubmit={submit} className="mt-4 space-y-3">
+        <div>
+          <label className="block text-xs font-medium text-slate-700 mb-1">Current password</label>
+          <input type="password" required value={current} onChange={(e) => setCurrent(e.target.value)} autoComplete="current-password" className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">New password</label>
+            <input type="password" required minLength={8} value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Confirm new password</label>
+            <input type="password" required minLength={8} value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+        </div>
+        {msg && (
+          <div className={`text-sm rounded-md border px-3 py-2 ${msg.type === 'ok' ? 'text-emerald-800 bg-emerald-50 border-emerald-100' : 'text-red-700 bg-red-50 border-red-100'}`}>{msg.text}</div>
+        )}
+        <button disabled={busy} className="h-10 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium disabled:opacity-60 inline-flex items-center gap-2">
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Update password'}
+        </button>
+      </form>
+    </div>
+  )
+}
+
 const ProfileView = ({ user, setUser, onNav }) => {
   const [name, setName] = useState(user?.name || '')
   const [newsletter, setNewsletter] = useState(user?.newsletter || false)
@@ -915,6 +965,8 @@ const ProfileView = ({ user, setUser, onNav }) => {
           <div><div className="text-2xl font-semibold text-slate-900">{stats?.minutesStudied ?? 0}m</div><div className="text-xs text-slate-500 uppercase tracking-wide mt-1">Time</div></div>
         </div>
       </div>
+
+      <ChangePasswordCard />
 
       {/* GDPR Art. 17 — self-service Right to erasure. Visually separated + danger-styled. */}
       <div className="rounded-2xl border-2 border-red-200 bg-red-50/50 p-6">

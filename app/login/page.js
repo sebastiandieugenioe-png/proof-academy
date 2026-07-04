@@ -41,6 +41,8 @@ function LoginInner() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [needsVerify, setNeedsVerify] = useState(false) // shown when login is blocked for unverified email
+  const [resent, setResent] = useState(false)
 
   useEffect(() => {
     // Purge any legacy client-side id from pre-cookie installs.
@@ -57,15 +59,27 @@ function LoginInner() {
   }, [router, nextPath])
 
   const submit = async (e) => {
-    e.preventDefault(); setError('')
+    e.preventDefault(); setError(''); setNeedsVerify(false); setResent(false)
     setLoading(true)
     try {
       await api('/login', { method: 'POST', body: { email, password } })
       router.replace(nextPath)
     } catch (e) {
-      // Generic error message — do not leak whether an account exists.
-      setError('Invalid email or password.')
+      // Specifically surface EMAIL_NOT_VERIFIED so users can trigger a resend.
+      if (e.status === 403 && e.body?.code === 'EMAIL_NOT_VERIFIED') {
+        setNeedsVerify(true)
+      } else {
+        // Generic error message — do not leak whether an account exists.
+        setError('Invalid email or password.')
+      }
     } finally { setLoading(false) }
+  }
+
+  const doResend = async () => {
+    try {
+      await api('/auth/resend-verification', { method: 'POST', body: { email: email.trim().toLowerCase() } })
+    } catch { /* generic response */ }
+    setResent(true)
   }
 
   if (checking) {
@@ -101,9 +115,28 @@ function LoginInner() {
                 <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required autoComplete="email" placeholder="you@example.com" className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Password</label>
+                <div className="flex items-baseline justify-between">
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Password</label>
+                  <Link href="/forgot-password" className="text-xs text-blue-700 hover:underline">Forgot?</Link>
+                </div>
                 <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" required autoComplete="current-password" className="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
               </div>
+              {needsVerify && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 space-y-2">
+                  <p><strong>Please verify your email before logging in.</strong></p>
+                  <p className="text-xs">We sent a link to <span className="font-medium">{email}</span> when you signed up. It expires 24h after we send it.</p>
+                  {resent ? (
+                    <p className="text-xs text-emerald-700">If an account exists for that email, a fresh verification link has been sent. Please check your inbox (and spam folder).</p>
+                  ) : (
+                    <button type="button" onClick={doResend} className="text-xs font-medium text-amber-800 underline hover:no-underline">Resend verification email</button>
+                  )}
+                </div>
+              )}
+              {sp?.get('reset') === '1' && (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800 text-sm px-3 py-2">
+                  Your password has been updated. Please log in with your new password.
+                </div>
+              )}
               {error && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md p-2">{error}</div>}
               <button disabled={loading} className="w-full h-11 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium disabled:opacity-60 inline-flex items-center justify-center gap-2">
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Log in <ArrowRight className="h-4 w-4" /></>}
