@@ -157,10 +157,10 @@ const Landing = ({ courses }) => {
         </p>
         <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
           <a href="/register" className="h-12 px-7 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium inline-flex items-center gap-2 transition">
-            Start learning <ArrowRight className="h-4 w-4" />
+            Start Learning <ArrowRight className="h-4 w-4" />
           </a>
           <a href="#paths" className="h-12 px-5 text-slate-700 hover:text-slate-900 font-medium inline-flex items-center gap-1 transition">
-            Browse learning paths <ChevronRight className="h-4 w-4" />
+            Explore Learning Paths <ChevronRight className="h-4 w-4" />
           </a>
         </div>
         <p className="mt-8 text-xs text-slate-400 tracking-wide">
@@ -456,6 +456,9 @@ const Landing = ({ courses }) => {
               Begin <ArrowRight className="h-4 w-4" />
             </a>
           </div>
+          <p className="mt-16 text-sm italic text-slate-400 tracking-wide">
+            Knowledge compounds. Careers follow.
+          </p>
         </div>
       </section>
 
