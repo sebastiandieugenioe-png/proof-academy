@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Lock, Loader2, ShieldAlert, LogIn } from 'lucide-react'
+import OscLogo from '@/components/OscLogo'
 
 export default function AdminUnlock() {
   const [email, setEmail] = useState('')
@@ -43,7 +44,10 @@ export default function AdminUnlock() {
     <div className="min-h-screen bg-gradient-to-b from-slate-100 to-white grid place-items-center px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-6">
-          <div className="inline-flex h-11 w-11 rounded-xl bg-slate-900 text-white items-center justify-center shadow-md"><Lock className="h-5 w-5" /></div>
+          <div className="inline-flex flex-col items-center gap-3">
+            <OscLogo size={40} />
+            <div className="inline-flex h-9 w-9 rounded-lg bg-slate-900 text-white items-center justify-center shadow-sm"><Lock className="h-4 w-4" /></div>
+          </div>
           <h1 className="mt-3 text-2xl font-semibold tracking-tight text-slate-900">Admin access</h1>
           <p className="text-sm text-slate-500 mt-1">Restricted area. Two-factor gate.</p>
         </div>

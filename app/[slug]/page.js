@@ -6,6 +6,7 @@ import { getDb } from '@/lib/mongo';
 import { htmlToPlainText } from '@/lib/sanitize';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import OscLogo from '@/components/OscLogo';
 import PublicFooter from '@/components/PublicFooter';
 
 export const dynamic = 'force-dynamic';
@@ -54,9 +55,9 @@ export default async function PublicPage({ params }) {
     <div className="min-h-screen bg-white text-slate-900">
       <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/80 backdrop-blur">
         <div className="mx-auto max-w-6xl px-4 h-14 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-700 grid place-items-center text-white text-sm font-bold shadow-sm">OS</div>
-            <span className="font-semibold tracking-tight text-slate-900 hidden sm:inline">Online Spirits Club</span>
+          <Link href="/" className="flex items-center gap-2" aria-label="Online Spirits Club — home">
+            <OscLogo size={28} className="sm:hidden" />
+            <OscLogo variant="full" size={28} className="hidden sm:inline-flex" />
           </Link>
         </div>
       </header>

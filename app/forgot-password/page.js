@@ -7,6 +7,7 @@ import { useState, Suspense } from 'react'
 import Link from 'next/link'
 import { Loader2, Mail, ArrowLeft } from 'lucide-react'
 import PublicFooter from '@/components/PublicFooter'
+import OscLogo from '@/components/OscLogo'
 
 function api(path, opts = {}) {
   return fetch(`/api${path}`, {
@@ -79,9 +80,9 @@ export default function ForgotPasswordPage() {
     <div className="min-h-screen bg-slate-50 flex flex-col">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto max-w-6xl px-4 h-14 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-700 grid place-items-center text-white text-sm font-bold">OS</div>
-            <span className="font-semibold text-slate-900 hidden sm:inline">Online Spirits Club</span>
+          <Link href="/" className="flex items-center gap-2" aria-label="Online Spirits Club — home">
+            <OscLogo size={28} className="sm:hidden" />
+            <OscLogo variant="full" size={28} className="hidden sm:inline-flex" />
           </Link>
           <Link href="/" className="text-sm text-slate-500 hover:text-slate-800 inline-flex items-center gap-1"><ArrowLeft className="h-4 w-4" /> Home</Link>
         </div>

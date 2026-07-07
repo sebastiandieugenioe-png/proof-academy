@@ -8,6 +8,7 @@ import {
   Zap, StopCircle, Timer, Award, Smartphone, Trash2, AlertTriangle,
 } from 'lucide-react'
 import PublicFooter from '@/components/PublicFooter'
+import OscLogo from '@/components/OscLogo'
 
 const ICONS = { Flame, GlassWater, Sparkles }
 
@@ -83,9 +84,9 @@ const FullPageLoader = () => (
 )
 
 const Logo = ({ onClick }) => (
-  <button onClick={onClick} className="flex items-center gap-2 group">
-    <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-700 grid place-items-center text-white text-sm font-bold shadow-sm">OS</div>
-    <span className="font-semibold tracking-tight text-slate-900 hidden sm:inline">Online Spirits Club</span>
+  <button onClick={onClick} className="flex items-center gap-2 group" aria-label="Online Spirits Club — home">
+    <OscLogo size={28} className="sm:hidden" />
+    <OscLogo variant="full" size={28} className="hidden sm:inline-flex" />
   </button>
 )
 
