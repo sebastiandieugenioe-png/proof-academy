@@ -133,58 +133,335 @@ const BottomNav = ({ user, route, onNav }) => {
   )
 }
 
-const Landing = ({ courses, onCta }) => (
-  <div className="space-y-16 pt-4 md:pt-10">
-    <section className="text-center max-w-3xl mx-auto">
-      <div className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-800 mb-6">
-        <Sparkles className="h-3.5 w-3.5" /> Free forever · evidence-based · no ads
-      </div>
-      <h1 className="text-4xl md:text-6xl font-semibold tracking-tight text-slate-900">
-        Master spirits, cocktails <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">& hospitality.</span>
-      </h1>
-      <p className="mt-5 text-lg text-slate-600 leading-relaxed">
-        The free, science-based platform to learn behind-the-bar knowledge in 3–5 minute modules. Active recall, study cards, spaced repetition. No XP, no streaks — just real learning.
-      </p>
-      <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-        <a href="/register" className="h-11 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm inline-flex items-center gap-2">Start free <ArrowRight className="h-4 w-4" /></a>
-        <a href="#courses" className="h-11 px-6 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-800 font-medium">See learning paths</a>
-      </div>
-      <p className="mt-4 text-xs text-slate-400">Free forever. No ads. No credit card required.</p>
-    </section>
+// =====================================================================
+// Landing — repositioned homepage (institutional, typography-first, calm)
+// Sections: Hero · Premise · For Professionals · Method · Curriculum ·
+//           Structured vs Scattered · Science · Career · Certifications ·
+//           Promise · FAQ · Closing CTA
+// =====================================================================
+const Landing = ({ courses }) => {
+  const publishedCount = courses?.length || 0
+  return (
+    <div className="pb-8">
 
-    <section className="grid gap-4 md:grid-cols-4">
-      {[
-        { icon: Brain, title: 'Active recall', body: 'Embedded questions and knowledge checks proven to strengthen memory.' },
-        { icon: Repeat, title: 'Spaced repetition', body: 'Anki-inspired study sessions that surface cards right before you forget.' },
-        { icon: Layers, title: 'Microlearning', body: '3–5 minute modules that fit between shifts, classes, or coffees.' },
-        { icon: Target, title: 'For real bartenders', body: 'Built for barbacks, waiters, students — the pros of tomorrow.' },
-      ].map((f, i) => (
-        <div key={i} className="rounded-xl border border-slate-200 bg-white p-5">
-          <f.icon className="h-5 w-5 text-blue-600" />
-          <h3 className="mt-3 font-semibold text-slate-900">{f.title}</h3>
-          <p className="mt-1 text-sm text-slate-600 leading-relaxed">{f.body}</p>
+      {/* 1. HERO ------------------------------------------------------- */}
+      <section className="pt-8 md:pt-24 pb-20 md:pb-32 text-center max-w-4xl mx-auto">
+        <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500 font-medium">
+          Online Spirits Club — Est. 2025
         </div>
-      ))}
-    </section>
+        <h1 className="mt-8 text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-semibold tracking-tight text-slate-900 leading-[1.05]">
+          The modern learning platform for hospitality professionals.
+        </h1>
+        <p className="mt-8 text-lg md:text-xl text-slate-600 leading-relaxed max-w-2xl mx-auto">
+          Free. Structured. Evidence-based. Built for your career.
+        </p>
+        <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
+          <a href="/register" className="h-12 px-7 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium inline-flex items-center gap-2 transition">
+            Start learning <ArrowRight className="h-4 w-4" />
+          </a>
+          <a href="#paths" className="h-12 px-5 text-slate-700 hover:text-slate-900 font-medium inline-flex items-center gap-1 transition">
+            Browse learning paths <ChevronRight className="h-4 w-4" />
+          </a>
+        </div>
+        <p className="mt-8 text-xs text-slate-400 tracking-wide">
+          Free forever · No ads · No credit card
+        </p>
+      </section>
 
-    <section id="courses" className="space-y-4">
-      <div className="flex items-end justify-between">
-        <h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">Beginner learning paths</h2>
-        <p className="text-sm text-slate-500 hidden md:block">More coming: Hospitality &amp; Intermediate levels.</p>
-      </div>
-      <div className="grid gap-4 md:grid-cols-3">
-        {courses.map((c) => <CourseCard key={c.slug} course={c} onClick={onCta} />)}
-      </div>
-    </section>
+      {/* 2. PREMISE ---------------------------------------------------- */}
+      <section className="border-t border-slate-200 py-20 md:py-28">
+        <div className="max-w-3xl mx-auto">
+          <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500 font-medium mb-6">
+            Why OSC exists
+          </div>
+          <p className="text-2xl md:text-3xl text-slate-900 leading-snug font-normal tracking-tight">
+            Great hospitality is built on knowledge. OSC organizes that knowledge into a modern curriculum you can trust.
+          </p>
+          <p className="mt-6 text-base md:text-lg text-slate-500 leading-relaxed">
+            We are not a marketplace. We are not a video library. We are building a serious educational institution for the people who make hospitality work — starting with spirits and cocktails, and expanding into wine, coffee, service, management and leadership.
+          </p>
+        </div>
+      </section>
 
-    <section className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-indigo-50 p-8 md:p-10 text-center">
-      <PartyPopper className="h-6 w-6 text-blue-600 mx-auto" />
-      <h3 className="mt-3 text-2xl font-semibold text-slate-900">Ready to actually learn?</h3>
-      <p className="mt-2 text-slate-600 max-w-md mx-auto">Create a free account and start your first module. Newsletter is optional.</p>
-      <a href="/register" className="mt-5 inline-flex h-11 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium items-center">Get started free</a>
-    </section>
-  </div>
-)
+      {/* 3. FOR PROFESSIONALS ----------------------------------------- */}
+      <section className="border-t border-slate-200 py-20 md:py-28">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500 font-medium mb-6">
+            Who this is for
+          </div>
+          <h2 className="text-3xl md:text-5xl font-semibold tracking-tight text-slate-900 leading-[1.1]">
+            Built for the people who make hospitality work.
+          </h2>
+          <p className="mt-6 text-base md:text-lg text-slate-600 leading-relaxed max-w-2xl">
+            Whether you are behind the bar tonight or leading a team next year, OSC meets you where you are.
+          </p>
+          <div className="mt-12 grid grid-cols-2 md:grid-cols-3 gap-y-4 gap-x-8">
+            {[
+              'Bartenders', 'Sommeliers', 'Baristas',
+              'Waiters', 'Restaurant Managers', 'Hotel Staff',
+              'Hotel Managers', 'Brand Ambassadors', 'Hospitality Students',
+            ].map((role) => (
+              <div key={role} className="border-t border-slate-100 pt-3 text-base font-medium text-slate-800">{role}</div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 4. HOW LEARNING WORKS ---------------------------------------- */}
+      <section className="border-t border-slate-200 py-20 md:py-28">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500 font-medium mb-6">
+            The method
+          </div>
+          <h2 className="text-3xl md:text-5xl font-semibold tracking-tight text-slate-900 leading-[1.1]">
+            Four steps, deliberately structured.
+          </h2>
+          <div className="mt-14 grid gap-10 md:gap-14 md:grid-cols-2">
+            {[
+              { n: '01', t: 'Learning Paths', b: 'Choose a discipline — spirits and cocktails today; wine, coffee, service and leadership soon.' },
+              { n: '02', t: 'Modules', b: 'Short lessons of 3–5 minutes, designed to be studied between shifts or over coffee.' },
+              { n: '03', t: 'Study Cards', b: 'Memorize what matters through active recall — the most effective form of learning.' },
+              { n: '04', t: 'Knowledge Checks', b: 'Prove what you know before moving forward. Retention over speed.' },
+            ].map((s) => (
+              <div key={s.n} className="border-t border-slate-200 pt-6">
+                <div className="text-xs font-mono text-slate-400 tracking-wider">{s.n}</div>
+                <h3 className="mt-3 text-xl md:text-2xl font-semibold text-slate-900 tracking-tight">{s.t}</h3>
+                <p className="mt-2 text-slate-600 leading-relaxed">{s.b}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 5. CURRICULUM ------------------------------------------------ */}
+      <section id="paths" className="border-t border-slate-200 py-20 md:py-28 scroll-mt-20">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500 font-medium mb-6">
+            The curriculum
+          </div>
+          <h2 className="text-3xl md:text-5xl font-semibold tracking-tight text-slate-900 leading-[1.1]">
+            A growing library of professional disciplines.
+          </h2>
+          <p className="mt-6 text-base md:text-lg text-slate-600 leading-relaxed max-w-2xl">
+            Everything on OSC is free. New paths are added regularly, following the same evidence-based method.
+          </p>
+
+          {/* Available now */}
+          <div className="mt-14">
+            <div className="flex items-baseline justify-between border-b border-slate-300 pb-3">
+              <div className="text-sm font-medium text-slate-900">Available now</div>
+              <div className="text-xs text-slate-500 uppercase tracking-wider">{publishedCount} {publishedCount === 1 ? 'path' : 'paths'}</div>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {(courses || []).length === 0 && (
+                <div className="py-6 text-sm text-slate-400 italic">Learning paths loading…</div>
+              )}
+              {(courses || []).map((c) => (
+                <a
+                  key={c.slug}
+                  href="/register"
+                  className="flex items-baseline justify-between py-5 group hover:bg-slate-50 -mx-4 px-4 rounded-md transition"
+                >
+                  <div className="min-w-0 pr-4">
+                    <div className="text-base md:text-lg font-semibold text-slate-900 tracking-tight">{c.title}</div>
+                    <div className="mt-1 text-sm text-slate-500 line-clamp-1">{c.tagline}</div>
+                  </div>
+                  <div className="flex items-baseline gap-4 md:gap-6 text-xs text-slate-500 shrink-0">
+                    <span className="hidden sm:inline uppercase tracking-wider">{c.level}</span>
+                    <span className="uppercase tracking-wider">{c.lessonCount} modules</span>
+                    <ArrowRight className="h-4 w-4 text-slate-400 group-hover:text-slate-900 group-hover:translate-x-0.5 transition" />
+                  </div>
+                </a>
+              ))}
+            </div>
+          </div>
+
+          {/* In development */}
+          <div className="mt-16">
+            <div className="flex items-baseline justify-between border-b border-slate-300 pb-3">
+              <div className="text-sm font-medium text-slate-900">In development</div>
+              <div className="text-xs text-slate-500 uppercase tracking-wider">Coming</div>
+            </div>
+            <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-y-3 gap-x-8">
+              {['Wine', 'Beer', 'Coffee', 'Tea', 'Luxury Service', 'Restaurant Management', 'Hotel Management', 'Leadership', 'Career Development'].map((d) => (
+                <div key={d} className="border-t border-slate-100 pt-3 text-base font-medium text-slate-500">{d}</div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 6. STRUCTURED vs SCATTERED ----------------------------------- */}
+      <section className="border-t border-slate-200 py-20 md:py-28">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500 font-medium mb-6">
+            The difference
+          </div>
+          <h2 className="text-3xl md:text-5xl font-semibold tracking-tight text-slate-900 leading-[1.1]">
+            Structured learning is not the same as scrolling.
+          </h2>
+          <p className="mt-6 text-base md:text-lg text-slate-600 leading-relaxed max-w-2xl">
+            Watching videos feels like learning. Real learning is what remains a month later.
+          </p>
+          <div className="mt-14 grid md:grid-cols-2 gap-10 md:gap-16">
+            <div className="border-t-2 border-slate-200 pt-6">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400 font-medium">Scattered</div>
+              <ul className="mt-5 space-y-3 text-slate-500 text-base leading-relaxed">
+                <li>Random YouTube videos</li>
+                <li>Forgetting what you learned</li>
+                <li>No path forward</li>
+                <li>Advice from strangers</li>
+              </ul>
+            </div>
+            <div className="border-t-2 border-slate-900 pt-6">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-slate-900 font-medium">Structured</div>
+              <ul className="mt-5 space-y-3 text-slate-900 text-base leading-relaxed">
+                <li>A curriculum built by educators</li>
+                <li>Retention by design</li>
+                <li>A clear path from beginner to mastery</li>
+                <li>Sources you can trust</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 7. THE SCIENCE ----------------------------------------------- */}
+      <section className="border-t border-slate-200 py-20 md:py-28">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500 font-medium mb-6">
+            The science behind it
+          </div>
+          <h2 className="text-3xl md:text-5xl font-semibold tracking-tight text-slate-900 leading-[1.1]">
+            Learning that stays with you.
+          </h2>
+          <p className="mt-6 text-base md:text-lg text-slate-600 leading-relaxed max-w-2xl">
+            Every part of OSC is grounded in decades of research on how memory actually works.
+          </p>
+          <div className="mt-14 space-y-8">
+            {[
+              { t: 'Active recall', b: 'You remember what you retrieve, not what you re-read. Every module ends with retrieval — not review.' },
+              { t: 'Spaced repetition', b: 'Study cards return exactly when memory is about to fade, following the algorithm proven by Ebbinghaus and refined by modern cognitive science.' },
+              { t: 'Structured curriculum', b: 'Concepts build on each other in a deliberate order. Learning is planned, not left to chance.' },
+              { t: 'Short modules', b: 'Three to five minutes each. Small enough to fit into a real professional life, long enough to be substantial.' },
+              { t: 'Long-term retention', b: 'Knowledge compounds. What you study today serves you for years, not just for the next shift.' },
+            ].map((s) => (
+              <div key={s.t} className="grid md:grid-cols-[220px_1fr] gap-2 md:gap-10 border-t border-slate-100 pt-5 md:pt-6">
+                <div className="text-slate-900 font-semibold tracking-tight">{s.t}</div>
+                <div className="text-slate-600 leading-relaxed">{s.b}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 8. CAREER ---------------------------------------------------- */}
+      <section className="border-t border-slate-200 py-20 md:py-28">
+        <div className="max-w-3xl mx-auto">
+          <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500 font-medium mb-6">
+            Why this matters
+          </div>
+          <h2 className="text-3xl md:text-5xl font-semibold tracking-tight text-slate-900 leading-[1.1]">
+            Knowledge is career capital.
+          </h2>
+          <div className="mt-12 space-y-8 text-lg md:text-xl text-slate-600 leading-relaxed">
+            <p>The best jobs go to the people who understand what they serve.</p>
+            <p>Confidence comes from knowing, not guessing.</p>
+            <p>Every path completed is one more thing you can build on for the rest of your career.</p>
+          </div>
+        </div>
+      </section>
+
+      {/* 9. CERTIFICATIONS -------------------------------------------- */}
+      <section className="border-t border-slate-200 py-20 md:py-28">
+        <div className="max-w-3xl mx-auto">
+          <div className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-500 font-medium">
+            <span className="h-1.5 w-1.5 rounded-full bg-slate-900" aria-hidden="true"></span>
+            In development
+          </div>
+          <h2 className="mt-6 text-3xl md:text-5xl font-semibold tracking-tight text-slate-900 leading-[1.1]">
+            Professional certifications, coming soon.
+          </h2>
+          <p className="mt-6 text-base md:text-lg text-slate-600 leading-relaxed">
+            OSC is building free, verifiable credentials that reflect real knowledge. Certificates will be issued upon completion of specific learning paths and knowledge checks — designed to be respected by employers and meaningful to learners.
+          </p>
+        </div>
+      </section>
+
+      {/* 10. PROMISE -------------------------------------------------- */}
+      <section className="border-t border-slate-200 py-20 md:py-28">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500 font-medium mb-6">
+            What OSC promises
+          </div>
+          <div className="grid md:grid-cols-2 gap-x-16 gap-y-10 mt-4">
+            {[
+              { t: 'Free forever', b: 'Every path, every module, every study card. No paywalls, no upsells, no premium tier.' },
+              { t: 'No ads', b: 'Your attention is not for sale. No banners, no sponsored content, no tracking beyond what runs the site.' },
+              { t: 'Evidence-based', b: 'Every method we use is grounded in learning science, not entertainment.' },
+              { t: 'Continuously updated', b: 'Modules are revised as knowledge evolves. This is a living curriculum.' },
+            ].map((p) => (
+              <div key={p.t} className="border-t border-slate-200 pt-6">
+                <h3 className="text-xl md:text-2xl font-semibold text-slate-900 tracking-tight">{p.t}</h3>
+                <p className="mt-2 text-slate-600 leading-relaxed">{p.b}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 11. FAQ ------------------------------------------------------ */}
+      <section className="border-t border-slate-200 py-20 md:py-28">
+        <div className="max-w-3xl mx-auto">
+          <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500 font-medium mb-6">
+            Frequently asked
+          </div>
+          <h2 className="text-3xl md:text-5xl font-semibold tracking-tight text-slate-900 leading-[1.1]">
+            The essentials.
+          </h2>
+          <div className="mt-12 divide-y divide-slate-200 border-t border-b border-slate-200">
+            {[
+              { q: 'Is it really free?', a: 'Yes. Every learning path, every module, every study card. Free forever. There is no premium tier and no paid version.' },
+              { q: 'Who is OSC for?', a: 'Ambitious hospitality professionals — bartenders, sommeliers, baristas, waiters, restaurant and hotel staff, brand ambassadors, and hospitality students. Anyone whose career depends on hospitality knowledge.' },
+              { q: 'How is this different from watching YouTube?', a: 'YouTube gives you videos. OSC gives you a curriculum: structured paths, short modules, active recall, spaced repetition and knowledge checks. Videos entertain. Structured learning stays with you.' },
+              { q: 'Do I need a background in hospitality?', a: 'No. Paths start from the fundamentals and build up. Whether you started last week or ten years ago, there is a place to begin.' },
+              { q: 'How long does a module take?', a: 'Three to five minutes on average. Short enough to fit between shifts or during a break. Long enough to actually teach something.' },
+              { q: 'Will there be certifications?', a: 'Yes. Free, verifiable certifications are in development, issued upon completion of learning paths and knowledge checks.' },
+              { q: 'Is there a mobile app?', a: 'OSC is a Progressive Web App. Add it to your home screen and it behaves like a native app — offline-friendly, fast, no store required.' },
+              { q: 'Where does the content come from?', a: 'Content is written and reviewed by educators and hospitality professionals, grounded in primary sources. The curriculum is continuously updated as the field evolves.' },
+            ].map((f, i) => (
+              <details key={i} className="group">
+                <summary className="flex items-center justify-between cursor-pointer list-none py-5 gap-6">
+                  <span className="text-base md:text-lg text-slate-900 font-medium">{f.q}</span>
+                  <span className="text-slate-400 group-open:rotate-45 transition-transform text-2xl leading-none font-light shrink-0" aria-hidden="true">+</span>
+                </summary>
+                <div className="pb-5 pr-10 text-slate-600 leading-relaxed">{f.a}</div>
+              </details>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 12. CLOSING CTA --------------------------------------------- */}
+      <section className="border-t border-slate-200 py-24 md:py-36 text-center">
+        <div className="max-w-2xl mx-auto">
+          <h2 className="text-3xl md:text-5xl font-semibold tracking-tight text-slate-900 leading-[1.1]">
+            Start when you are ready.
+          </h2>
+          <p className="mt-6 text-base md:text-lg text-slate-600 leading-relaxed">
+            Create a free account. No credit card. No games. Just learning.
+          </p>
+          <div className="mt-10">
+            <a href="/register" className="h-12 px-8 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium inline-flex items-center gap-2 transition">
+              Begin <ArrowRight className="h-4 w-4" />
+            </a>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  )
+}
 
 const CourseCard = ({ course, onClick, progressMap }) => {
   const Icon = ICONS[course.icon] || BookOpen
