@@ -46,8 +46,8 @@ export default function SeoLessonBody({ lesson }) {
       <section className="mt-8 grid gap-3 md:grid-cols-3">
         {[
           { icon: Brain, title: `${lesson.embedded?.length || 0} embedded questions`, note: 'Active-recall in-line' },
-          { icon: Layers, title: `${lesson.flashcards.length} flashcards`, note: 'Spaced repetition' },
-          { icon: ClipboardCheck, title: `${lesson.quiz.length}-question quiz`, note: 'Explanations included' },
+          { icon: Layers, title: `${lesson.flashcards.length} study cards`, note: 'Spaced repetition' },
+          { icon: ClipboardCheck, title: `${lesson.quiz.length}-question knowledge check`, note: 'Explanations included' },
         ].map((f, i) => (
           <div key={i} className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-center relative">
             <Lock className="h-4 w-4 text-slate-400 absolute top-3 right-3" aria-hidden="true" />

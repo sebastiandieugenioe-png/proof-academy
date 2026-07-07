@@ -131,7 +131,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <AuthShell title="Create your account" subtitle="Free forever. Learn spirits, cocktails and hospitality with evidence-based lessons.">
+    <AuthShell title="Create your account" subtitle="Free forever. Learn spirits, cocktails and hospitality with evidence-based modules.">
       <form onSubmit={submit} className="mt-6 space-y-3.5">
         <Field label="Full name (optional)">
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Alex" className="input" />
@@ -165,7 +165,7 @@ export default function RegisterPage() {
             <span>
               <span className="font-medium">Subscribe to the free weekly newsletter (optional).</span>
               <span className="block text-xs text-slate-600 mt-0.5 leading-relaxed">
-                One short email per week with a new mini-lesson, a curated flashcard set, cocktail history and hospitality tips. No ads. One-click unsubscribe in every email — your account and lessons stay untouched.
+                One short email per week with a new mini-module, a curated study card set, cocktail history and hospitality tips. No ads. One-click unsubscribe in every email — your account and modules stay untouched.
               </span>
             </span>
           </label>

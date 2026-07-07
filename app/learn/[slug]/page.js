@@ -96,7 +96,7 @@ function absoluteUrl(u) {
 export async function generateMetadata({ params }) {
   const { slug } = await params;
   const found = await findByLessonSlug(slug);
-  if (!found) return { title: 'Lesson not found — Online Spirits Club' };
+  if (!found) return { title: 'Module not found — Online Spirits Club' };
   const { lesson, course, media } = found;
   const seoDesc = stripBeginnerText(lesson.seo?.description || (lesson.theory.split('\n\n')[0].replace(/\*\*/g, '').slice(0, 155) + '…'));
   const seoTitle = stripBeginnerText(lesson.seo?.title || `${lesson.title} — ${course.title}`);

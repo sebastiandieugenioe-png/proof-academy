@@ -143,20 +143,20 @@ const Landing = ({ courses, onCta }) => (
         Master spirits, cocktails <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">& hospitality.</span>
       </h1>
       <p className="mt-5 text-lg text-slate-600 leading-relaxed">
-        The free, science-based platform to learn behind-the-bar knowledge in 3–5 minute lessons. Active recall, flashcards, spaced repetition. No XP, no streaks — just real learning.
+        The free, science-based platform to learn behind-the-bar knowledge in 3–5 minute modules. Active recall, study cards, spaced repetition. No XP, no streaks — just real learning.
       </p>
       <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
         <a href="/register" className="h-11 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm inline-flex items-center gap-2">Start free <ArrowRight className="h-4 w-4" /></a>
-        <a href="#courses" className="h-11 px-6 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-800 font-medium">See courses</a>
+        <a href="#courses" className="h-11 px-6 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-800 font-medium">See learning paths</a>
       </div>
       <p className="mt-4 text-xs text-slate-400">Free forever. No ads. No credit card required.</p>
     </section>
 
     <section className="grid gap-4 md:grid-cols-4">
       {[
-        { icon: Brain, title: 'Active recall', body: 'Embedded questions and quizzes proven to strengthen memory.' },
+        { icon: Brain, title: 'Active recall', body: 'Embedded questions and knowledge checks proven to strengthen memory.' },
         { icon: Repeat, title: 'Spaced repetition', body: 'Anki-inspired study sessions that surface cards right before you forget.' },
-        { icon: Layers, title: 'Microlearning', body: '3–5 minute lessons that fit between shifts, classes, or coffees.' },
+        { icon: Layers, title: 'Microlearning', body: '3–5 minute modules that fit between shifts, classes, or coffees.' },
         { icon: Target, title: 'For real bartenders', body: 'Built for barbacks, waiters, students — the pros of tomorrow.' },
       ].map((f, i) => (
         <div key={i} className="rounded-xl border border-slate-200 bg-white p-5">
@@ -180,7 +180,7 @@ const Landing = ({ courses, onCta }) => (
     <section className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-indigo-50 p-8 md:p-10 text-center">
       <PartyPopper className="h-6 w-6 text-blue-600 mx-auto" />
       <h3 className="mt-3 text-2xl font-semibold text-slate-900">Ready to actually learn?</h3>
-      <p className="mt-2 text-slate-600 max-w-md mx-auto">Create a free account and start your first lesson. Newsletter is optional.</p>
+      <p className="mt-2 text-slate-600 max-w-md mx-auto">Create a free account and start your first module. Newsletter is optional.</p>
       <a href="/register" className="mt-5 inline-flex h-11 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium items-center">Get started free</a>
     </section>
   </div>
@@ -196,7 +196,7 @@ const CourseCard = ({ course, onClick, progressMap }) => {
         <Icon className="h-5 w-5" />
       </div>
       <div className="mt-4">
-        <div className="text-xs font-medium uppercase tracking-wide text-slate-500">{course.level} · {course.lessonCount} lessons</div>
+        <div className="text-xs font-medium uppercase tracking-wide text-slate-500">{course.level} · {course.lessonCount} modules</div>
         <h3 className="mt-1 text-lg font-semibold text-slate-900">{course.title}</h3>
         <p className="mt-1 text-sm text-slate-600 leading-relaxed">{course.tagline}</p>
       </div>
@@ -235,9 +235,9 @@ const Dashboard = ({ user, courses, onNav }) => {
       </div>
       <InstallAppBanner />
       <div className="grid gap-4 md:grid-cols-3">
-        <StatCard label="Lessons completed" value={stats?.lessonsCompleted ?? 0} icon={BookOpen} />
-        <StatCard label="Flashcards learned" value={stats?.flashcardsLearned ?? 0} icon={Layers} />
-        <StatCard label="Cards to study" value={stats?.reviewsDue ?? 0} icon={Brain} highlight={stats?.reviewsDue > 0} onClick={() => onNav({ name: 'study' })} />
+        <StatCard label="Modules completed" value={stats?.lessonsCompleted ?? 0} icon={BookOpen} />
+        <StatCard label="Study Cards learned" value={stats?.flashcardsLearned ?? 0} icon={Layers} />
+        <StatCard label="Study Cards due" value={stats?.reviewsDue ?? 0} icon={Brain} highlight={stats?.reviewsDue > 0} onClick={() => onNav({ name: 'study' })} />
       </div>
       {continueLesson && (
         <div className="rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-5 md:p-6 flex flex-wrap items-center justify-between gap-4">
@@ -307,7 +307,7 @@ const CourseView = ({ slug, onNav, user }) => {
           <Icon className="h-7 w-7" />
         </div>
         <div>
-          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">{course.level} · {course.lessons.length} lessons</div>
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">{course.level} · {course.lessons.length} modules</div>
           <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-slate-900">{course.title}</h1>
           <p className="mt-1.5 text-slate-600 max-w-2xl">{course.tagline}</p>
         </div>
@@ -323,7 +323,7 @@ const CourseView = ({ slug, onNav, user }) => {
                 </div>
                 <div className="flex-1">
                   <div className="font-medium text-slate-900">{l.title}</div>
-                  <div className="text-xs text-slate-500">{l.minutes} min · Theory · Flashcards · Quiz</div>
+                  <div className="text-xs text-slate-500">{l.minutes} min · Theory · Study Cards · Knowledge Check</div>
                 </div>
                 <ChevronRight className="h-4 w-4 text-slate-400" />
               </button>
@@ -336,6 +336,7 @@ const CourseView = ({ slug, onNav, user }) => {
 }
 
 const STEPS = ['objectives', 'theory', 'flashcards', 'quiz', 'done']
+const STEP_LABELS = { objectives: 'Objectives', theory: 'Theory', flashcards: 'Study Cards', quiz: 'Knowledge Check', done: 'Complete' }
 const LessonView = ({ courseSlug, lessonSlug, user, onNav }) => {
   const [data, setData] = useState(null)
   const [step, setStep] = useState(0)
@@ -355,9 +356,9 @@ const LessonView = ({ courseSlug, lessonSlug, user, onNav }) => {
   const { course, lesson, next, index, total } = data
   if (!lesson) return (
     <div className="max-w-lg mx-auto text-center py-12 space-y-4">
-      <h1 className="text-xl font-semibold text-slate-900">Lesson unavailable</h1>
-      <p className="text-sm text-slate-600">This lesson could not be loaded. Please try again or go back.</p>
-      <button onClick={() => onNav({ name: 'course', slug: courseSlug })} className="h-10 px-5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm">Back to course</button>
+      <h1 className="text-xl font-semibold text-slate-900">Module unavailable</h1>
+      <p className="text-sm text-slate-600">This module could not be loaded. Please try again or go back.</p>
+      <button onClick={() => onNav({ name: 'course', slug: courseSlug })} className="h-10 px-5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm">Back to path</button>
     </div>
   )
   const pct = Math.round(((step) / (STEPS.length - 1)) * 100)
@@ -365,7 +366,7 @@ const LessonView = ({ courseSlug, lessonSlug, user, onNav }) => {
     <div className="max-w-3xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <button onClick={() => onNav({ name: 'course', slug: courseSlug })} className="text-sm text-slate-500 hover:text-slate-800 inline-flex items-center gap-1"><ChevronLeft className="h-4 w-4" /> {course.title}</button>
-        <div className="text-xs text-slate-500">Lesson {index + 1} of {total}</div>
+        <div className="text-xs text-slate-500">Module {index + 1} of {total}</div>
       </div>
       <div>
         <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
@@ -373,7 +374,7 @@ const LessonView = ({ courseSlug, lessonSlug, user, onNav }) => {
         </div>
         <div className="mt-4">
           <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">{lesson.title}</h1>
-          <p className="mt-1 text-sm text-slate-500">{lesson.minutes} minute lesson · {STEPS[step].charAt(0).toUpperCase() + STEPS[step].slice(1)}</p>
+          <p className="mt-1 text-sm text-slate-500">{lesson.minutes} minute module · {STEP_LABELS[STEPS[step]] || STEPS[step]}</p>
         </div>
       </div>
       {STEPS[step] === 'objectives' && <StepObjectives lesson={lesson} media={data.media} onNext={() => setStep(1)} />}
@@ -406,7 +407,7 @@ const StepObjectives = ({ lesson, media, onNext }) => {
     <div className="p-6 md:p-8">
       <div className="text-xs font-medium uppercase tracking-wide text-blue-700 flex items-center gap-1.5"><Target className="h-3.5 w-3.5" /> Learning objectives</div>
       {objectives.length === 0 ? (
-        <p className="mt-4 text-sm text-slate-500 italic">No objectives listed for this lesson.</p>
+        <p className="mt-4 text-sm text-slate-500 italic">No objectives listed for this module.</p>
       ) : (
         <ul className="mt-4 space-y-3">
           {objectives.map((o, i) => (
@@ -417,7 +418,7 @@ const StepObjectives = ({ lesson, media, onNext }) => {
           ))}
         </ul>
       )}
-      <button onClick={onNext} className="mt-8 w-full sm:w-auto h-12 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium inline-flex items-center justify-center gap-2 tap">Start lesson <ArrowRight className="h-4 w-4" /></button>
+      <button onClick={onNext} className="mt-8 w-full sm:w-auto h-12 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium inline-flex items-center justify-center gap-2 tap">Start module <ArrowRight className="h-4 w-4" /></button>
     </div>
   </section>
 )}
@@ -448,7 +449,7 @@ const StepTheory = ({ lesson, onNext }) => {
     <section className="rounded-2xl border border-slate-200 bg-white p-6 md:p-8 prose-lesson">
       <div className="text-xs font-medium uppercase tracking-wide text-blue-700 flex items-center gap-1.5 mb-4"><BookOpen className="h-3.5 w-3.5" /> Theory</div>
       {paragraphs.length === 0 ? (
-        <p className="text-sm text-slate-500 italic">No theory content available for this lesson.</p>
+        <p className="text-sm text-slate-500 italic">No theory content available for this module.</p>
       ) : paragraphs.map((p, idx) => {
         const embedIdx = positions.indexOf(idx)
         return (
@@ -461,7 +462,7 @@ const StepTheory = ({ lesson, onNext }) => {
         )
       })}
       <button disabled={!allEmbedsAnswered} onClick={onNext} className="mt-4 h-11 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium inline-flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-        Continue to flashcards <ArrowRight className="h-4 w-4" />
+        Continue to study cards <ArrowRight className="h-4 w-4" />
       </button>
       {!allEmbedsAnswered && <p className="mt-2 text-xs text-slate-500">Answer the embedded question to continue.</p>}
     </section>
@@ -511,9 +512,9 @@ const StepFlashcards = ({ lesson, onNext }) => {
     return (
       <section className="rounded-2xl border border-slate-200 bg-white p-6 md:p-8 text-center">
         <Layers className="h-6 w-6 text-blue-600 mx-auto" />
-        <h3 className="mt-3 text-lg font-semibold text-slate-900">{cards.length === 0 ? 'No flashcards for this lesson' : 'All flashcards reviewed'}</h3>
-        <p className="mt-1 text-sm text-slate-600">{cards.length === 0 ? 'Continue to the quiz.' : 'They will now enter your spaced-repetition queue for daily study.'}</p>
-        <button onClick={onNext} className="mt-6 h-11 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium inline-flex items-center gap-2">Take the quiz <ArrowRight className="h-4 w-4" /></button>
+        <h3 className="mt-3 text-lg font-semibold text-slate-900">{cards.length === 0 ? 'No study cards for this module' : 'All study cards reviewed'}</h3>
+        <p className="mt-1 text-sm text-slate-600">{cards.length === 0 ? 'Continue to the knowledge check.' : 'They will now enter your spaced-repetition queue for daily practice.'}</p>
+        <button onClick={onNext} className="mt-6 h-11 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium inline-flex items-center gap-2">Take the knowledge check <ArrowRight className="h-4 w-4" /></button>
       </section>
     )
   }
@@ -521,7 +522,7 @@ const StepFlashcards = ({ lesson, onNext }) => {
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-6 md:p-8">
       <div className="flex items-center justify-between text-xs font-medium uppercase tracking-wide text-blue-700">
-        <div className="flex items-center gap-1.5"><Layers className="h-3.5 w-3.5" /> Flashcard {i + 1} / {cards.length}</div>
+        <div className="flex items-center gap-1.5"><Layers className="h-3.5 w-3.5" /> Study Card {i + 1} / {cards.length}</div>
         <div className="text-slate-400">Tap to flip</div>
       </div>
       <button onClick={() => setFlipped((f) => !f)} className="mt-4 w-full min-h-[220px] rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-6 md:p-8 grid place-items-center text-center">
@@ -557,19 +558,19 @@ const StepQuiz = ({ lesson, onNext }) => {
     return (
       <section className="rounded-2xl border border-slate-200 bg-white p-6 md:p-8 text-center">
         <Brain className="h-6 w-6 text-blue-600 mx-auto" />
-        <h3 className="mt-3 text-lg font-semibold text-slate-900">No quiz for this lesson</h3>
-        <p className="mt-1 text-sm text-slate-600">You can finish the lesson.</p>
-        <button onClick={() => onNext(0)} className="mt-6 h-11 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium inline-flex items-center gap-2">Finish lesson <Check className="h-4 w-4" /></button>
+        <h3 className="mt-3 text-lg font-semibold text-slate-900">No knowledge check for this module</h3>
+        <p className="mt-1 text-sm text-slate-600">You can finish the module.</p>
+        <button onClick={() => onNext(0)} className="mt-6 h-11 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium inline-flex items-center gap-2">Finish module <Check className="h-4 w-4" /></button>
       </section>
     )
   }
   if (submitted) {
     return (
       <section className="rounded-2xl border border-slate-200 bg-white p-6 md:p-8">
-        <div className="text-xs font-medium uppercase tracking-wide text-blue-700 flex items-center gap-1.5"><Brain className="h-3.5 w-3.5" /> Quiz results</div>
+        <div className="text-xs font-medium uppercase tracking-wide text-blue-700 flex items-center gap-1.5"><Brain className="h-3.5 w-3.5" /> Knowledge Check results</div>
         <div className="mt-3">
           <div className="text-4xl font-semibold text-slate-900">{score} <span className="text-slate-400 text-2xl">/ {questions.length}</span></div>
-          <div className="text-sm text-slate-600 mt-1">{score === questions.length ? 'Perfect. You nailed it.' : score >= questions.length - 1 ? 'Excellent work.' : score >= questions.length / 2 ? 'Good — review flashcards to strengthen weak spots.' : 'Not quite yet — replay the lesson and try again.'}</div>
+          <div className="text-sm text-slate-600 mt-1">{score === questions.length ? 'Perfect. You nailed it.' : score >= questions.length - 1 ? 'Excellent work.' : score >= questions.length / 2 ? 'Good — review study cards to strengthen weak spots.' : 'Not quite yet — replay the module and try again.'}</div>
         </div>
         <div className="mt-6 space-y-4">
           {questions.map((q, i) => (
@@ -583,13 +584,13 @@ const StepQuiz = ({ lesson, onNext }) => {
             </div>
           ))}
         </div>
-        <button onClick={() => onNext(score)} className="mt-6 h-11 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium inline-flex items-center gap-2">Finish lesson <Check className="h-4 w-4" /></button>
+        <button onClick={() => onNext(score)} className="mt-6 h-11 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium inline-flex items-center gap-2">Finish module <Check className="h-4 w-4" /></button>
       </section>
     )
   }
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-6 md:p-8 space-y-6">
-      <div className="text-xs font-medium uppercase tracking-wide text-blue-700 flex items-center gap-1.5"><Brain className="h-3.5 w-3.5" /> Quiz · {questions.length} questions</div>
+      <div className="text-xs font-medium uppercase tracking-wide text-blue-700 flex items-center gap-1.5"><Brain className="h-3.5 w-3.5" /> Knowledge Check · {questions.length} questions</div>
       {questions.map((q, i) => (
         <div key={i}>
           <div className="font-medium text-slate-900">{i + 1}. {q.q}</div>
@@ -603,7 +604,7 @@ const StepQuiz = ({ lesson, onNext }) => {
         </div>
       ))}
       <button disabled={!complete} onClick={() => setSubmitted(true)} className="h-11 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2">
-        Submit quiz <ArrowRight className="h-4 w-4" />
+        Submit knowledge check <ArrowRight className="h-4 w-4" />
       </button>
     </section>
   )
@@ -624,13 +625,13 @@ const StepDone = ({ lesson, next, courseSlug, onNav, user }) => {
     <section className="space-y-6">
       <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 md:p-8 text-center">
         <PartyPopper className="h-6 w-6 text-emerald-600 mx-auto" />
-        <h3 className="mt-3 text-2xl font-semibold text-slate-900">Lesson complete</h3>
-        <p className="mt-1 text-sm text-slate-700">Your flashcards are now in the study queue. Come back tomorrow to keep them fresh.</p>
+        <h3 className="mt-3 text-2xl font-semibold text-slate-900">Module complete</h3>
+        <p className="mt-1 text-sm text-slate-700">Your study cards are now in the practice queue. Come back tomorrow to keep them fresh.</p>
         <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
           {next && (
             <button onClick={() => onNav({ name: 'lesson', courseSlug, lessonSlug: next.slug })} className="h-11 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium inline-flex items-center gap-2">Next: {next.title} <ArrowRight className="h-4 w-4" /></button>
           )}
-          <button onClick={() => onNav({ name: 'course', slug: courseSlug })} className="h-11 px-6 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-medium">Back to course</button>
+          <button onClick={() => onNav({ name: 'course', slug: courseSlug })} className="h-11 px-6 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-medium">Back to path</button>
         </div>
       </div>
       <div className="rounded-2xl border border-slate-200 bg-white p-6">
@@ -724,7 +725,7 @@ const StudyView = ({ user, onNav }) => {
         </div>
         <div className="text-sm text-slate-600">Recall accuracy: <strong>{avgAcc}%</strong></div>
         {session.estimatedNextReviews.length > 0 && (
-          <div className="text-xs text-slate-500">Next reviews scheduled from <strong>{new Date(Math.min(...session.estimatedNextReviews.map((d) => new Date(d).getTime()))).toLocaleDateString()}</strong> onwards.</div>
+          <div className="text-xs text-slate-500">Next practice scheduled from <strong>{new Date(Math.min(...session.estimatedNextReviews.map((d) => new Date(d).getTime()))).toLocaleDateString()}</strong> onwards.</div>
         )}
         <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
           <button onClick={() => { seenIds.current.clear(); setSession({ studied: 0, correct: 0, again: 0, hard: 0, startedAt: Date.now(), estimatedNextReviews: [] }); setEnded(false); setDone(false); load() }} className="h-11 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium inline-flex items-center gap-2">Keep studying <ArrowRight className="h-4 w-4" /></button>
@@ -741,7 +742,7 @@ const StudyView = ({ user, onNav }) => {
       <div className="max-w-lg mx-auto text-center pt-8 md:pt-16">
         <TrendingUp className="h-8 w-8 text-blue-600 mx-auto" />
         <h1 className="mt-3 text-2xl font-semibold text-slate-900">Nothing to study right now.</h1>
-        <p className="mt-2 text-slate-600">Complete a lesson to add new flashcards. Your due cards will show up here.</p>
+        <p className="mt-2 text-slate-600">Complete a module to add new study cards. Your due cards will show up here.</p>
         <button onClick={() => onNav({ name: 'dashboard' })} className="mt-6 h-11 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium">Back to dashboard</button>
       </div>
     )
@@ -936,7 +937,7 @@ const ProfileView = ({ user, setUser, onNav }) => {
             <span>
               <span className="font-medium">Subscribe to the free weekly newsletter.</span>
               <span className="block text-xs text-slate-600 mt-0.5 leading-relaxed">
-                One short email per week — new mini-lessons, curated flashcards, cocktail history and hospitality tips. No ads. Unsubscribe anytime.
+                One short email per week — new mini-modules, curated study cards, cocktail history and hospitality tips. No ads. Unsubscribe anytime.
               </span>
             </span>
           </label>
@@ -961,7 +962,7 @@ const ProfileView = ({ user, setUser, onNav }) => {
       <div className="rounded-2xl border border-slate-200 bg-white p-6">
         <h3 className="font-semibold text-slate-900">Study statistics</h3>
         <div className="mt-4 grid grid-cols-3 gap-4 text-center">
-          <div><div className="text-2xl font-semibold text-slate-900">{stats?.lessonsCompleted ?? 0}</div><div className="text-xs text-slate-500 uppercase tracking-wide mt-1">Lessons</div></div>
+          <div><div className="text-2xl font-semibold text-slate-900">{stats?.lessonsCompleted ?? 0}</div><div className="text-xs text-slate-500 uppercase tracking-wide mt-1">Modules</div></div>
           <div><div className="text-2xl font-semibold text-slate-900">{stats?.flashcardsLearned ?? 0}</div><div className="text-xs text-slate-500 uppercase tracking-wide mt-1">Cards</div></div>
           <div><div className="text-2xl font-semibold text-slate-900">{stats?.minutesStudied ?? 0}m</div><div className="text-xs text-slate-500 uppercase tracking-wide mt-1">Time</div></div>
         </div>
@@ -978,7 +979,7 @@ const ProfileView = ({ user, setUser, onNav }) => {
           <div className="min-w-0 flex-1">
             <h3 className="font-semibold text-red-900">Danger zone — Delete my account</h3>
             <p className="mt-1 text-sm text-red-800/90 leading-relaxed">
-              This will permanently erase your account, your learning progress, every flashcard review, all comments you have posted, and your newsletter preferences. Some anonymised statistics may be retained (with no personal data). This action is <strong className="font-semibold">permanent and cannot be undone</strong>.
+              This will permanently erase your account, your learning mastery, every study card practice record, all comments you have posted, and your newsletter preferences. Some anonymised statistics may be retained (with no personal data). This action is <strong className="font-semibold">permanent and cannot be undone</strong>.
             </p>
             <p className="mt-2 text-xs text-red-700/80">
               Want a copy of your data first? Email <a href="mailto:privacy@onlinespiritsclub.com" className="underline">privacy@onlinespiritsclub.com</a> from this address and we&rsquo;ll send you a GDPR data export within 30 days.
@@ -1011,8 +1012,8 @@ const ProfileView = ({ user, setUser, onNav }) => {
               </div>
               <ul className="text-xs text-slate-600 space-y-1 rounded-md bg-slate-50 border border-slate-200 p-3">
                 <li>🗑️ Your account &amp; profile ({user?.email})</li>
-                <li>🗑️ Every lesson progress record</li>
-                <li>🗑️ All flashcard-review history</li>
+                <li>🗑️ Every module mastery record</li>
+                <li>🗑️ All study card practice history</li>
                 <li>🗑️ Every comment you have posted</li>
                 <li>🗑️ Newsletter subscription and preferences</li>
                 <li>⚠️ A one-way hashed audit row is retained (no personal data) to prove consent was withdrawn — as required by GDPR accountability.</li>

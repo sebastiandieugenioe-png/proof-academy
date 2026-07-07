@@ -168,7 +168,7 @@ function UnsubscribeInner() {
         </button>
         {errMsg && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md p-2">{errMsg}</div>}
         <p className="text-xs text-slate-500 text-center">
-          Your account, progress and access to all lessons are <strong className="font-medium">not affected</strong> by this. Only the marketing newsletter stops.
+          Your account, mastery and access to all modules are <strong className="font-medium">not affected</strong> by this. Only the marketing newsletter stops.
         </p>
       </div>
     )
@@ -204,7 +204,7 @@ function UnsubscribeInner() {
         {errMsg && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md p-2">{errMsg}</div>}
       </form>
       <p className="text-xs text-slate-500 text-center">
-        Your account, progress and access to all lessons are <strong className="font-medium">not affected</strong> — only the marketing newsletter is removed.
+        Your account, mastery and access to all modules are <strong className="font-medium">not affected</strong> — only the marketing newsletter is removed.
       </p>
     </div>
   )

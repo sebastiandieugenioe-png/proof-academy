@@ -17,7 +17,7 @@ export const metadata = {
     default: 'Online Spirits Club \u2014 Learn spirits, cocktails & hospitality',
     template: '%s',
   },
-  description: 'The free, science-based platform to learn spirits, cocktails, beer and hospitality. Evidence-based lessons in 3\u20135 minutes.',
+  description: 'The free, science-based platform to learn spirits, cocktails, beer and hospitality. Evidence-based modules in 3\u20135 minutes.',
   keywords: ['spirits', 'cocktails', 'whiskey', 'gin', 'bartending', 'hospitality', 'online course', 'flashcards'],
   applicationName: 'Online Spirits Club',
   manifest: '/manifest.json',
