@@ -63,8 +63,8 @@ export default function OscLogo({
   }
 
   const label = variant === 'compact' ? 'OSC' : 'Online Spirits Club'
-  const labelSize = variant === 'compact' ? size * 0.55 : size * 0.42
-  const labelWeight = 'font-semibold tracking-tight'
+  const labelSize = variant === 'compact' ? size * 0.78 : size * 0.62
+  const labelWeight = variant === 'compact' ? 'font-extrabold' : 'font-bold'
 
   return (
     <span
@@ -76,7 +76,11 @@ export default function OscLogo({
       <Symbol color={symbolColor} accent={showAccent} />
       <span
         className={`${labelWeight} text-slate-900 whitespace-nowrap ${labelClass}`}
-        style={{ fontSize: labelSize, letterSpacing: variant === 'compact' ? '0.02em' : '-0.01em' }}
+        style={{
+          fontSize: labelSize,
+          letterSpacing: variant === 'compact' ? '0.06em' : '-0.015em',
+          fontFamily: "var(--font-manrope), Manrope, 'Inter', -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
+        }}
       >
         {label}
       </span>

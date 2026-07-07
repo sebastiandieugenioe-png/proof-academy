@@ -154,6 +154,7 @@ const RESERVED_SLUGS = new Set([
 const RESERVED_PAGE_SLUGS = new Set([
   'admin', 'api', 'learn', 'p', 'unsubscribe',
   'verify-email', 'forgot-password', 'reset-password',
+  'brand',
   'manifest.json', 'sitemap.xml', 'robots.txt', 'favicon.ico', 'placeholder-lesson.svg',
   '_next', 'assets', 'static', 'images',
 ]);

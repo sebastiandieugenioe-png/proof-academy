@@ -74,6 +74,7 @@
         "zod": "3.25.67"
     },
     "devDependencies": {
+        "@fontsource/manrope": "^5.2.8",
         "@types/lodash": "4.17.24",
         "autoprefixer": "10.4.19",
         "globals": "16.2.0",

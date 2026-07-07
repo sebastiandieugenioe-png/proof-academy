@@ -72,9 +72,9 @@ const og = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
     <circle cx="32" cy="32" r="8" fill="#1E3A8A" />
     <circle cx="32" cy="32" r="2" fill="#C8A44D" />
   </g>
-  <text x="600" y="420" text-anchor="middle" font-family="'Inter', -apple-system, 'Segoe UI', Arial, sans-serif" font-weight="600" font-size="56" fill="#0F172A" letter-spacing="-1">Online Spirits Club</text>
-  <text x="600" y="470" text-anchor="middle" font-family="'Inter', -apple-system, 'Segoe UI', Arial, sans-serif" font-weight="400" font-size="26" fill="#475569">Learn spirits, cocktails, beer &amp; hospitality</text>
-  <text x="600" y="530" text-anchor="middle" font-family="'Inter', -apple-system, 'Segoe UI', Arial, sans-serif" font-weight="500" font-size="18" fill="#94A3B8" letter-spacing="4">EVIDENCE\u2011BASED \u00b7 FREE \u00b7 IRELAND</text>
+  <text x="600" y="420" text-anchor="middle" font-family="Manrope, 'Inter', sans-serif" font-weight="700" font-size="56" fill="#0F172A" letter-spacing="-1.5">Online Spirits Club</text>
+  <text x="600" y="470" text-anchor="middle" font-family="Manrope, 'Inter', sans-serif" font-weight="500" font-size="26" fill="#475569">Learn spirits, cocktails, beer &amp; hospitality</text>
+  <text x="600" y="530" text-anchor="middle" font-family="Manrope, 'Inter', sans-serif" font-weight="600" font-size="18" fill="#94A3B8" letter-spacing="4">EVIDENCE\u2011BASED \u00b7 FREE \u00b7 IRELAND</text>
 </svg>`;
 
 async function render(svg, out, size, opts = {}) {

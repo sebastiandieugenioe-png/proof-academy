@@ -1,5 +1,15 @@
 import './globals.css'
+import { Manrope } from 'next/font/google'
 import { Providers } from './providers'
+
+// Manrope \u2014 modern geometric sans, used for the OSC wordmark and headings.
+// display: 'swap' avoids FOIT; variable exposed as --font-manrope for CSS use.
+const manrope = Manrope({
+  subsets: ['latin'],
+  weight: ['500', '600', '700', '800'],
+  display: 'swap',
+  variable: '--font-manrope',
+})
 
 export const metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL || 'https://onlinespiritsclub.com'),
@@ -45,7 +55,7 @@ export const viewport = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
+    <html lang="en" className={manrope.variable}>
       <head>
         {/* Icons + manifest are auto-injected by Next.js metadata (see icons + manifest fields above). */}
         <meta name="apple-mobile-web-app-capable" content="yes" />
