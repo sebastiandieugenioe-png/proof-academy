@@ -145,14 +145,14 @@ const err = (msg, code = 400) => NextResponse.json({ error: msg }, { status: cod
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 // Reserved slugs (cannot be used for public pages or renamed courses).
 const RESERVED_SLUGS = new Set([
-  'admin', 'api', 'learn', 'about', 'privacy', 'terms', 'contact', 'newsletter', 'p',
+  'admin', 'api', 'learn', 'about', 'privacy', 'terms', 'contact', 'newsletter', 'journal', 'p',
   'manifest.json', 'sitemap.xml', 'robots.txt', 'favicon.ico', 'placeholder-lesson.svg',
   '_next', 'assets', 'static', 'images',
 ]);
 // Reserved slugs specifically for PUBLIC PAGES (pages tab) — courses live under /learn/*,
 // so course slugs can be more flexible. But pages sit at site root, so we forbid clashes with the SPA.
 const RESERVED_PAGE_SLUGS = new Set([
-  'admin', 'api', 'learn', 'p', 'unsubscribe',
+  'admin', 'api', 'learn', 'p', 'unsubscribe', 'journal',
   'verify-email', 'forgot-password', 'reset-password',
   'brand',
   'manifest.json', 'sitemap.xml', 'robots.txt', 'favicon.ico', 'placeholder-lesson.svg',
@@ -1072,6 +1072,83 @@ export async function POST(request, { params }) {
     const res = NextResponse.json({ ok: true });
     res.cookies.set({ ...USER_COOKIE_CLEAR.options, name: USER_COOKIE_CLEAR.name, value: '' });
     return res;
+  }
+
+  // ------------------------------------------------------------------
+  // Public: OSC Journal — email-only subscription
+  // No account needed. Sends a welcome email (best-effort via Resend).
+  // Idempotent upserts into the shared `newsletter` collection so the
+  // existing /unsubscribe flow works out of the box.
+  // ------------------------------------------------------------------
+  if (seg === 'journal/subscribe') {
+    try {
+      const ip = ipFromRequest(request);
+      // 5 subs per 10 min per IP — prevents automated abuse.
+      const rl = rateLimit(`journal:${ip}`, { max: 5, windowMs: 10 * 60 * 1000 });
+      if (!rl.allowed) return tooMany(rl.retryAfterMs);
+
+      const raw = String(body?.email || '').trim().toLowerCase().slice(0, 254);
+      if (!isSafeEmail(raw)) return NextResponse.json({ error: 'Please enter a valid email.' }, { status: 400 });
+
+      const db = await getDb();
+      const now = new Date();
+      const unsubToken = newUnsubToken();
+
+      // If this email already has an active subscription, treat as success (idempotent).
+      const existing = await db.collection('newsletter').findOne({ email: raw });
+      const existingUser = await db.collection('users').findOne({ email: raw }, { projection: { newsletter: 1, newsletterWithdrawnAt: 1, newsletterUnsubscribeToken: 1 } });
+
+      const alreadyActive = (existing && !existing.withdrawnAt) || (existingUser && existingUser.newsletter && !existingUser.newsletterWithdrawnAt);
+
+      await db.collection('newsletter').updateOne(
+        { email: raw },
+        {
+          $set: {
+            email: raw,
+            source: existing?.source || 'journal',
+            consentAt: now,
+            withdrawnAt: null,
+            unsubscribeToken: existing?.unsubscribeToken || unsubToken,
+            updatedAt: now,
+          },
+          $setOnInsert: { id: uuid(), createdAt: now },
+        },
+        { upsert: true }
+      );
+
+      // If the email belongs to a registered user, also flip their user-level
+      // newsletter flag back on so both surfaces stay in sync.
+      if (existingUser) {
+        await db.collection('users').updateOne(
+          { email: raw },
+          {
+            $set: {
+              newsletter: true,
+              newsletterConsentAt: now,
+              newsletterWithdrawnAt: null,
+              newsletterUnsubscribeToken: existingUser.newsletterUnsubscribeToken || unsubToken,
+              updatedAt: now,
+            },
+          }
+        );
+      }
+
+      // Fire-and-forget welcome email. Never block the subscribe on Resend.
+      if (!alreadyActive) {
+        const base = process.env.NEXT_PUBLIC_BASE_URL || '';
+        const token = existing?.unsubscribeToken || unsubToken;
+        const unsubUrl = `${base}/unsubscribe?token=${encodeURIComponent(token)}`;
+        sendTransactionalEmail({
+          to: raw,
+          ...emailTemplates.journalWelcome({ unsubUrl }),
+        }).catch((e) => console.warn('[journal] welcome email failed:', e?.message || e));
+      }
+
+      return NextResponse.json({ ok: true, alreadySubscribed: !!alreadyActive });
+    } catch (e) {
+      console.error('[journal/subscribe] error:', e);
+      return NextResponse.json({ error: 'Could not subscribe. Please try again.' }, { status: 500 });
+    }
   }
 
   // All other admin POSTs require the cookie

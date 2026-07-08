@@ -159,19 +159,49 @@ export default function RegisterPage() {
             {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
           </select>
         </Field>
-        <div className="pt-1 rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
-          <label className="flex items-start gap-2.5 text-sm text-slate-800 cursor-pointer">
-            <input type="checkbox" checked={newsletter} onChange={(e) => setNewsletter(e.target.checked)} className="mt-0.5 h-4 w-4 rounded accent-blue-600" />
-            <span>
-              <span className="font-medium">Subscribe to the free weekly newsletter (optional).</span>
-              <span className="block text-xs text-slate-600 mt-0.5 leading-relaxed">
-                One short email per week with a new mini-module, a curated study card set, cocktail history and hospitality tips. No ads. One-click unsubscribe in every email — your account and modules stay untouched.
-              </span>
+        <div className="pt-1 rounded-xl border border-slate-300 bg-white p-5 space-y-4">
+          <div className="flex items-baseline justify-between">
+            <div className="text-[10px] uppercase tracking-[0.22em] text-slate-500 font-medium">
+              Editorial &middot; Free
+            </div>
+            <div className="text-[10px] uppercase tracking-[0.18em] text-slate-400">Optional</div>
+          </div>
+          <div>
+            <div className="text-lg font-semibold tracking-tight text-slate-900">
+              Subscribe to the Online Spirits Club Journal
+            </div>
+            <p className="mt-2 text-sm text-slate-600 leading-relaxed">
+              Receive three carefully curated emails every week designed to help hospitality professionals build lasting knowledge.
+            </p>
+          </div>
+          <ul className="space-y-2 text-sm text-slate-700 border-t border-slate-100 pt-4">
+            <li className="flex items-baseline gap-2.5">
+              <span className="text-slate-900 font-medium">✓</span>
+              <span><span className="font-medium text-slate-900">Hospitality Weekly</span> &mdash; every Sunday</span>
+            </li>
+            <li className="flex items-baseline gap-2.5">
+              <span className="text-slate-900 font-medium">✓</span>
+              <span><span className="font-medium text-slate-900">Educational Deep Dive</span> &mdash; every Tuesday</span>
+            </li>
+            <li className="flex items-baseline gap-2.5">
+              <span className="text-slate-900 font-medium">✓</span>
+              <span><span className="font-medium text-slate-900">Practical Learning</span> &mdash; every Thursday</span>
+            </li>
+          </ul>
+          <label className="flex items-start gap-2.5 cursor-pointer border-t border-slate-100 pt-4">
+            <input
+              type="checkbox"
+              checked={newsletter}
+              onChange={(e) => setNewsletter(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded accent-slate-900"
+            />
+            <span className="text-sm text-slate-800 font-medium">
+              Yes, send me the Journal.
             </span>
           </label>
           <p className="text-[11px] text-slate-500 leading-relaxed">
-            <span className="font-medium text-slate-600">Not subscribing?</span> That&rsquo;s fine — you&rsquo;ll still receive occasional service emails (password reset, security alerts, account deletion confirmations) as required to run your account. See our{' '}
-            <Link href="/privacy" className="text-blue-700 hover:underline">Privacy Policy</Link>.
+            Free forever &middot; Unsubscribe anytime with one click &middot; Your account and Learning Paths are not affected if you unsubscribe. See our{' '}
+            <Link href="/privacy" className="text-slate-700 hover:text-slate-900 underline underline-offset-2">Privacy Policy</Link>.
           </p>
         </div>
         {error && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md p-2">{error}</div>}

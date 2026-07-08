@@ -95,9 +95,17 @@ const TopBar = ({ user, onNav, onLogout }) => (
     <div className="mx-auto max-w-6xl px-4 h-14 flex items-center justify-between">
       <Logo onClick={() => onNav(user ? { name: 'dashboard' } : { name: 'landing' })} />
       <nav className="flex items-center gap-1">
+        {!user && (
+          <>
+            <a href="/#paths" className="hidden md:inline-flex text-sm px-3 h-9 items-center rounded-md hover:bg-slate-100 text-slate-700">Learning Paths</a>
+            <a href="/journal" className="hidden md:inline-flex text-sm px-3 h-9 items-center rounded-md hover:bg-slate-100 text-slate-700">Journal</a>
+            <a href="/about" className="hidden md:inline-flex text-sm px-3 h-9 items-center rounded-md hover:bg-slate-100 text-slate-700">About</a>
+          </>
+        )}
         {user ? (
           <>
             <button onClick={() => onNav({ name: 'study' })} className="hidden md:inline-flex text-sm px-3 h-9 items-center rounded-md hover:bg-slate-100 text-slate-700">Study</button>
+            <a href="/journal" className="hidden md:inline-flex text-sm px-3 h-9 items-center rounded-md hover:bg-slate-100 text-slate-700">Journal</a>
             <button onClick={() => onNav({ name: 'profile' })} className="hidden md:inline-flex text-sm px-3 h-9 items-center rounded-md hover:bg-slate-100 text-slate-700">Profile</button>
             <button onClick={onLogout} className="text-sm px-3 h-9 inline-flex items-center gap-1.5 rounded-md hover:bg-slate-100 text-slate-600"><LogOut className="h-4 w-4" /><span className="hidden sm:inline">Log out</span></button>
           </>

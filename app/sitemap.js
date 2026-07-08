@@ -10,6 +10,8 @@ export default async function sitemap() {
   const now = new Date();
   const base = [
     { url: `${site}/`, lastModified: now, changeFrequency: 'weekly', priority: 1 },
+    { url: `${site}/journal`, lastModified: now, changeFrequency: 'weekly', priority: 0.9 },
+    { url: `${site}/about`, lastModified: now, changeFrequency: 'monthly', priority: 0.6 },
   ];
   const staticLessons = allLessonPointers().map((p) => ({
     url: `${site}/learn/${p.lessonSlug}`,
