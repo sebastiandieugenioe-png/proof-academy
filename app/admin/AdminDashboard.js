@@ -1355,33 +1355,118 @@ function UserDetail({ id, onBack }) {
 }
 function NewsletterView() {
   const [rows, setRows] = useState(null)
+  const [filter, setFilter] = useState('all') // all | journal | register | withdrawn
   useEffect(() => { api('/admin/newsletter').then(setRows) }, [])
+
+  const stats = useMemo(() => {
+    if (!rows) return null
+    const active = rows.filter((r) => !r.withdrawnAt)
+    const journal = active.filter((r) => (r.source || '').startsWith('journal'))
+    const register = active.filter((r) => r.source === 'register' || !r.source)
+    const withdrawn = rows.filter((r) => r.withdrawnAt)
+    return { total: rows.length, active: active.length, journal: journal.length, register: register.length, withdrawn: withdrawn.length }
+  }, [rows])
+
+  const filtered = useMemo(() => {
+    if (!rows) return []
+    if (filter === 'journal')  return rows.filter((r) => !r.withdrawnAt && (r.source || '').startsWith('journal'))
+    if (filter === 'register') return rows.filter((r) => !r.withdrawnAt && (r.source === 'register' || !r.source))
+    if (filter === 'withdrawn') return rows.filter((r) => !!r.withdrawnAt)
+    return rows
+  }, [rows, filter])
+
   const exportCsv = () => {
     if (!rows) return
-    const csv = 'email,source,createdAt\n' + rows.map((r) => `${r.email},${r.source || ''},${r.createdAt}`).join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'osc-newsletter.csv'; a.click()
+    const header = 'email,source,status,consentAt,lastConsentAt,withdrawnAt,createdAt\n'
+    const body = filtered.map((r) => [
+      r.email,
+      r.source || '',
+      r.withdrawnAt ? 'withdrawn' : 'active',
+      r.consentAt || '',
+      r.lastConsentAt || '',
+      r.withdrawnAt || '',
+      r.createdAt,
+    ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const blob = new Blob([header + body], { type: 'text/csv' })
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `osc-newsletter-${filter}.csv`; a.click()
   }
+
   if (!rows) return <Spinner />
+
+  const SourcePill = ({ source }) => {
+    const s = (source || '').toLowerCase()
+    const isJournal = s.startsWith('journal')
+    const isRegister = s === 'register' || !s
+    const classes = isJournal
+      ? 'bg-slate-900 text-white'
+      : isRegister
+        ? 'bg-slate-100 text-slate-700 border border-slate-200'
+        : 'bg-amber-50 text-amber-800 border border-amber-200'
+    const label = isJournal ? 'Journal' : (isRegister ? 'Register' : s)
+    return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${classes}`}>{label}</span>
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Newsletter opt-ins <span className="text-sm text-slate-400 font-normal">({rows.length})</span></h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+          Newsletter &amp; Journal <span className="text-sm text-slate-400 font-normal">({stats.total})</span>
+        </h1>
         <button onClick={exportCsv} className="h-9 px-3 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm inline-flex items-center gap-1.5"><Download className="h-3.5 w-3.5" /> Export CSV</button>
       </div>
+
+      {/* Stat strip */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Stat label="Active total" value={stats.active} />
+        <Stat label="Journal subscribers" value={stats.journal} accent />
+        <Stat label="Register opt-ins" value={stats.register} />
+        <Stat label="Withdrawn" value={stats.withdrawn} />
+      </div>
+
+      {/* Filter tabs */}
+      <div className="flex flex-wrap gap-1 border-b border-slate-200">
+        {[
+          { k: 'all',       t: `All (${stats.total})` },
+          { k: 'journal',   t: `Journal (${stats.journal})` },
+          { k: 'register',  t: `Register (${stats.register})` },
+          { k: 'withdrawn', t: `Withdrawn (${stats.withdrawn})` },
+        ].map((tab) => (
+          <button
+            key={tab.k}
+            onClick={() => setFilter(tab.k)}
+            className={`h-9 px-3 text-sm border-b-2 -mb-px ${filter === tab.k ? 'border-slate-900 text-slate-900 font-medium' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+          >{tab.t}</button>
+        ))}
+      </div>
+
       <div className="rounded-xl border border-slate-200 bg-white overflow-hidden overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
-            <tr><th className="text-left px-4 py-2">Email</th><th className="text-left px-4 py-2">Source</th><th className="text-left px-4 py-2">Signed up</th></tr>
+            <tr>
+              <th className="text-left px-4 py-2">Email</th>
+              <th className="text-left px-4 py-2">Source</th>
+              <th className="text-left px-4 py-2">Status</th>
+              <th className="text-left px-4 py-2">Consent</th>
+              <th className="text-left px-4 py-2">Withdrawn</th>
+            </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
+            {filtered.map((r) => (
               <tr key={r.id} className="border-t border-slate-100">
                 <td className="px-4 py-2 text-slate-900">{r.email}</td>
-                <td className="px-4 py-2 text-slate-500">{r.source || '—'}</td>
-                <td className="px-4 py-2 text-slate-500 text-xs">{new Date(r.createdAt).toLocaleString()}</td>
+                <td className="px-4 py-2"><SourcePill source={r.source} /></td>
+                <td className="px-4 py-2">
+                  {r.withdrawnAt
+                    ? <span className="inline-flex items-center gap-1 text-xs text-slate-400"><X className="h-3.5 w-3.5" /> Withdrawn</span>
+                    : <span className="inline-flex items-center gap-1 text-xs text-emerald-700"><Check className="h-3.5 w-3.5" /> Active</span>}
+                </td>
+                <td className="px-4 py-2 text-slate-500 text-xs">{r.lastConsentAt ? new Date(r.lastConsentAt).toLocaleString() : (r.consentAt ? new Date(r.consentAt).toLocaleString() : '—')}</td>
+                <td className="px-4 py-2 text-slate-500 text-xs">{r.withdrawnAt ? new Date(r.withdrawnAt).toLocaleString() : '—'}</td>
               </tr>
             ))}
+            {filtered.length === 0 && (
+              <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-400 text-sm">No subscribers in this view.</td></tr>
+            )}
           </tbody>
         </table>
       </div>

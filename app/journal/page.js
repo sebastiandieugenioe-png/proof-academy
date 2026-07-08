@@ -80,11 +80,12 @@ function SubscribeForm({ variant = 'hero' }) {
   const [email, setEmail] = useState('')
   const [status, setStatus] = useState('idle') // idle | submitting | done | error
   const [msg, setMsg] = useState('')
+  const [note, setNote] = useState('')
 
   const submit = async (e) => {
     e.preventDefault()
     if (!email.trim() || status === 'submitting') return
-    setStatus('submitting'); setMsg('')
+    setStatus('submitting'); setMsg(''); setNote('')
     try {
       const res = await fetch('/api/journal/subscribe', {
         method: 'POST',
@@ -93,10 +94,24 @@ function SubscribeForm({ variant = 'hero' }) {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || 'Something went wrong.')
+
+      // Server tells us the outcome and whether the welcome email actually went out.
       setStatus('done')
-      setMsg(data.alreadySubscribed
-        ? 'You are already on the list. Look out for the next issue.'
-        : 'Welcome to the Journal. A confirmation is on its way.')
+      setMsg(data.message || 'You have been subscribed to the Journal.')
+
+      // Sub-note tuned per outcome for perfect honesty about what just happened.
+      if (data.outcome === 'already_subscribed') {
+        setNote('Look out for the next issue on Sunday.')
+      } else if (data.emailSkipped) {
+        // Resend not yet configured in this environment — sub is saved, we say so.
+        setNote('Your subscription is saved. A welcome email will be sent shortly.')
+      } else if (data.emailError) {
+        setNote('Your subscription is saved. The confirmation email had an issue — we will retry.')
+      } else if (data.emailSent) {
+        setNote('Check your inbox for a confirmation from the OSC Journal.')
+      } else {
+        setNote('You will hear from us at the next issue.')
+      }
     } catch (err) {
       setStatus('error')
       setMsg(err.message || 'Please try again in a moment.')
@@ -111,7 +126,7 @@ function SubscribeForm({ variant = 'hero' }) {
             <Check className="h-5 w-5 text-white" />
           </div>
           <p className="mt-4 text-lg font-medium text-slate-900">{msg}</p>
-          <p className="mt-2 text-sm text-slate-500">You can close this page.</p>
+          {note && <p className="mt-2 text-sm text-slate-500">{note}</p>}
         </div>
       </div>
     )

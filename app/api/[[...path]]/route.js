@@ -1076,9 +1076,18 @@ export async function POST(request, { params }) {
 
   // ------------------------------------------------------------------
   // Public: OSC Journal — email-only subscription
-  // No account needed. Sends a welcome email (best-effort via Resend).
-  // Idempotent upserts into the shared `newsletter` collection so the
-  // existing /unsubscribe flow works out of the box.
+  //
+  // Behaviour is explicit. Every request resolves to ONE of four outcomes,
+  // logged with a stable prefix so we can grep production logs:
+  //   [journal] new_subscriber                — email seen for the first time
+  //   [journal] existing_user_newly_subscribed — has an OSC account, was not opted in
+  //   [journal] already_subscribed             — active subscription exists (no email sent)
+  //   [journal] email_skipped_resend_not_configured — Resend not set up (no email sent)
+  //   [journal] welcome_email_sent / welcome_email_failed
+  //
+  // Idempotent — safe to POST repeatedly. Never sends duplicate welcome
+  // emails. Blocks on the mailer so send failures surface in the response
+  // (emailSent / emailSkipped / emailError) instead of being swallowed.
   // ------------------------------------------------------------------
   if (seg === 'journal/subscribe') {
     try {
@@ -1088,27 +1097,48 @@ export async function POST(request, { params }) {
       if (!rl.allowed) return tooMany(rl.retryAfterMs);
 
       const raw = String(body?.email || '').trim().toLowerCase().slice(0, 254);
-      if (!isSafeEmail(raw)) return NextResponse.json({ error: 'Please enter a valid email.' }, { status: 400 });
+      if (!isSafeEmail(raw)) {
+        return NextResponse.json({ error: 'Please enter a valid email.' }, { status: 400 });
+      }
 
       const db = await getDb();
       const now = new Date();
-      const unsubToken = newUnsubToken();
 
-      // If this email already has an active subscription, treat as success (idempotent).
-      const existing = await db.collection('newsletter').findOne({ email: raw });
-      const existingUser = await db.collection('users').findOne({ email: raw }, { projection: { newsletter: 1, newsletterWithdrawnAt: 1, newsletterUnsubscribeToken: 1 } });
+      // Load both records in parallel — need both to determine outcome.
+      const [nlDoc, userDoc] = await Promise.all([
+        db.collection('newsletter').findOne({ email: raw }),
+        db.collection('users').findOne(
+          { email: raw },
+          { projection: { _id: 1, id: 1, email: 1, name: 1, newsletter: 1, newsletterWithdrawnAt: 1, newsletterConsentAt: 1, newsletterUnsubscribeToken: 1, journalOptIn: 1, journalOptInAt: 1 } }
+        ),
+      ]);
 
-      const alreadyActive = (existing && !existing.withdrawnAt) || (existingUser && existingUser.newsletter && !existingUser.newsletterWithdrawnAt);
+      // Active = either surface shows a live opt-in that hasn't been withdrawn.
+      const nlActive = !!(nlDoc && !nlDoc.withdrawnAt);
+      const userActive = !!(userDoc && userDoc.newsletter && !userDoc.newsletterWithdrawnAt);
+      const wasAlreadyActive = nlActive || userActive;
 
+      // Resolve outcome first — drives both response message + mailer decision.
+      let outcome;
+      if (wasAlreadyActive) outcome = 'already_subscribed';
+      else if (userDoc)     outcome = 'existing_user_newly_subscribed';
+      else                  outcome = 'new_subscriber';
+
+      // Reuse existing unsubscribe token when we have one so old email links keep working.
+      const unsubscribeToken = nlDoc?.unsubscribeToken || userDoc?.newsletterUnsubscribeToken || newUnsubToken();
+
+      // --- Upsert newsletter document (source of truth for anyone subscribed).
       await db.collection('newsletter').updateOne(
         { email: raw },
         {
           $set: {
             email: raw,
-            source: existing?.source || 'journal',
-            consentAt: now,
+            source: nlDoc?.source || 'journal',
+            consentAt: nlDoc?.consentAt || now,
+            lastConsentAt: now,
             withdrawnAt: null,
-            unsubscribeToken: existing?.unsubscribeToken || unsubToken,
+            unsubscribeToken,
+            userId: userDoc ? (userDoc.id || String(userDoc._id)) : (nlDoc?.userId || null),
             updatedAt: now,
           },
           $setOnInsert: { id: uuid(), createdAt: now },
@@ -1116,37 +1146,76 @@ export async function POST(request, { params }) {
         { upsert: true }
       );
 
-      // If the email belongs to a registered user, also flip their user-level
-      // newsletter flag back on so both surfaces stay in sync.
-      if (existingUser) {
+      // --- Sync the user document so /profile + /admin stay coherent with /newsletter.
+      if (userDoc) {
         await db.collection('users').updateOne(
           { email: raw },
           {
             $set: {
               newsletter: true,
-              newsletterConsentAt: now,
+              newsletterConsentAt: userDoc.newsletterConsentAt || now,
+              newsletterLastConsentAt: now,
               newsletterWithdrawnAt: null,
-              newsletterUnsubscribeToken: existingUser.newsletterUnsubscribeToken || unsubToken,
+              newsletterUnsubscribeToken: unsubscribeToken,
+              // Explicit Journal flag — makes admin filtering trivial.
+              journalOptIn: true,
+              journalOptInAt: userDoc.journalOptInAt || now,
               updatedAt: now,
             },
           }
         );
       }
 
-      // Fire-and-forget welcome email. Never block the subscribe on Resend.
-      if (!alreadyActive) {
+      // --- Welcome email: only sent for the two "newly-active" outcomes.
+      //     Blocking (await) so we can report the result honestly to the caller.
+      let emailSent = false;
+      let emailSkipped = false;
+      let emailError = null;
+
+      if (outcome === 'new_subscriber' || outcome === 'existing_user_newly_subscribed') {
         const base = process.env.NEXT_PUBLIC_BASE_URL || '';
-        const token = existing?.unsubscribeToken || unsubToken;
-        const unsubUrl = `${base}/unsubscribe?token=${encodeURIComponent(token)}`;
-        sendTransactionalEmail({
+        const unsubUrl = `${base}/unsubscribe?token=${encodeURIComponent(unsubscribeToken)}`;
+        const result = await sendTransactionalEmail({
           to: raw,
           ...emailTemplates.journalWelcome({ unsubUrl }),
-        }).catch((e) => console.warn('[journal] welcome email failed:', e?.message || e));
+        });
+
+        if (result?.skipped) {
+          emailSkipped = true;
+          console.warn(`[journal] email_skipped_resend_not_configured reason="${result.reason}" email=${raw} outcome=${outcome}`);
+        } else if (result?.ok) {
+          emailSent = true;
+          console.log(`[journal] welcome_email_sent id=${result.id || 'n/a'} email=${raw} outcome=${outcome}`);
+        } else {
+          emailError = result?.message || 'Unknown mailer error';
+          console.error(`[journal] welcome_email_failed status=${result?.status || 'n/a'} email=${raw} outcome=${outcome} message="${emailError}"`);
+        }
+      } else {
+        console.log(`[journal] no_email_sent reason=already_subscribed email=${raw}`);
       }
 
-      return NextResponse.json({ ok: true, alreadySubscribed: !!alreadyActive });
+      // Overall structured log entry — one line per subscription attempt.
+      console.log(`[journal] subscription outcome=${outcome} email=${raw} emailSent=${emailSent} emailSkipped=${emailSkipped}${emailError ? ` emailError="${emailError}"` : ''}`);
+
+      // User-facing message per outcome — never silent, never ambiguous.
+      const message =
+        outcome === 'already_subscribed'
+          ? "You're already subscribed to the OSC Journal."
+          : outcome === 'existing_user_newly_subscribed'
+            ? 'Welcome to the Journal. Your subscription is now active.'
+            : 'Welcome to the Journal. A confirmation email is on its way.';
+
+      return NextResponse.json({
+        ok: true,
+        outcome,                                  // 'new_subscriber' | 'existing_user_newly_subscribed' | 'already_subscribed'
+        alreadySubscribed: outcome === 'already_subscribed', // kept for backwards compatibility
+        message,
+        emailSent,
+        emailSkipped,
+        emailError,
+      });
     } catch (e) {
-      console.error('[journal/subscribe] error:', e);
+      console.error('[journal/subscribe] unexpected error:', e);
       return NextResponse.json({ error: 'Could not subscribe. Please try again.' }, { status: 500 });
     }
   }
