@@ -112,7 +112,6 @@ const TopBar = ({ user, onNav, onLogout }) => {
           {!user && (
             <>
               <a href="/#paths"  className="text-sm px-3 h-9 inline-flex items-center rounded-md hover:bg-slate-100 text-slate-700">Learning Paths</a>
-              <a href="/journal" className="text-sm px-3 h-9 inline-flex items-center rounded-md hover:bg-slate-100 text-slate-700">Journal</a>
               <a href="/about"   className="text-sm px-3 h-9 inline-flex items-center rounded-md hover:bg-slate-100 text-slate-700">About</a>
               <button onClick={() => { if (typeof window !== 'undefined') window.location.href = '/login' }} className="ml-1 text-sm h-9 px-3 inline-flex items-center rounded-md hover:bg-slate-100 text-slate-700 font-medium">Log in</button>
             </>
@@ -120,7 +119,6 @@ const TopBar = ({ user, onNav, onLogout }) => {
           {user && (
             <>
               <button onClick={() => onNav({ name: 'study' })} className="text-sm px-3 h-9 inline-flex items-center rounded-md hover:bg-slate-100 text-slate-700">Study</button>
-              <a href="/journal" className="text-sm px-3 h-9 inline-flex items-center rounded-md hover:bg-slate-100 text-slate-700">Journal</a>
               <button onClick={() => onNav({ name: 'profile' })} className="text-sm px-3 h-9 inline-flex items-center rounded-md hover:bg-slate-100 text-slate-700">Profile</button>
               <button onClick={onLogout} className="text-sm px-3 h-9 inline-flex items-center gap-1.5 rounded-md hover:bg-slate-100 text-slate-600"><LogOut className="h-4 w-4" /> Log out</button>
             </>
@@ -171,7 +169,6 @@ const TopBar = ({ user, onNav, onLogout }) => {
           {!user && (
             <>
               <a href="/#paths"  onClick={closeAnd()} className="h-12 flex items-center border-b border-slate-100 text-slate-900 text-base font-medium">Learning Paths</a>
-              <a href="/journal" onClick={closeAnd()} className="h-12 flex items-center border-b border-slate-100 text-slate-900 text-base font-medium">Journal</a>
               <a href="/about"   onClick={closeAnd()} className="h-12 flex items-center border-b border-slate-100 text-slate-900 text-base font-medium">About</a>
               <a href="/register" onClick={closeAnd()} className="mt-4 h-12 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium inline-flex items-center justify-center gap-2">Start Learning</a>
             </>
@@ -179,7 +176,6 @@ const TopBar = ({ user, onNav, onLogout }) => {
           {user && (
             <>
               <button onClick={closeAnd(() => onNav({ name: 'study' }))} className="h-12 flex items-center border-b border-slate-100 text-slate-900 text-base font-medium text-left">Study</button>
-              <a href="/journal" onClick={closeAnd()} className="h-12 flex items-center border-b border-slate-100 text-slate-900 text-base font-medium">Journal</a>
               <button onClick={closeAnd(() => onNav({ name: 'profile' }))} className="h-12 flex items-center border-b border-slate-100 text-slate-900 text-base font-medium text-left">Profile</button>
               <button onClick={closeAnd(onLogout)} className="h-12 flex items-center text-slate-600 text-base font-medium text-left"><LogOut className="h-4 w-4 mr-2" /> Log out</button>
             </>

@@ -70,14 +70,11 @@ export default function AboutPage() {
             Two ways to start.
           </h2>
           <p className="mt-6 text-base md:text-lg text-slate-600 leading-relaxed">
-            Take a Learning Path, or subscribe to the Journal. Both are free.
+            Create a free account and start a Learning Path.
           </p>
           <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
             <Link href="/register" className="h-12 px-7 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium inline-flex items-center gap-2 transition">
               Create a free account
-            </Link>
-            <Link href="/journal" className="h-12 px-5 text-slate-700 hover:text-slate-900 font-medium inline-flex items-center gap-1 transition">
-              Read the Journal &rarr;
             </Link>
           </div>
           <p className="mt-16 text-sm italic text-slate-400 tracking-wide">

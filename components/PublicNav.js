@@ -12,7 +12,6 @@ import OscLogo from '@/components/OscLogo'
 
 const DEFAULT_LINKS = [
   { href: '/#paths',  label: 'Learning Paths' },
-  { href: '/journal', label: 'Journal' },
   { href: '/about',   label: 'About' },
 ]
 
