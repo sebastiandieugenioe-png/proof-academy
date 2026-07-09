@@ -12,6 +12,7 @@ import { getLegalPages } from '@/lib/legal-pages';
 import { sendTransactionalEmail, templates as emailTemplates, mailerStatus } from '@/lib/mailer';
 import { issueToken, verifyAndConsumeToken, hashToken } from '@/lib/auth-tokens';
 import { getUserIdFromRequest, makeUserSessionToken, USER_COOKIE, USER_COOKIE_CLEAR } from '@/lib/user-session';
+import { ensureMigrationsRun } from '@/lib/migrations';
 import { isSafeId, assertSafeId, isSafeSlug, assertSafeSlug, isSafeEmail, assertSafeEmail } from '@/lib/validators';
 import { rateLimit, ipFromRequest, rateLimitResponse } from '@/lib/rate-limit';
 import bcrypt from 'bcryptjs';
@@ -277,6 +278,10 @@ async function findLessonMerged(courseSlug, lessonSlug) {
 }
 
 export async function GET(request, { params }) {
+  // Fire self-healing migrations on the first request after each deploy.
+  // In-process gated, idempotent, non-blocking on subsequent requests.
+  ensureMigrationsRun();
+
   const { path = [] } = await params;
   const url = new URL(request.url);
   const seg = path.join('/');
@@ -1098,6 +1103,9 @@ export async function DELETE(request, { params }) {
 }
 
 export async function POST(request, { params }) {
+  // Self-healing migrations gate — no-op after first successful run.
+  ensureMigrationsRun();
+
   const { path = [] } = await params;
   const seg = path.join('/');
 
