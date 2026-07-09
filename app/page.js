@@ -655,48 +655,95 @@ const StatCard = ({ label, value, icon: Icon, highlight, onClick }) => (
 
 const CourseView = ({ slug, onNav, user }) => {
   const [course, setCourse] = useState(null)
+  const [error, setError] = useState(null)
   const [progress, setProgress] = useState([])
   useEffect(() => {
-    api(`/courses/${slug}`).then(setCourse).catch(() => {})
-    if (user) api('/progress').then(setProgress)
+    let cancelled = false
+    setCourse(null); setError(null)
+    api(`/courses/${slug}`)
+      .then((c) => {
+        if (cancelled) return
+        // Defensive shape check — the DB must return an object with a lessons array
+        if (!c || typeof c !== 'object' || !Array.isArray(c.lessons)) {
+          setError('This learning path could not be loaded. It may have been moved or is temporarily unavailable.')
+          return
+        }
+        setCourse(c)
+      })
+      .catch((e) => {
+        if (cancelled) return
+        console.error('[CourseView] load failed:', e)
+        const msg = /404|not found/i.test(String(e?.message || ''))
+          ? 'This learning path is no longer available.'
+          : 'We could not load this learning path. Please check your connection and try again.'
+        setError(msg)
+      })
+    if (user) {
+      api('/progress').then((p) => { if (!cancelled) setProgress(Array.isArray(p) ? p : []) }).catch(() => {})
+    }
+    return () => { cancelled = true }
   }, [slug, user])
+
+  // Error state — never leaves the user stuck on an infinite spinner.
+  if (error) return (
+    <div className="max-w-lg mx-auto text-center py-16 space-y-4">
+      <div className="inline-flex h-10 w-10 rounded-full bg-slate-100 items-center justify-center">
+        <AlertTriangle className="h-5 w-5 text-slate-500" />
+      </div>
+      <h1 className="text-xl font-semibold text-slate-900">Learning path unavailable</h1>
+      <p className="text-sm text-slate-600">{error}</p>
+      <div className="flex items-center justify-center gap-2 pt-2">
+        <button onClick={() => onNav({ name: 'dashboard' })} className="h-10 px-5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-medium">Back to dashboard</button>
+        <button onClick={() => { setError(null); setCourse(null); api(`/courses/${slug}`).then(setCourse).catch(() => setError('Still not available. Please try again in a moment.')) }} className="h-10 px-5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium">Try again</button>
+      </div>
+    </div>
+  )
   if (!course) return <FullPageLoader />
+
   const Icon = ICONS[course.icon] || BookOpen
+  const lessons = Array.isArray(course.lessons) ? course.lessons : []
   const doneSet = new Set(progress.filter((p) => p.completed && p.courseSlug === slug).map((p) => p.lessonSlug))
+  const accent = course.accent || 'from-slate-700 to-slate-900'
+
   return (
     <div className="space-y-8">
       <button onClick={() => onNav({ name: 'dashboard' })} className="text-sm text-slate-500 hover:text-slate-800 inline-flex items-center gap-1"><ChevronLeft className="h-4 w-4" /> Dashboard</button>
       <div className="flex items-start gap-4">
-        <div className={`h-14 w-14 rounded-xl bg-gradient-to-br ${course.accent} grid place-items-center text-white shadow-sm`}>
+        <div className={`h-14 w-14 rounded-xl bg-gradient-to-br ${accent} grid place-items-center text-white shadow-sm`}>
           <Icon className="h-7 w-7" />
         </div>
         <div>
-          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">{course.level} · {course.lessons.length} modules</div>
-          <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-slate-900">{course.title}</h1>
-          <p className="mt-1.5 text-slate-600 max-w-2xl">{course.tagline}</p>
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">{course.level || ''} · {lessons.length} modules</div>
+          <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-slate-900">{course.title || 'Learning path'}</h1>
+          {course.tagline && <p className="mt-1.5 text-slate-600 max-w-2xl">{course.tagline}</p>}
         </div>
       </div>
-      <ol className="space-y-2.5">
-        {course.lessons.map((l, i) => {
-          const done = doneSet.has(l.slug)
-          return (
-            <li key={l.slug}>
-              <button onClick={() => onNav({ name: 'lesson', courseSlug: slug, lessonSlug: l.slug })} className="w-full text-left rounded-xl border border-slate-200 bg-white p-4 md:p-5 flex items-center gap-4 card-hover">
-                <div className={`h-9 w-9 shrink-0 rounded-full grid place-items-center text-sm font-semibold ${done ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
-                  {done ? <Check className="h-4 w-4" /> : i + 1}
-                </div>
-                <div className="flex-1">
-                  <div className="font-medium text-slate-900">{l.title}</div>
-                  <div className="text-xs text-slate-500">{l.minutes} min · Theory · Study Cards · Knowledge Check</div>
-                </div>
-                <ChevronRight className="h-4 w-4 text-slate-400" />
-              </button>
-            </li>
-          )
-        })}
-      </ol>
+      {lessons.length === 0 ? (
+        <div className="text-center py-8 text-sm text-slate-500 italic">No modules published yet. Check back soon.</div>
+      ) : (
+        <ol className="space-y-2.5">
+          {lessons.map((l, i) => {
+            if (!l || !l.slug) return null
+            const done = doneSet.has(l.slug)
+            return (
+              <li key={l.slug}>
+                <button onClick={() => onNav({ name: 'lesson', courseSlug: slug, lessonSlug: l.slug })} className="w-full text-left rounded-xl border border-slate-200 bg-white p-4 md:p-5 flex items-center gap-4 card-hover">
+                  <div className={`h-9 w-9 shrink-0 rounded-full grid place-items-center text-sm font-semibold ${done ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                    {done ? <Check className="h-4 w-4" /> : i + 1}
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-medium text-slate-900">{l.title || 'Untitled module'}</div>
+                    <div className="text-xs text-slate-500">{l.minutes || 5} min · Theory · Study Cards · Knowledge Check</div>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-slate-400" />
+                </button>
+              </li>
+            )
+          })}
+        </ol>
+      )}
       <div className="pt-4 border-t border-slate-100 flex justify-end">
-        <FeedbackButton pageType="learning_path" context={{ courseId: course.slug, courseTitle: course.title }} label="Suggest an improvement" />
+        <FeedbackButton pageType="learning_path" context={{ courseId: course.slug || slug, courseTitle: course.title || slug }} label="Suggest an improvement" />
       </div>
     </div>
   )
@@ -706,12 +753,25 @@ const STEPS = ['objectives', 'theory', 'flashcards', 'quiz', 'done']
 const STEP_LABELS = { objectives: 'Objectives', theory: 'Theory', flashcards: 'Study Cards', quiz: 'Knowledge Check', done: 'Complete' }
 const LessonView = ({ courseSlug, lessonSlug, user, onNav }) => {
   const [data, setData] = useState(null)
+  const [error, setError] = useState(null)
   const [step, setStep] = useState(0)
   const startedAt = useMemo(() => Date.now(), [courseSlug, lessonSlug])
   useEffect(() => {
-    setData(null); setStep(0)
-    api(`/lessons/${courseSlug}/${lessonSlug}`).then(setData).catch(() => {})
+    let cancelled = false
+    setData(null); setError(null); setStep(0)
+    api(`/lessons/${courseSlug}/${lessonSlug}`)
+      .then((d) => {
+        if (cancelled) return
+        if (!d || typeof d !== 'object') { setError('This module could not be loaded.'); return }
+        setData(d)
+      })
+      .catch((e) => {
+        if (cancelled) return
+        console.error('[LessonView] load failed:', e)
+        setError(/404|not found/i.test(String(e?.message || '')) ? 'This module is no longer available.' : 'We could not load this module. Please try again.')
+      })
     if (user) api('/progress', { method: 'POST', body: { courseSlug, lessonSlug, step: 'objectives' } }).catch(() => {})
+    return () => { cancelled = true }
   }, [courseSlug, lessonSlug, user])
   const complete = async (quizScore) => {
     if (!user) return
@@ -719,9 +779,19 @@ const LessonView = ({ courseSlug, lessonSlug, user, onNav }) => {
     try { await api('/progress', { method: 'POST', body: { courseSlug, lessonSlug, step: 'done', completed: true, minutesSpent: minutes, quizScore } }) }
     catch (e) { console.error(e) }
   }
+  if (error) return (
+    <div className="max-w-lg mx-auto text-center py-16 space-y-4">
+      <div className="inline-flex h-10 w-10 rounded-full bg-slate-100 items-center justify-center">
+        <AlertTriangle className="h-5 w-5 text-slate-500" />
+      </div>
+      <h1 className="text-xl font-semibold text-slate-900">Module unavailable</h1>
+      <p className="text-sm text-slate-600">{error}</p>
+      <button onClick={() => onNav({ name: 'course', slug: courseSlug })} className="h-10 px-5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium">Back to path</button>
+    </div>
+  )
   if (!data) return <FullPageLoader />
   const { course, lesson, next, index, total } = data
-  if (!lesson) return (
+  if (!lesson || !course) return (
     <div className="max-w-lg mx-auto text-center py-12 space-y-4">
       <h1 className="text-xl font-semibold text-slate-900">Module unavailable</h1>
       <p className="text-sm text-slate-600">This module could not be loaded. Please try again or go back.</p>
