@@ -222,11 +222,20 @@ async function findCourseMerged(slug) {
     const p = await db.collection('courses_published').findOne({ slug });
     if (p && !p.hidden) {
       delete p._id;
+      // Guardrail: if the DB override is malformed (e.g. lessons stored as a
+      // non-array), refuse to return it. Fall back to canonical instead of
+      // sending broken data to the client. This prevents a single bad admin
+      // save from bricking an entire learning path.
+      if (!Array.isArray(p.lessons)) {
+        console.warn(`[findCourseMerged] override for '${slug}' has non-array lessons — falling back to canonical.`);
+        if (canonical) return canonical;
+        return null;
+      }
       // Rehydrate: any lesson field missing on the DB record falls back to canonical source.
       // Prevents crashes when admin-override accidentally stored a lesson without theory/flashcards/etc.
       if (canonical?.lessons) {
-        p.lessons = (p.lessons || []).map((l) => {
-          const src = canonical.lessons.find((c) => c.slug === l.slug);
+        p.lessons = p.lessons.map((l) => {
+          const src = canonical.lessons.find((c) => c.slug === l?.slug);
           return src ? { ...src, ...l } : l;
         });
       }
@@ -806,6 +815,42 @@ export async function GET(request, { params }) {
       return json(rows.map((r) => ({ ...r, _id: undefined })));
     }
 
+    // Admin: Course diagnostic — dumps everything about a slug so we can
+    // see exactly why a learning path is failing on the client side.
+    // GET /api/admin/course-diagnostic/:slug
+    if (path[0] === 'admin' && path[1] === 'course-diagnostic' && path[2]) {
+      const slug = path[2];
+      const db = await getDb();
+      const staticC = getCourse(slug) || null;
+      const aiC = AI_COURSES.find((c) => c.slug === slug) || null;
+      const published = await db.collection('courses_published').findOne({ slug });
+      const alias = await db.collection('course_slug_aliases').findOne({ from: slug });
+      const aliasTargets = await db.collection('course_slug_aliases').find({ to: slug }).toArray();
+      const summarizeLessons = (arr) => Array.isArray(arr) ? { count: arr.length, sample: arr.slice(0, 3).map((l) => ({ slug: l?.slug, title: l?.title, hasTheory: !!l?.theory, hasFlashcards: Array.isArray(l?.flashcards), hasQuiz: Array.isArray(l?.quiz) })) } : { count: 0, notAnArray: true, actualType: typeof arr };
+      return json({
+        slug,
+        static: staticC ? { title: staticC.title, level: staticC.level, lessons: summarizeLessons(staticC.lessons) } : null,
+        ai: aiC ? { title: aiC.title, lessons: summarizeLessons(aiC.lessons) } : null,
+        published: published ? {
+          _id: undefined,
+          title: published.title,
+          level: published.level,
+          hidden: !!published.hidden,
+          hasLessonsField: 'lessons' in published,
+          lessons: summarizeLessons(published.lessons),
+          updatedAt: published.updatedAt,
+        } : null,
+        aliasFromThis: alias ? { to: alias.to } : null,
+        aliasesPointingHere: aliasTargets.map((a) => a.from),
+        wouldResolveVia:
+          published && !published.hidden && Array.isArray(published.lessons) ? 'published' :
+          staticC ? 'static' :
+          aiC ? 'ai' :
+          alias?.to ? `alias -> ${alias.to}` :
+          'nothing (404)',
+      });
+    }
+
     // Admin: Feedback list + stats
     if (seg === 'admin/feedback') {
       const db = await getDb();
@@ -1153,6 +1198,70 @@ export async function POST(request, { params }) {
     const res = await db.collection('feedback').deleteMany(filter);
     console.log(`[feedback] bulk-delete mode=${mode} deleted=${res.deletedCount}`);
     return NextResponse.json({ ok: true, deleted: res.deletedCount });
+  }
+
+  // Admin: Course repair — heals broken overrides for a given slug.
+  // POST /api/admin/course-repair  body: { slug, mode?: 'auto'|'delete_override'|'unhide'|'remove_alias' }
+  // Default mode='auto' does the safest possible thing:
+  //   - clears hidden:true if present
+  //   - removes non-array lessons field (falls back to canonical)
+  //   - removes stale alias if it points to a nonexistent slug
+  // Returns a report of what was changed.
+  if (seg === 'admin/course-repair') {
+    const s = getAdminSessionFromRequest(request);
+    if (!s) return NextResponse.json({ error: 'Admin authentication required' }, { status: 401 });
+    const slug = String(body?.slug || '').trim();
+    if (!slug) return NextResponse.json({ error: 'slug is required' }, { status: 400 });
+    const mode = String(body?.mode || 'auto').toLowerCase();
+    const db = await getDb();
+    const actions = [];
+
+    const published = await db.collection('courses_published').findOne({ slug });
+    const staticC = getCourse(slug) || AI_COURSES.find((c) => c.slug === slug) || null;
+
+    if (published) {
+      const set = {}; const unset = {};
+      if (mode === 'auto' || mode === 'unhide') {
+        if (published.hidden) { set.hidden = false; actions.push(`cleared hidden:true on courses_published/${slug}`); }
+      }
+      if (mode === 'auto') {
+        if ('lessons' in published && !Array.isArray(published.lessons)) {
+          unset.lessons = ''; actions.push(`removed malformed lessons field (was ${typeof published.lessons}) — will now fall back to canonical bundled content`);
+        }
+      }
+      if (mode === 'delete_override') {
+        await db.collection('courses_published').deleteOne({ slug });
+        actions.push(`deleted the entire courses_published override for ${slug} — will now serve canonical bundled content`);
+      } else if (Object.keys(set).length || Object.keys(unset).length) {
+        const update = {};
+        if (Object.keys(set).length) update.$set = { ...set, updatedAt: new Date() };
+        if (Object.keys(unset).length) update.$unset = unset;
+        await db.collection('courses_published').updateOne({ slug }, update);
+      }
+    } else {
+      actions.push(`no courses_published override exists for ${slug}`);
+    }
+
+    if (mode === 'auto' || mode === 'remove_alias') {
+      const alias = await db.collection('course_slug_aliases').findOne({ from: slug });
+      if (alias?.to) {
+        const targetExists = !!(getCourse(alias.to) || AI_COURSES.find((c) => c.slug === alias.to) || await db.collection('courses_published').findOne({ slug: alias.to }));
+        if (!targetExists) {
+          await db.collection('course_slug_aliases').deleteOne({ from: slug });
+          actions.push(`removed stale alias ${slug} -> ${alias.to} (target did not exist)`);
+        }
+      }
+    }
+
+    const nowResolves = !!(await findCourseMerged(slug));
+    return NextResponse.json({
+      ok: true,
+      slug,
+      canonicalAvailable: !!staticC,
+      actionsTaken: actions,
+      resolvesNow: nowResolves,
+      hint: nowResolves ? 'Course now loads — verify on the live site.' : (staticC ? 'Canonical exists but not resolving — try mode=delete_override.' : 'No canonical bundled content for this slug — admin must recreate it in the DB.'),
+    });
   }
 
   if (seg === 'feedback') {
