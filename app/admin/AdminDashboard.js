@@ -29,6 +29,7 @@ const TABS = [
   { key: 'comments', label: 'Comments', icon: MessageSquare },
   { key: 'users', label: 'Users', icon: UsersIcon },
   { key: 'newsletter', label: 'Newsletter', icon: Mail },
+  { key: 'feedback', label: 'Feedback', icon: MessageSquare },
 ]
 
 export default function AdminDashboard({ adminEmail }) {
@@ -77,6 +78,7 @@ export default function AdminDashboard({ adminEmail }) {
         {tab === 'comments' && <CommentsView />}
         {tab === 'users' && (openUser ? <UserDetail id={openUser} onBack={() => setOpenUser(null)} /> : <UsersView onOpen={setOpenUser} />)}
         {tab === 'newsletter' && <NewsletterView />}
+        {tab === 'feedback' && <FeedbackView />}
       </main>
     </div>
   )
@@ -1811,6 +1813,268 @@ function PagePreviewModal({ title, slug, html, onClose }) {
           <AlertCircle className="h-3.5 w-3.5" /> Preview shows content <em>before</em> server-side sanitization. Save the page to apply sanitization.
         </div>
       </div>
+    </div>
+  )
+}
+
+/* ==================== FEEDBACK VIEW ==================== */
+const FEEDBACK_TYPES = [
+  { value: 'suggestion',         label: 'Suggestion' },
+  { value: 'content_correction', label: 'Content correction' },
+  { value: 'bug',                label: 'Bug report' },
+  { value: 'ux_issue',           label: 'UX issue' },
+  { value: 'opinion',            label: 'General opinion' },
+  { value: 'other',              label: 'Other' },
+]
+const FEEDBACK_STATUSES = [
+  { value: 'new',         label: 'New',         className: 'bg-blue-50 text-blue-800 border-blue-200' },
+  { value: 'reviewed',    label: 'Reviewed',    className: 'bg-slate-100 text-slate-700 border-slate-200' },
+  { value: 'in_progress', label: 'In Progress', className: 'bg-amber-50 text-amber-800 border-amber-200' },
+  { value: 'resolved',    label: 'Resolved',    className: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
+  { value: 'ignored',     label: 'Ignored',     className: 'bg-slate-50 text-slate-500 border-slate-200' },
+]
+const FEEDBACK_PRIORITIES = [
+  { value: 'low',      label: 'Low',      className: 'text-slate-500' },
+  { value: 'medium',   label: 'Medium',   className: 'text-slate-700' },
+  { value: 'high',     label: 'High',     className: 'text-amber-700' },
+  { value: 'critical', label: 'Critical', className: 'text-red-700 font-semibold' },
+]
+const typeLabel  = (v) => FEEDBACK_TYPES.find((t) => t.value === v)?.label || v
+const statusMeta = (v) => FEEDBACK_STATUSES.find((s) => s.value === v) || FEEDBACK_STATUSES[0]
+const prMeta     = (v) => FEEDBACK_PRIORITIES.find((p) => p.value === v) || FEEDBACK_PRIORITIES[0]
+
+function FeedbackView() {
+  const [rows, setRows] = useState(null)
+  const [stats, setStats] = useState(null)
+  const [openId, setOpenId] = useState(null)
+  const [filter, setFilter] = useState({ type: 'all', status: 'all', priority: 'all', pageType: 'all', q: '' })
+
+  const load = useCallback(async () => {
+    try {
+      const [r, s] = await Promise.all([api('/admin/feedback'), api('/admin/feedback/stats')])
+      setRows(r); setStats(s)
+    } catch (e) { toast.error(e.message) }
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  const filtered = useMemo(() => {
+    if (!rows) return []
+    const q = filter.q.trim().toLowerCase()
+    return rows.filter((r) => {
+      if (filter.type !== 'all' && r.type !== filter.type) return false
+      if (filter.status !== 'all' && r.status !== filter.status) return false
+      if (filter.priority !== 'all' && r.priority !== filter.priority) return false
+      if (filter.pageType !== 'all' && r.pageType !== filter.pageType) return false
+      if (q) {
+        const hay = `${r.message} ${r.userEmail || ''} ${r.url || ''} ${r.lessonTitle || ''} ${r.courseTitle || ''}`.toLowerCase()
+        if (!hay.includes(q)) return false
+      }
+      return true
+    })
+  }, [rows, filter])
+
+  const openRow = rows?.find((r) => r.id === openId) || null
+
+  const exportCsv = () => {
+    if (!filtered) return
+    const esc = (v) => `"${String(v ?? '').replace(/"/g, '""').replace(/\n/g, ' ').slice(0, 500)}"`
+    const header = 'id,createdAt,type,status,priority,pageType,userEmail,url,courseTitle,lessonTitle,message,adminNotes\n'
+    const csv = header + filtered.map((r) => [r.id, r.createdAt, r.type, r.status, r.priority, r.pageType, r.userEmail, r.url, r.courseTitle, r.lessonTitle, r.message, r.adminNotes].map(esc).join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `osc-feedback-${filter.status !== 'all' ? filter.status : 'all'}.csv`; a.click()
+  }
+
+  const bulkDelete = async (mode, status) => {
+    const label = mode === 'older_than_90_days' ? 'ALL resolved/ignored feedback older than 90 days' : `ALL feedback with status "${status}"`
+    if (!confirm(`Export first if you need a copy — this cannot be undone.\n\nDelete ${label}?`)) return
+    try {
+      const res = await api('/admin/feedback/bulk-delete', { method: 'POST', body: { mode, status } })
+      toast.success(`Deleted ${res.deleted} feedback item(s).`)
+      load()
+    } catch (e) { toast.error(e.message) }
+  }
+
+  const updateOne = async (id, patch) => {
+    try {
+      const res = await api(`/admin/feedback/${id}`, { method: 'PATCH', body: patch })
+      setRows((prev) => prev.map((r) => (r.id === id ? res.feedback : r)))
+      load()
+    } catch (e) { toast.error(e.message) }
+  }
+
+  const deleteOne = async (id) => {
+    if (!confirm('Delete this feedback? This cannot be undone.')) return
+    try {
+      await api(`/admin/feedback/${id}`, { method: 'DELETE' })
+      setRows((prev) => prev.filter((r) => r.id !== id))
+      setOpenId(null); load()
+    } catch (e) { toast.error(e.message) }
+  }
+
+  if (!rows || !stats) return <Spinner />
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Feedback <span className="text-sm text-slate-400 font-normal">({stats.total})</span></h1>
+        <div className="flex items-center gap-2">
+          <button onClick={exportCsv} className="h-9 px-3 rounded-md border border-slate-200 hover:bg-slate-50 text-sm inline-flex items-center gap-1.5"><Download className="h-3.5 w-3.5" /> Export CSV</button>
+          <details className="relative">
+            <summary className="h-9 px-3 rounded-md border border-slate-200 hover:bg-slate-50 text-sm inline-flex items-center gap-1.5 cursor-pointer list-none"><Trash2 className="h-3.5 w-3.5" /> Bulk delete</summary>
+            <div className="absolute right-0 top-11 z-10 w-64 rounded-lg border border-slate-200 bg-white shadow-lg p-2 text-sm">
+              <button onClick={() => bulkDelete('status', 'resolved')} className="block w-full text-left px-3 py-2 rounded hover:bg-slate-50 text-slate-700">Delete all Resolved</button>
+              <button onClick={() => bulkDelete('status', 'ignored')} className="block w-full text-left px-3 py-2 rounded hover:bg-slate-50 text-slate-700">Delete all Ignored</button>
+              <div className="border-t border-slate-100 my-1"></div>
+              <button onClick={() => bulkDelete('older_than_90_days')} className="block w-full text-left px-3 py-2 rounded hover:bg-red-50 text-red-700">Delete Resolved/Ignored older than 90 days</button>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+        <Stat label="Total" value={stats.total} />
+        <Stat label="New" value={stats.new} accent />
+        <Stat label="Bug reports" value={stats.bugs} />
+        <Stat label="Content corrections" value={stats.contentCorrections} />
+        <Stat label="Critical" value={stats.critical} />
+        <Stat label="Resolved" value={stats.resolved} />
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <select value={filter.type} onChange={(e) => setFilter({ ...filter, type: e.target.value })} className="h-9 rounded-md border border-slate-200 px-2 text-sm bg-white">
+          <option value="all">All types</option>
+          {FEEDBACK_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+        </select>
+        <select value={filter.status} onChange={(e) => setFilter({ ...filter, status: e.target.value })} className="h-9 rounded-md border border-slate-200 px-2 text-sm bg-white">
+          <option value="all">All statuses</option>
+          {FEEDBACK_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+        </select>
+        <select value={filter.priority} onChange={(e) => setFilter({ ...filter, priority: e.target.value })} className="h-9 rounded-md border border-slate-200 px-2 text-sm bg-white">
+          <option value="all">All priorities</option>
+          {FEEDBACK_PRIORITIES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+        </select>
+        <select value={filter.pageType} onChange={(e) => setFilter({ ...filter, pageType: e.target.value })} className="h-9 rounded-md border border-slate-200 px-2 text-sm bg-white">
+          <option value="all">All pages</option>
+          <option value="dashboard">Dashboard</option>
+          <option value="learning_path">Learning path</option>
+          <option value="module">Module</option>
+          <option value="lesson">Lesson</option>
+          <option value="study">Study</option>
+          <option value="journal">Journal</option>
+          <option value="profile">Profile</option>
+          <option value="other">Other</option>
+        </select>
+        <div className="flex-1 min-w-[220px] relative">
+          <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input placeholder="Search message, email, url, lesson…" value={filter.q} onChange={(e) => setFilter({ ...filter, q: e.target.value })} className="w-full h-9 pl-8 pr-3 rounded-md border border-slate-200 text-sm" />
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
+            <tr>
+              <th className="text-left px-4 py-2">When</th>
+              <th className="text-left px-4 py-2">Type</th>
+              <th className="text-left px-4 py-2">Status</th>
+              <th className="text-left px-4 py-2">Priority</th>
+              <th className="text-left px-4 py-2">Page</th>
+              <th className="text-left px-4 py-2">Message</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((r) => {
+              const s = statusMeta(r.status); const p = prMeta(r.priority)
+              return (
+                <tr key={r.id} onClick={() => setOpenId(r.id)} className="border-t border-slate-100 hover:bg-slate-50 cursor-pointer">
+                  <td className="px-4 py-2 text-xs text-slate-500 whitespace-nowrap">{new Date(r.createdAt).toLocaleString()}</td>
+                  <td className="px-4 py-2 text-slate-700 whitespace-nowrap">{typeLabel(r.type)}</td>
+                  <td className="px-4 py-2"><span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider border ${s.className}`}>{s.label}</span></td>
+                  <td className={`px-4 py-2 whitespace-nowrap ${p.className}`}>{p.label}</td>
+                  <td className="px-4 py-2 text-xs text-slate-500 max-w-[180px] truncate">{r.lessonTitle || r.courseTitle || r.pageType}</td>
+                  <td className="px-4 py-2 text-slate-800 max-w-md truncate">{r.message}</td>
+                </tr>
+              )
+            })}
+            {filtered.length === 0 && (<tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400 text-sm">No feedback matches these filters.</td></tr>)}
+          </tbody>
+        </table>
+      </div>
+
+      {(stats.topLessons?.length > 0 || stats.topCourses?.length > 0) && (
+        <div className="grid gap-3 md:grid-cols-2 mt-4">
+          {stats.topLessons?.length > 0 && (
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="text-xs uppercase tracking-wider text-slate-500 font-medium mb-2">Most reported lessons</div>
+              {stats.topLessons.map((l) => (<div key={l.label} className="flex items-center justify-between py-1 text-sm"><span className="text-slate-800 truncate">{l.label}</span><span className="text-slate-500 shrink-0 ml-2">{l.count}</span></div>))}
+            </div>
+          )}
+          {stats.topCourses?.length > 0 && (
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="text-xs uppercase tracking-wider text-slate-500 font-medium mb-2">Most reported learning paths</div>
+              {stats.topCourses.map((l) => (<div key={l.label} className="flex items-center justify-between py-1 text-sm"><span className="text-slate-800 truncate">{l.label}</span><span className="text-slate-500 shrink-0 ml-2">{l.count}</span></div>))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {openRow && (
+        <div className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center p-4" onClick={() => setOpenId(null)}>
+          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[85vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="border-b border-slate-200 px-5 py-4 flex items-center justify-between">
+              <div>
+                <div className="text-[11px] uppercase tracking-wider text-slate-500 font-medium">Feedback · {typeLabel(openRow.type)}</div>
+                <div className="text-sm text-slate-500 mt-0.5">{new Date(openRow.createdAt).toLocaleString()} · from {openRow.userEmail || 'anonymous'}</div>
+              </div>
+              <button onClick={() => setOpenId(null)} className="h-9 w-9 rounded-md hover:bg-slate-100 grid place-items-center text-slate-500"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="overflow-y-auto p-5 space-y-5">
+              <div>
+                <div className="text-xs uppercase tracking-wider text-slate-500 mb-1">Message</div>
+                <p className="text-slate-900 leading-relaxed whitespace-pre-wrap">{openRow.message}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div><div className="text-xs uppercase tracking-wider text-slate-500 mb-0.5">Page</div><div className="text-slate-700">{openRow.pageType}</div></div>
+                <div><div className="text-xs uppercase tracking-wider text-slate-500 mb-0.5">URL</div><div className="text-slate-700 truncate">{openRow.url || '—'}</div></div>
+                {openRow.courseTitle && <div><div className="text-xs uppercase tracking-wider text-slate-500 mb-0.5">Learning path</div><div className="text-slate-700">{openRow.courseTitle}</div></div>}
+                {openRow.lessonTitle && <div><div className="text-xs uppercase tracking-wider text-slate-500 mb-0.5">Lesson</div><div className="text-slate-700">{openRow.lessonTitle}</div></div>}
+                <div><div className="text-xs uppercase tracking-wider text-slate-500 mb-0.5">Viewport</div><div className="text-slate-700">{openRow.viewport || '—'}</div></div>
+                <div className="col-span-2"><div className="text-xs uppercase tracking-wider text-slate-500 mb-0.5">User agent</div><div className="text-slate-500 text-xs truncate">{openRow.userAgent || '—'}</div></div>
+                {openRow.screenshotUrl && <div className="col-span-2"><div className="text-xs uppercase tracking-wider text-slate-500 mb-0.5">Screenshot</div><a href={openRow.screenshotUrl} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline text-xs break-all">{openRow.screenshotUrl}</a></div>}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="text-xs uppercase tracking-wider text-slate-500 mb-1 block">Status</label>
+                  <select value={openRow.status} onChange={(e) => updateOne(openRow.id, { status: e.target.value })} className="w-full h-10 rounded-md border border-slate-300 px-2 text-sm bg-white">
+                    {FEEDBACK_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                  </select>
+                </div>
+                <div><label className="text-xs uppercase tracking-wider text-slate-500 mb-1 block">Priority</label>
+                  <select value={openRow.priority} onChange={(e) => updateOne(openRow.id, { priority: e.target.value })} className="w-full h-10 rounded-md border border-slate-300 px-2 text-sm bg-white">
+                    {FEEDBACK_PRIORITIES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs uppercase tracking-wider text-slate-500 mb-1 block">Admin notes</label>
+                <textarea
+                  defaultValue={openRow.adminNotes || ''}
+                  onBlur={(e) => updateOne(openRow.id, { adminNotes: e.target.value })}
+                  rows={3}
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm bg-white"
+                  placeholder="Notes visible only to admins…"
+                />
+              </div>
+            </div>
+            <div className="border-t border-slate-200 px-5 py-3 bg-slate-50 flex items-center justify-between">
+              <button onClick={() => deleteOne(openRow.id)} className="h-9 px-3 text-sm text-red-600 hover:bg-red-50 rounded-md inline-flex items-center gap-1.5"><Trash2 className="h-3.5 w-3.5" /> Delete</button>
+              <div className="flex items-center gap-2">
+                <button onClick={() => updateOne(openRow.id, { status: 'ignored' })} className="h-9 px-3 text-sm text-slate-600 hover:bg-slate-100 rounded-md">Ignore</button>
+                <button onClick={() => updateOne(openRow.id, { status: 'resolved' })} className="h-9 px-4 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium">Mark resolved</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

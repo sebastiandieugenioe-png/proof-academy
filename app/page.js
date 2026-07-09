@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import PublicFooter from '@/components/PublicFooter'
 import OscLogo from '@/components/OscLogo'
+import FeedbackButton from '@/components/FeedbackButton'
 
 const ICONS = { Flame, GlassWater, Sparkles }
 
@@ -616,6 +617,9 @@ const Dashboard = ({ user, courses, onNav }) => {
           {courses.map((c) => <CourseCard key={c.slug} course={c} onClick={() => onNav({ name: 'course', slug: c.slug })} progressMap={progressMap} />)}
         </div>
       </section>
+      <div className="pt-2 flex justify-end">
+        <FeedbackButton pageType="dashboard" label="Send feedback" />
+      </div>
     </div>
   )
 }
@@ -691,6 +695,9 @@ const CourseView = ({ slug, onNav, user }) => {
           )
         })}
       </ol>
+      <div className="pt-4 border-t border-slate-100 flex justify-end">
+        <FeedbackButton pageType="learning_path" context={{ courseId: course.slug, courseTitle: course.title }} label="Suggest an improvement" />
+      </div>
     </div>
   )
 }
@@ -742,6 +749,13 @@ const LessonView = ({ courseSlug, lessonSlug, user, onNav }) => {
       {STEPS[step] === 'flashcards' && <StepFlashcards lesson={lesson} onNext={() => setStep(3)} />}
       {STEPS[step] === 'quiz' && <StepQuiz lesson={lesson} onNext={(score) => { setStep(4); complete(score) }} />}
       {STEPS[step] === 'done' && <StepDone lesson={lesson} next={next} courseSlug={courseSlug} onNav={onNav} user={user} />}
+      <div className="pt-4 border-t border-slate-100 flex justify-end">
+        <FeedbackButton
+          pageType="lesson"
+          context={{ courseId: courseSlug, courseTitle: course.title, lessonId: lessonSlug, lessonTitle: lesson.title }}
+          label="Report an issue with this module"
+        />
+      </div>
     </div>
   )
 }
@@ -1104,6 +1118,9 @@ const StudyView = ({ user, onNav }) => {
         <h1 className="mt-3 text-2xl font-semibold text-slate-900">Nothing to study right now.</h1>
         <p className="mt-2 text-slate-600">Complete a module to add new study cards. Your due cards will show up here.</p>
         <button onClick={() => onNav({ name: 'dashboard' })} className="mt-6 h-11 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium">Back to dashboard</button>
+        <div className="mt-10">
+          <FeedbackButton pageType="study" label="Send feedback about Study" />
+        </div>
       </div>
     )
   }
