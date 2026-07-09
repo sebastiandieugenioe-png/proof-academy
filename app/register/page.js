@@ -184,21 +184,13 @@ export default function RegisterPage() {
               Subscribe to the Online Spirits Club Journal
             </div>
             <p className="mt-2 text-sm text-slate-600 leading-relaxed">
-              Receive three carefully curated emails every week designed to help hospitality professionals build lasting knowledge.
+              Receive carefully curated hospitality knowledge designed to help you become a better hospitality professional.
             </p>
           </div>
           <ul className="space-y-2 text-sm text-slate-700 border-t border-slate-100 pt-4">
             <li className="flex items-baseline gap-2.5">
               <span className="text-slate-900 font-medium">✓</span>
               <span><span className="font-medium text-slate-900">Hospitality Weekly</span> &mdash; every Monday</span>
-            </li>
-            <li className="flex items-baseline gap-2.5">
-              <span className="text-slate-900 font-medium">✓</span>
-              <span>Two additional editorial issues each week</span>
-            </li>
-            <li className="flex items-baseline gap-2.5">
-              <span className="text-slate-900 font-medium">✓</span>
-              <span>Topics may include hospitality insights, spirits knowledge, practical skills and study notes</span>
             </li>
           </ul>
           <label className="flex items-start gap-2.5 cursor-pointer border-t border-slate-100 pt-4">
@@ -213,7 +205,7 @@ export default function RegisterPage() {
             </span>
           </label>
           <p className="text-[11px] text-slate-500 leading-relaxed">
-            Free forever &middot; Unsubscribe anytime with one click &middot; Your account and Learning Paths are not affected if you unsubscribe. See our{' '}
+            Free forever. Unsubscribe anytime. See our{' '}
             <Link href="/privacy" className="text-slate-700 hover:text-slate-900 underline underline-offset-2">Privacy Policy</Link>.
           </p>
         </div>
