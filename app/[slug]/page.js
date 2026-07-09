@@ -19,6 +19,10 @@ const RESERVED = new Set([
   '_next', 'assets', 'static', 'images', 'sitemap',
 ]);
 
+// Legal / policy pages — publicly accessible, but excluded from search
+// engine indexes. /about is intentionally NOT here so it remains indexable.
+const NOINDEX_SLUGS = new Set(['privacy', 'terms', 'cookies', 'contact', 'data-rights']);
+
 async function fetchPage(slug) {
   if (!slug || RESERVED.has(slug)) return null;
   try {
@@ -37,13 +41,22 @@ export async function generateMetadata({ params }) {
   const title = p.seoTitle || `${p.title} · Online Spirits Club`;
   const description = p.seoDescription || htmlToPlainText(p.contentHtml, 160);
   const url = `${site}/${p.slug}`;
+  const isNoindex = NOINDEX_SLUGS.has(p.slug);
+  const robots = isNoindex
+    ? { index: false, follow: true, googleBot: { index: false, follow: true } }
+    : { index: true, follow: true };
+  const openGraph = { title, description, url, type: 'article', siteName: 'Online Spirits Club' };
   return {
     title,
     description,
     alternates: { canonical: url },
-    openGraph: { title, description, url, type: 'article', siteName: 'Online Spirits Club' },
+    // For noindex pages, omit canonical to further signal exclusion but keep OG for social share
+    ...(isNoindex ? { openGraph: { ...openGraph, url } } : { openGraph }),
     twitter: { card: 'summary_large_image', title, description },
-    robots: { index: true, follow: true },
+    robots,
+    // Belt-and-braces: emit X-Robots-Tag equivalent via `other` meta so crawlers
+    // that ignore Next.js's generated <meta name="robots"> still see it.
+    ...(isNoindex ? { other: { 'X-Robots-Tag': 'noindex, follow' } } : {}),
   };
 }
 

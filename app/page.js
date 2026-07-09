@@ -6,6 +6,7 @@ import {
   BookOpen, Brain, Layers, Target, Loader2, LogOut, User as UserIcon,
   Home, Wrench, ArrowRight, PartyPopper, Repeat, TrendingUp,
   Zap, StopCircle, Timer, Award, Smartphone, Trash2, AlertTriangle,
+  Menu as MenuIcon,
 } from 'lucide-react'
 import PublicFooter from '@/components/PublicFooter'
 import OscLogo from '@/components/OscLogo'
@@ -90,32 +91,103 @@ const Logo = ({ onClick }) => (
   </button>
 )
 
-const TopBar = ({ user, onNav, onLogout }) => (
-  <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/80 backdrop-blur">
-    <div className="mx-auto max-w-6xl px-4 h-14 flex items-center justify-between">
-      <Logo onClick={() => onNav(user ? { name: 'dashboard' } : { name: 'landing' })} />
-      <nav className="flex items-center gap-1">
-        {!user && (
-          <>
-            <a href="/#paths" className="hidden md:inline-flex text-sm px-3 h-9 items-center rounded-md hover:bg-slate-100 text-slate-700">Learning Paths</a>
-            <a href="/journal" className="hidden md:inline-flex text-sm px-3 h-9 items-center rounded-md hover:bg-slate-100 text-slate-700">Journal</a>
-            <a href="/about" className="hidden md:inline-flex text-sm px-3 h-9 items-center rounded-md hover:bg-slate-100 text-slate-700">About</a>
-          </>
-        )}
-        {user ? (
-          <>
-            <button onClick={() => onNav({ name: 'study' })} className="hidden md:inline-flex text-sm px-3 h-9 items-center rounded-md hover:bg-slate-100 text-slate-700">Study</button>
-            <a href="/journal" className="hidden md:inline-flex text-sm px-3 h-9 items-center rounded-md hover:bg-slate-100 text-slate-700">Journal</a>
-            <button onClick={() => onNav({ name: 'profile' })} className="hidden md:inline-flex text-sm px-3 h-9 items-center rounded-md hover:bg-slate-100 text-slate-700">Profile</button>
-            <button onClick={onLogout} className="text-sm px-3 h-9 inline-flex items-center gap-1.5 rounded-md hover:bg-slate-100 text-slate-600"><LogOut className="h-4 w-4" /><span className="hidden sm:inline">Log out</span></button>
-          </>
-        ) : (
-          <button onClick={() => { if (typeof window !== 'undefined') window.location.href = '/login' }} className="text-sm h-9 px-3 inline-flex items-center rounded-md hover:bg-slate-100 text-slate-700 font-medium">Log in</button>
-        )}
-      </nav>
-    </div>
-  </header>
-)
+const TopBar = ({ user, onNav, onLogout }) => {
+  const [mobileOpen, setMobileOpen] = useState(false)
+  useEffect(() => {
+    if (!mobileOpen) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = prev }
+  }, [mobileOpen])
+  const closeAnd = (fn) => () => { setMobileOpen(false); if (typeof fn === 'function') fn() }
+
+  return (
+    <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/80 backdrop-blur">
+      <div className="mx-auto max-w-6xl px-4 h-14 flex items-center justify-between gap-3">
+        <Logo onClick={() => onNav(user ? { name: 'dashboard' } : { name: 'landing' })} />
+
+        {/* Desktop nav */}
+        <nav className="hidden md:flex items-center gap-1">
+          {!user && (
+            <>
+              <a href="/#paths"  className="text-sm px-3 h-9 inline-flex items-center rounded-md hover:bg-slate-100 text-slate-700">Learning Paths</a>
+              <a href="/journal" className="text-sm px-3 h-9 inline-flex items-center rounded-md hover:bg-slate-100 text-slate-700">Journal</a>
+              <a href="/about"   className="text-sm px-3 h-9 inline-flex items-center rounded-md hover:bg-slate-100 text-slate-700">About</a>
+              <button onClick={() => { if (typeof window !== 'undefined') window.location.href = '/login' }} className="ml-1 text-sm h-9 px-3 inline-flex items-center rounded-md hover:bg-slate-100 text-slate-700 font-medium">Log in</button>
+            </>
+          )}
+          {user && (
+            <>
+              <button onClick={() => onNav({ name: 'study' })} className="text-sm px-3 h-9 inline-flex items-center rounded-md hover:bg-slate-100 text-slate-700">Study</button>
+              <a href="/journal" className="text-sm px-3 h-9 inline-flex items-center rounded-md hover:bg-slate-100 text-slate-700">Journal</a>
+              <button onClick={() => onNav({ name: 'profile' })} className="text-sm px-3 h-9 inline-flex items-center rounded-md hover:bg-slate-100 text-slate-700">Profile</button>
+              <button onClick={onLogout} className="text-sm px-3 h-9 inline-flex items-center gap-1.5 rounded-md hover:bg-slate-100 text-slate-600"><LogOut className="h-4 w-4" /> Log out</button>
+            </>
+          )}
+        </nav>
+
+        {/* Mobile controls */}
+        <div className="flex items-center gap-1 md:hidden">
+          {!user && (
+            <>
+              <button onClick={() => { if (typeof window !== 'undefined') window.location.href = '/login' }} className="text-sm h-9 px-3 inline-flex items-center rounded-md hover:bg-slate-100 text-slate-700 font-medium">Log in</button>
+              <button
+                type="button"
+                aria-expanded={mobileOpen}
+                aria-controls="app-mobile-nav"
+                aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
+                onClick={() => setMobileOpen((v) => !v)}
+                className="h-10 w-10 inline-flex items-center justify-center rounded-md hover:bg-slate-100 text-slate-700"
+              >
+                {mobileOpen ? <X className="h-5 w-5" /> : <MenuIcon className="h-5 w-5" />}
+              </button>
+            </>
+          )}
+          {user && (
+            <>
+              <button onClick={onLogout} className="text-sm h-9 px-3 inline-flex items-center gap-1.5 rounded-md hover:bg-slate-100 text-slate-600"><LogOut className="h-4 w-4" /></button>
+              <button
+                type="button"
+                aria-expanded={mobileOpen}
+                aria-controls="app-mobile-nav"
+                aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
+                onClick={() => setMobileOpen((v) => !v)}
+                className="h-10 w-10 inline-flex items-center justify-center rounded-md hover:bg-slate-100 text-slate-700"
+              >
+                {mobileOpen ? <X className="h-5 w-5" /> : <MenuIcon className="h-5 w-5" />}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Mobile sheet */}
+      <div
+        id="app-mobile-nav"
+        className={`md:hidden overflow-hidden border-t border-slate-200 transition-[max-height,opacity] duration-200 ${mobileOpen ? 'max-h-[80vh] opacity-100' : 'max-h-0 opacity-0 pointer-events-none'}`}
+      >
+        <nav className="mx-auto max-w-6xl px-4 py-4 flex flex-col">
+          {!user && (
+            <>
+              <a href="/#paths"  onClick={closeAnd()} className="h-12 flex items-center border-b border-slate-100 text-slate-900 text-base font-medium">Learning Paths</a>
+              <a href="/journal" onClick={closeAnd()} className="h-12 flex items-center border-b border-slate-100 text-slate-900 text-base font-medium">Journal</a>
+              <a href="/about"   onClick={closeAnd()} className="h-12 flex items-center border-b border-slate-100 text-slate-900 text-base font-medium">About</a>
+              <a href="/register" onClick={closeAnd()} className="mt-4 h-12 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium inline-flex items-center justify-center gap-2">Start Learning</a>
+            </>
+          )}
+          {user && (
+            <>
+              <button onClick={closeAnd(() => onNav({ name: 'study' }))} className="h-12 flex items-center border-b border-slate-100 text-slate-900 text-base font-medium text-left">Study</button>
+              <a href="/journal" onClick={closeAnd()} className="h-12 flex items-center border-b border-slate-100 text-slate-900 text-base font-medium">Journal</a>
+              <button onClick={closeAnd(() => onNav({ name: 'profile' }))} className="h-12 flex items-center border-b border-slate-100 text-slate-900 text-base font-medium text-left">Profile</button>
+              <button onClick={closeAnd(onLogout)} className="h-12 flex items-center text-slate-600 text-base font-medium text-left"><LogOut className="h-4 w-4 mr-2" /> Log out</button>
+            </>
+          )}
+        </nav>
+      </div>
+    </header>
+  )
+}
 
 const BottomNav = ({ user, route, onNav }) => {
   if (!user) return null
@@ -1270,7 +1342,7 @@ const ProfileView = ({ user, setUser, onNav }) => {
               This will permanently erase your account, your learning mastery, every study card practice record, all comments you have posted, and your newsletter preferences. Some anonymised statistics may be retained (with no personal data). This action is <strong className="font-semibold">permanent and cannot be undone</strong>.
             </p>
             <p className="mt-2 text-xs text-red-700/80">
-              Want a copy of your data first? Email <a href="mailto:privacy@onlinespiritsclub.com" className="underline">privacy@onlinespiritsclub.com</a> from this address and we&rsquo;ll send you a GDPR data export within 30 days.
+              Want a copy of your data first? Email <a href="mailto:hello@onlinespiritsclub.com" className="underline">hello@onlinespiritsclub.com</a> from this address and we&rsquo;ll send you a GDPR data export within 30 days.
             </p>
             <button
               type="button"

@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import OscLogo from '@/components/OscLogo'
+import PublicNav from '@/components/PublicNav'
 import PublicFooter from '@/components/PublicFooter'
 
 export const metadata = {
@@ -15,22 +15,7 @@ export const metadata = {
 }
 
 function AboutTopBar() {
-  return (
-    <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/80 backdrop-blur">
-      <div className="mx-auto max-w-6xl px-4 h-14 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2" aria-label="Online Spirits Club — home">
-          <OscLogo size={28} className="sm:hidden" />
-          <OscLogo variant="full" size={28} className="hidden sm:inline-flex" />
-        </Link>
-        <nav className="flex items-center gap-1 text-sm">
-          <Link href="/#paths" className="hidden sm:inline-flex px-3 h-9 items-center rounded-md hover:bg-slate-100 text-slate-700">Learning Paths</Link>
-          <Link href="/journal" className="hidden sm:inline-flex px-3 h-9 items-center rounded-md hover:bg-slate-100 text-slate-700">Journal</Link>
-          <span className="hidden sm:inline-flex px-3 h-9 items-center rounded-md text-slate-900 font-medium">About</span>
-          <Link href="/login" className="px-3 h-9 inline-flex items-center rounded-md hover:bg-slate-100 text-slate-700 font-medium">Log in</Link>
-        </nav>
-      </div>
-    </header>
-  )
+  return <PublicNav active="About" />
 }
 
 export default function AboutPage() {

@@ -69,6 +69,14 @@ const nextConfig = {
         source: '/(.*)',
         headers: commonSecurityHeaders,
       },
+      // Legal / policy pages — HTTP-level noindex signal (belt-and-braces
+      // with the <meta name="robots"> tag emitted in generateMetadata).
+      // /about is intentionally excluded so it stays indexable.
+      { source: '/privacy',     headers: [{ key: 'X-Robots-Tag', value: 'noindex, follow' }] },
+      { source: '/terms',       headers: [{ key: 'X-Robots-Tag', value: 'noindex, follow' }] },
+      { source: '/cookies',     headers: [{ key: 'X-Robots-Tag', value: 'noindex, follow' }] },
+      { source: '/contact',     headers: [{ key: 'X-Robots-Tag', value: 'noindex, follow' }] },
+      { source: '/data-rights', headers: [{ key: 'X-Robots-Tag', value: 'noindex, follow' }] },
       {
         // API-scoped: same-origin CORS. If NEXT_PUBLIC_BASE_URL is set, mirror that origin.
         source: '/api/(.*)',

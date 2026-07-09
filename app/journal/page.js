@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { ArrowRight, Check, Loader2 } from 'lucide-react'
 import OscLogo from '@/components/OscLogo'
+import PublicNav from '@/components/PublicNav'
 import PublicFooter from '@/components/PublicFooter'
 
 // ============================================================================
@@ -19,19 +20,19 @@ const ROLES = [
 
 const ISSUES = [
   {
-    day: 'Sunday',
+    day: 'Monday',
     title: 'Hospitality Weekly',
     body: 'A curated summary of the week\u2019s most important hospitality and beverage industry news.',
   },
   {
-    day: 'Tuesday',
-    title: 'Hospitality Insight / Spirit of the Week',
-    body: 'A long-form article. One week: service, psychology, guest experience. The next: history, production, science and culture behind a spirit.',
+    day: 'Midweek',
+    title: 'Editorial issue',
+    body: 'A long-form article. Rotating between hospitality insight, the spirit of the week, service craft, guest psychology.',
   },
   {
-    day: 'Thursday',
-    title: 'One Skill Better / Study Corner',
-    body: 'A practical improvement you can apply on your next shift, plus a note on learning science from the OSC study team.',
+    day: 'Later in the week',
+    title: 'Practical or study issue',
+    body: 'A short, applied piece. One skill better on the pass, or a Study Corner note from the OSC study team.',
   },
   {
     day: 'Anytime',
@@ -42,7 +43,7 @@ const ISSUES = [
 
 const FAQ = [
   { q: 'Is it really free?', a: 'Yes. The Journal is free forever. Every issue, every week. No paid tier, no premium version.' },
-  { q: 'How often will you email me?', a: 'Three times a week — Sunday, Tuesday and Thursday. Never more. Sometimes less if there is nothing worth saying.' },
+  { q: 'How often will you email me?', a: 'Three times a week. Every Monday you receive Hospitality Weekly. Two additional editorial issues arrive later in the week — topics vary. Never more than three. Sometimes less if there is nothing worth saying.' },
   { q: 'Can I unsubscribe?', a: 'Any time, with one click. Every issue includes a link at the bottom. Your subscription ends immediately.' },
   { q: 'Will you send promotions?', a: 'No. The Journal is editorial, not marketing. We do not sell products in the emails, and we do not accept sponsored content.' },
   { q: 'How long does each issue take to read?', a: 'Sunday: three to five minutes. Tuesday: seven to twelve. Thursday: two to four. Written for busy professionals.' },
@@ -52,25 +53,10 @@ const FAQ = [
 ]
 
 // ---------------------------------------------------------------------------
-// Top bar — minimal, editorial. Not the app TopBar (no user session on this page).
+// Top bar — shared PublicNav (mobile-aware). "Journal" is active.
 // ---------------------------------------------------------------------------
 function JournalTopBar() {
-  return (
-    <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/80 backdrop-blur">
-      <div className="mx-auto max-w-6xl px-4 h-14 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2" aria-label="Online Spirits Club — home">
-          <OscLogo size={28} className="sm:hidden" />
-          <OscLogo variant="full" size={28} className="hidden sm:inline-flex" />
-        </Link>
-        <nav className="flex items-center gap-1 text-sm">
-          <Link href="/#paths" className="hidden sm:inline-flex px-3 h-9 items-center rounded-md hover:bg-slate-100 text-slate-700">Learning Paths</Link>
-          <span className="hidden sm:inline-flex px-3 h-9 items-center rounded-md text-slate-900 font-medium">Journal</span>
-          <Link href="/about" className="hidden sm:inline-flex px-3 h-9 items-center rounded-md hover:bg-slate-100 text-slate-700">About</Link>
-          <Link href="/login" className="px-3 h-9 inline-flex items-center rounded-md hover:bg-slate-100 text-slate-700 font-medium">Log in</Link>
-        </nav>
-      </div>
-    </header>
-  )
+  return <PublicNav active="Journal" />
 }
 
 // ---------------------------------------------------------------------------

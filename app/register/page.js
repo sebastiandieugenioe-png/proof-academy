@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { Loader2, ArrowRight, ArrowLeft, ShieldCheck } from 'lucide-react'
 import PublicFooter from '@/components/PublicFooter'
 import OscLogo from '@/components/OscLogo'
+import { COUNTRIES } from '@/lib/countries'
 
 const ROLE_OPTIONS = ['Bartender','Barback','Waiter/Server','Hospitality student','Cocktail enthusiast','Spirits enthusiast','Beer enthusiast','Wine enthusiast','Bar manager','Other']
 
@@ -147,7 +148,19 @@ export default function RegisterPage() {
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Country" required>
-            <input value={country} onChange={(e) => setCountry(e.target.value)} required maxLength={60} placeholder="e.g. Italy" className="input" />
+            <select
+              value={country}
+              onChange={(e) => setCountry(e.target.value)}
+              required
+              className="input"
+            >
+              <option value="" disabled>Select your country…</option>
+              {COUNTRIES.map((c, i) => (
+                c === '—'
+                  ? <option key={`sep-${i}`} disabled>──────────</option>
+                  : <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
           </Field>
           <Field label="City" required>
             <input value={city} onChange={(e) => setCity(e.target.value)} required maxLength={80} placeholder="e.g. Milan" className="input" />
@@ -177,15 +190,15 @@ export default function RegisterPage() {
           <ul className="space-y-2 text-sm text-slate-700 border-t border-slate-100 pt-4">
             <li className="flex items-baseline gap-2.5">
               <span className="text-slate-900 font-medium">✓</span>
-              <span><span className="font-medium text-slate-900">Hospitality Weekly</span> &mdash; every Sunday</span>
+              <span><span className="font-medium text-slate-900">Hospitality Weekly</span> &mdash; every Monday</span>
             </li>
             <li className="flex items-baseline gap-2.5">
               <span className="text-slate-900 font-medium">✓</span>
-              <span><span className="font-medium text-slate-900">Educational Deep Dive</span> &mdash; every Tuesday</span>
+              <span>Two additional editorial issues each week</span>
             </li>
             <li className="flex items-baseline gap-2.5">
               <span className="text-slate-900 font-medium">✓</span>
-              <span><span className="font-medium text-slate-900">Practical Learning</span> &mdash; every Thursday</span>
+              <span>Topics may include hospitality insights, spirits knowledge, practical skills and study notes</span>
             </li>
           </ul>
           <label className="flex items-start gap-2.5 cursor-pointer border-t border-slate-100 pt-4">
