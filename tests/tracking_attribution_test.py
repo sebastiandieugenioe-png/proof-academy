@@ -128,10 +128,15 @@ class IngestBeaconTests(unittest.TestCase):
 
 
 def _admin_session():
+    """Return an admin-authed requests.Session. Cached at the module level so we don't
+    trip the /api/admin-auth rate limiter (8/10min/IP) when the whole suite runs."""
+    if getattr(_admin_session, "_cached", None):
+        return _admin_session._cached
     s = requests.Session()
     r = s.post(f"{API}/admin-auth", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})
     if r.status_code != 200:
         raise RuntimeError(f"admin login failed: {r.status_code} {r.text}")
+    _admin_session._cached = s
     return s
 
 
