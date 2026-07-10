@@ -392,7 +392,88 @@ test_plan:
   test_all: false
   test_priority: "high_first"
 
+frontend:
+  - task: "Frontend smoke test after backend refactor"
+    implemented: true
+    working: false
+    file: "app/register/page.js, app/page.js, app/login/page.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: false
+        agent: "testing"
+        comment: |
+          ❌ CRITICAL ISSUE FOUND: Registration auto-login is NOT working on frontend
+          
+          **Issue**: Backend correctly implements auto-login (email verification bypass),
+          but frontend register page (app/register/page.js lines 88-90) ALWAYS shows
+          "check your email" verification screen, ignoring the backend's autoLogin response.
+          
+          **Root Cause**: Frontend code at line 88-89:
+          ```
+          // Registration no longer logs you in — you must verify your email first.
+          setSentTo(email.trim().toLowerCase())
+          setEmailSkipped(!!res?.emailSkipped)
+          ```
+          This ALWAYS sets sentTo state, which triggers the verification screen, regardless
+          of whether backend returned { autoLogin: true, emailVerified: true }.
+          
+          **Expected Behavior**: When backend returns autoLogin:true, frontend should:
+          1. NOT show verification screen
+          2. Redirect to dashboard (router.replace('/'))
+          3. User should be immediately logged in with session cookie
+          
+          **Actual Behavior**: Always shows "Please check your email" screen after registration.
+          
+          **Fix Required**: Update app/register/page.js submit function to check res.autoLogin:
+          ```javascript
+          const res = await api('/register', { method: 'POST', body: {...} })
+          if (res.autoLogin) {
+            // Auto-login successful, redirect to dashboard
+            router.replace('/')
+          } else {
+            // Email verification required
+            setSentTo(email.trim().toLowerCase())
+            setEmailSkipped(!!res?.emailSkipped)
+          }
+          ```
+          
+          **Other Findings** (all working correctly):
+          ✅ Backend API working after .next cache clear
+          ✅ Login flow works correctly
+          ✅ Dashboard loads with all components (stats cards, learning paths)
+          ✅ Logout functionality works
+          ✅ Profile updates work
+          ✅ Feedback submission works
+          ✅ Admin login and all tabs load without errors
+          ✅ Journal opt-in verified (email appears in newsletter list)
+          ✅ Mobile viewport: no horizontal scroll, hamburger nav works
+          ✅ No console errors during testing
+          ✅ All backend endpoints responding correctly
+          
+          **Test Credentials**: smoke-1783681688@example.com / TestPass123!
+          
+          **Note**: Initial testing revealed a webpack module error (Cannot find module './331.js')
+          which was resolved by clearing .next cache and restarting Next.js. This suggests
+          the backend refactor may have introduced a build cache invalidation issue.
+
 agent_communication:
+  - agent: "testing"
+    message: |
+      Frontend smoke test completed after backend refactor.
+      
+      **CRITICAL ISSUE**: Registration auto-login is broken on frontend.
+      
+      Backend is correctly configured for auto-login (EMAIL_VERIFICATION_REQUIRED not set,
+      returns autoLogin:true), but frontend register page ignores this and always shows
+      email verification screen.
+      
+      Fix needed in app/register/page.js lines 86-90 to check res.autoLogin and redirect
+      to dashboard instead of showing verification screen.
+      
+      All other flows tested and working correctly. See detailed findings in status_history above.
+  
   - agent: "main"
     message: |
       Please regression-test the full API surface after the refactor.
