@@ -85,7 +85,14 @@ export default function RegisterPage() {
     setLoading(true)
     try {
       const res = await api('/register', { method: 'POST', body: { email, password, confirmPassword, name, country, city, role, newsletter } })
-      // Registration no longer logs you in \u2014 you must verify your email first.
+      // Beta launch: when EMAIL_VERIFICATION_REQUIRED is off, /api/register auto-logs the
+      // user in and sets the session cookie server-side. Land them on the dashboard.
+      // When verification is re-enabled, the API omits `autoLogin` and returns
+      // `emailVerified: false`, so we fall through to the "check your email" screen.
+      if (res?.autoLogin) {
+        router.replace('/')
+        return
+      }
       setSentTo(email.trim().toLowerCase())
       setEmailSkipped(!!res?.emailSkipped)
     } catch (e) {
