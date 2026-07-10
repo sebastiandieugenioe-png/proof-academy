@@ -117,7 +117,49 @@ user_problem_statement: |
     - Verify zero regressions.
 
 backend:
-  - task: "API monolith split — dispatcher route.js + per-domain handlers"
+  - task: "Phase 1 marketing attribution infrastructure"
+    implemented: true
+    working: true
+    file: "middleware.js + lib/attribution.js + lib/api/handlers/tracking.js + app/go/[slug]/route.js + app/admin/tracking-links/* + components/AttributionTracker.js + lib/api/handlers/auth.js + lib/migrations.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: |
+          Phase 1 of the first-party marketing attribution system.
+          
+          Cookies (HttpOnly, SameSite=Lax, Secure in prod):
+            osc_vid  30d   visitor id (uuidv4)
+            osc_sid  30min session id (sliding)
+            osc_ft   30d   first-touch attribution (base64url JSON) \u2014 NEVER overwritten
+            osc_lt   30d   last-touch attribution (base64url JSON)  \u2014 ALWAYS overwritten
+          
+          Collections: tracking_links, tracking_visitors, tracking_sessions, tracking_visits.
+          Indexes are auto-created via ensure_tracking_indexes_v1 startup migration.
+          
+          Endpoints (all admin routes gated by osc_admin cookie):
+            GET/POST/PATCH/DELETE /api/admin/tracking-links[/:id]
+            POST /api/admin/tracking-links/:id/duplicate
+            POST /api/admin/tracking-links/:id/archive
+            POST /api/tracking/ingest      \u2014 public beacon, rate-limited 60/60s/IP
+            GET  /go/:slug                 \u2014 302 redirect with UTMs, click counter, DB write
+          
+          Register endpoint copies first_touch_* + last_touch_* from cookies onto the
+          new user document and links tracking_visitors.userId when present.
+          
+          Middleware.js matcher excludes /api/**, /_next/**, /go/**, static assets \u2014
+          so /go and /api handle cookies themselves without double-writes.
+          
+          NO third-party scripts. NO Google Analytics. NO Meta Pixel.
+          
+          Validation: 20/20 automated tests pass
+          (`python3 tests/tracking_attribution_test.py`). Production build succeeded
+          with new routes: /admin/tracking-links + /go/[slug] + middleware chunk 34.6kB.
+          Zero regressions on existing endpoints (verified via curl).
+
+  - task: "API monolith split \u2014 dispatcher route.js + per-domain handlers"
     implemented: true
     working: true
     file: "app/api/[[...path]]/route.js + lib/api/*.js + lib/api/handlers/*.js"

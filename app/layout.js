@@ -1,6 +1,7 @@
 import './globals.css'
 import { Manrope } from 'next/font/google'
 import { Providers } from './providers'
+import AttributionTracker from '@/components/AttributionTracker'
 
 // Manrope \u2014 modern geometric sans, used for the OSC wordmark and headings.
 // display: 'swap' avoids FOIT; variable exposed as --font-manrope for CSS use.
@@ -67,6 +68,7 @@ export default function RootLayout({ children }) {
       </head>
       <body className="min-h-screen bg-background text-foreground antialiased">
         <Providers>{children}</Providers>
+        <AttributionTracker />
       </body>
     </html>
   )

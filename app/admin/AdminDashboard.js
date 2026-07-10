@@ -51,6 +51,7 @@ export default function AdminDashboard({ adminEmail }) {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <a href="/admin/tracking-links" className="text-sm h-9 px-3 rounded-md border border-slate-200 hover:bg-slate-50 inline-flex items-center gap-1.5 text-slate-700"><Link2 className="h-3.5 w-3.5" /> Tracking links</a>
             <a href="/" className="text-sm h-9 px-3 rounded-md border border-slate-200 hover:bg-slate-50 inline-flex items-center gap-1.5 text-slate-700"><Eye className="h-3.5 w-3.5" /> View site</a>
             <button onClick={logout} className="text-sm h-9 px-3 rounded-md hover:bg-slate-100 text-slate-600 inline-flex items-center gap-1.5"><LogOut className="h-3.5 w-3.5" /> Sign out</button>
           </div>

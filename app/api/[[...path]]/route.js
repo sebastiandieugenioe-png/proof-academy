@@ -25,6 +25,7 @@ import { handle as pagesHandle } from '@/lib/api/handlers/pages';
 import { handle as adminCoursesHandle } from '@/lib/api/handlers/admin-courses';
 import { handle as adminImagesHandle, handleUpload as adminImagesUpload } from '@/lib/api/handlers/admin-images';
 import { handle as adminHandle } from '@/lib/api/handlers/admin';
+import { handle as trackingHandle } from '@/lib/api/handlers/tracking';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -46,6 +47,7 @@ const HANDLERS = [
   adminCoursesHandle,
   adminImagesHandle,
   adminHandle,
+  trackingHandle,
 ];
 
 async function dispatch(ctx) {
