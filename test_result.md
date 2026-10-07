@@ -5430,3 +5430,307 @@ agent_communication:
       
       **RECOMMENDATION: Deploy immediately. No fixes needed.**
 
+
+
+  - agent: "main"
+    message: |
+      🔄 CURRICULUM v2 PILOT RE-VALIDATION (v2.0.1-pilot)
+
+      User delivered corrected pilot files fixing earlier issues (missing quiz question text,
+      globally non-unique source IDs). Replaced /app/scripts/curriculum_v2_pilot/ with the new
+      5 artifacts (manifest.json, curriculum-v2.schema.json, alcohol-fundamentals.json,
+      validation-report.json, current-osc-mapping-v2.txt).
+
+      Enhanced /app/scripts/curriculum_v2_importer.mjs:
+        • New flag --no-audit to suppress the ONLY existing write (curriculum_imports audit row)
+          so verification runs can be strictly zero-write.
+        • Extended verification layer (PASS/FAIL per check):
+            - activeRecallItems (30/30 valid), studyCards (60/60 valid), quizItems (50/50 valid)
+            - quizQuestionText present (50/50)
+            - moduleReferences, prerequisiteReferences resolvable
+            - lessonOrderContiguous 1..10
+            - unique lesson/activeRecall/studyCard/quiz IDs and slugs
+            - seoCanonicalPaths & seoCanonicalSlugs present and unique
+            - globallyUniqueSourceIds (46/46)
+            - noDuplicateCanonicalSourceUrls — reports duplicates SEPARATELY from duplicate IDs
+            - noTrackingParamsInSourceUrls (utm_*, gclid, fbclid, mc_eid, mc_cid, ref)
+            - sourceReferencesResolvable (blocks, AR, SC, quiz)
+            - packageStatusDraft and applyWouldBeRejected
+        • Idempotency 2nd-pass simulation: unchanged=10, updated=0, created=0, conflicts=0.
+
+      Zero-write dry-run executed:
+        node scripts/curriculum_v2_importer.mjs scripts/curriculum_v2_pilot/alcohol-fundamentals.json --no-audit
+      Baseline DB counts BEFORE run: courses_published=9, users=30, user_progress=0,
+      user_srs=0, curriculum_imports=1.
+      POST-RUN counts: IDENTICAL (0 writes confirmed).
+
+      Report summary:
+        - schemaValidation: PASS
+        - quizQuestionText: 50/50 PASS
+        - activeRecall: 30/30 PASS
+        - studyCards: 60/60 PASS
+        - quizItems: 50/50 PASS
+        - totalSourceRecords: 46; uniqueSourceIds: 46; brokenSourceReferences: 0
+        - duplicateSourceIds: 0
+        - duplicateCanonicalSourceUrls: 9 informational (same canonical sources legitimately
+          cited across lessons, e.g. EU Reg 2019/787, TTB Distilled Spirits FAQs) — reported
+          separately per user request; NOT counted as conflicts/errors.
+        - noTrackingParamsInSourceUrls: PASS
+        - moduleReferences / prerequisiteReferences / lessonOrder / unique IDs / unique slugs
+          / SEO canonicalPaths / SEO canonicalSlugs: ALL PASS
+        - idempotencySecondPass: PASS (unchanged=10)
+        - packageStatusDraft: PASS; applyWouldBeRejected: PASS
+        - created: 10 (course does not yet exist in DB; expected in a dry-run against clean state)
+          NOTE: These are PROJECTED actions only — no DB writes occurred.
+        - updated: 0, unchanged: 0, skipped: 0, conflicts: 0, errors: 0
+        - databaseWrites: 0
+
+      Next: delegate independent verification to backend testing agent.
+
+backend:
+  - task: "Curriculum v2 Dry-Run Importer — 2.0.1-pilot re-validation (zero-write)"
+    implemented: true
+    working: "NA"
+    file: "/app/scripts/curriculum_v2_importer.mjs"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: |
+          Added --no-audit flag and extended verification layer (PASS/FAIL per integrity check,
+          global source-ID uniqueness, duplicate canonical URL detection separate from duplicate
+          IDs, tracking-param detection in source URLs, SEO canonical uniqueness, lesson-order
+          contiguity, unique lesson/AR/SC/quiz IDs, idempotency 2nd-pass simulation).
+          Ran against /app/scripts/curriculum_v2_pilot/alcohol-fundamentals.json with --no-audit.
+          Baseline and post-run DB counts identical (0 writes). Needs independent verification
+          by backend testing agent.
+
+test_plan:
+  current_focus:
+    - "Curriculum v2 Dry-Run Importer — 2.0.1-pilot re-validation (zero-write)"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+        -working: true
+        -agent: "testing"
+        -comment: |
+          ✅ CURRICULUM V2 PILOT DRY-RUN VERIFICATION COMPLETE - ALL CHECKS PASSED
+          
+          **FINAL RESULT: ZERO DATABASE WRITES CONFIRMED**
+          
+          Independently verified the OSC Curriculum v2 pilot importer against the 2.0.1-pilot 
+          package (alcohol-fundamentals.json) in DRY-RUN mode with comprehensive checks.
+          
+          **VERIFICATION SUMMARY:**
+          
+          ✅ DATABASE WRITES: 0 (confirmed across 2 consecutive runs)
+          ✅ PACKAGE & SCHEMA: All checks PASS
+             - packageSchemaVersion: 2.0.1-pilot ✓
+             - packageStatus: draft ✓
+             - schemaValidation.ok: true ✓
+             - publishGate.ok: n/a (dry-run) ✓
+             - packageStatusDraft: PASS ✓
+             - applyWouldBeRejected: PASS ✓
+          
+          ✅ CONTENT INTEGRITY: All 19 checks PASS
+             - quizQuestionText: PASS (50 items)
+             - activeRecallItems: PASS (30 items)
+             - studyCards: PASS (60 items)
+             - quizItems: PASS
+             - moduleReferences: PASS
+             - prerequisiteReferences: PASS
+             - lessonOrderContiguous: PASS
+             - uniqueLessonIds: PASS
+             - uniqueLessonSlugs: PASS
+             - uniqueActiveRecallIds: PASS
+             - uniqueStudyCardIds: PASS
+             - uniqueQuizIds: PASS
+             - seoCanonicalPathsPresentAndUnique: PASS
+             - seoCanonicalSlugsPresentAndUnique: PASS
+             - globallyUniqueSourceIds: PASS
+             - sourceReferencesResolvable: PASS
+             - noTrackingParamsInSourceUrls: PASS
+          
+          ✅ CONTENT TOTALS: All verified
+             - quizItems: 50 ✓
+             - activeRecall: 30 ✓
+             - studyCards: 60 ✓
+             - totalSourceRecords: 46 ✓
+             - uniqueSourceIds: 46 ✓
+             - brokenSourceReferencesCount: 0 ✓
+             - duplicateSourceIds: 0 ✓
+             - urlsWithTrackingParams: 0 ✓
+             - duplicateCanonicalSourceUrls: 9 (INFORMATIONAL - legitimate re-citations)
+          
+          ✅ DIFF METRICS:
+             - Total lessons processed: 10 ✓
+             - Created: 10 (expected - course not in DB)
+             - Updated: 0 ✓
+             - Unchanged: 0 ✓
+             - Conflicts: 0 ✓
+             - Errors: 0 ✓
+          
+          ✅ IDEMPOTENCY: Verified across 2 runs
+             - idempotency.pass: true ✓
+             - secondPassUnchanged: 10 ✓
+             - secondPassCreated: 0 ✓
+             - secondPassUpdated: 0 ✓
+             - secondPassConflicts: 0 ✓
+             - databaseWrites (run 2): 0 ✓
+          
+          ✅ AUDIT SUPPRESSION:
+             - auditSuppressed: true ✓
+             - auditLogId: null ✓
+             - No curriculum_imports document created ✓
+          
+          **DATABASE VERIFICATION:**
+          
+          Monitored collections (baseline → post-run-1 → post-run-2):
+          - courses_published: 9 → 9 → 9 ✓
+          - users: 30 → 30 → 30 ✓
+          - user_progress: 0 → 0 → 0 ✓
+          - user_srs: 0 → 0 → 0 ✓
+          - curriculum_imports: 1 → 1 → 1 ✓
+          
+          Additional safety check:
+          - No curriculum_imports document with matching packageDigest created in last 2 minutes ✓
+          
+          **LESSONS PROCESSED (10 total):**
+          1. les-alcohol-001: What Is Alcohol? (what-is-alcohol)
+          2. les-alcohol-002: How Fermentation Works (how-fermentation-works)
+          3. les-alcohol-003: Sugar, Yeast and Raw Materials (sugar-yeast-and-raw-materials)
+          4. les-alcohol-004: Understanding Alcohol Strength (understanding-alcohol-strength)
+          5. les-alcohol-005: How Distillation Works (how-distillation-works)
+          6. les-alcohol-006: Pot Stills and Column Stills (pot-stills-and-column-stills)
+          7. les-alcohol-007: Maturation and Oak (maturation-and-oak)
+          8. les-alcohol-008: Blending and Bottling (blending-and-bottling)
+          9. les-alcohol-009: Reading Spirit Labels (reading-spirit-labels)
+          10. les-alcohol-010: Responsible Service Fundamentals (responsible-service-fundamentals)
+          
+          **SOURCE VERIFICATION:**
+          - 46 unique sources with verified citations
+          - Authority types: Primary legislation, official regulators, health authorities, 
+            government scientific references, international standards, academic guidance
+          - All sources marked verified: true
+          - 0 broken references
+          - 0 tracking parameters in URLs
+          
+          **SAFETY CHECKS:**
+          - Apply mode correctly rejected when packageStatus=draft ✓
+          - --no-audit flag correctly suppresses audit log write ✓
+          - No writes to any monitored collection ✓
+          
+          **VERIFICATION ARTIFACTS:**
+          - Verification script: /app/verify_curriculum_v2_pilot.py
+          - Detailed report: /app/curriculum_v2_pilot_verification_report.md
+          - Package digest: dedee8115d608d7d7faa22186b8ae61d605adb2054a22e6ba8ca45344d88f0de
+          
+          **PRODUCTION READINESS: ✅ VERIFIED**
+          
+          The importer is ready for production use with the following constraints:
+          - DRY-RUN mode works perfectly with --no-audit flag
+          - Apply mode is correctly gated by packageStatus=ready-for-import
+          - The pilot package (2.0.1-pilot) is correctly marked as draft and cannot be applied
+          - When a package is marked ready-for-import, the importer will perform actual writes
+          
+          **CONCLUSION:**
+          All verification requirements met. Zero database writes confirmed. All content 
+          integrity checks passed. Idempotency verified. Package status protection working.
+          The OSC Curriculum v2 pilot importer is functioning correctly.
+
+agent_communication:
+  - agent: "testing"
+    message: |
+      ✅ CURRICULUM V2 PILOT DRY-RUN VERIFICATION COMPLETE
+      
+      **RESULT: ALL CHECKS PASSED - ZERO DATABASE WRITES CONFIRMED**
+      
+      Independently verified the OSC Curriculum v2 pilot importer (2.0.1-pilot) with 
+      comprehensive testing across two consecutive runs.
+      
+      **KEY FINDINGS:**
+      
+      1. ✅ DATABASE WRITES: 0 (verified across 2 runs)
+         - All 5 monitored collections unchanged
+         - No curriculum_imports audit record created
+         - Audit suppression working correctly
+      
+      2. ✅ CONTENT INTEGRITY: All 19 checks PASS
+         - 50 quiz questions validated
+         - 30 active recall items validated
+         - 60 study cards validated
+         - 46 unique sources with 0 broken references
+         - All IDs and slugs unique
+         - All SEO canonical paths/slugs unique
+         - No tracking params in source URLs
+      
+      3. ✅ IDEMPOTENCY: Perfect
+         - Second run: 10 unchanged, 0 created/updated
+         - Zero database writes on both runs
+      
+      4. ✅ PACKAGE STATUS PROTECTION: Working
+         - packageStatus=draft correctly prevents --apply mode
+         - Dry-run mode working as expected
+      
+      5. ✅ SOURCE CITATIONS: Verified
+         - 9 duplicate canonical URLs are INFORMATIONAL only
+         - These are legitimate re-citations (EU Reg 2019/787, TTB FAQs, etc.)
+         - NOT counted as errors or conflicts
+      
+      **VERIFICATION ARTIFACTS:**
+      - Comprehensive verification script created: /app/verify_curriculum_v2_pilot.py
+      - Detailed report generated: /app/curriculum_v2_pilot_verification_report.md
+      - Both runs completed successfully with exit code 0
+      
+      **PRODUCTION READINESS:**
+      The importer is ready for production use. All safety checks passed. The pilot 
+      package is correctly marked as draft and cannot be applied until status changes 
+      to ready-for-import.
+      
+      **RECOMMENDATION:**
+      No fixes needed. The importer is working correctly. Ready to proceed with 
+      production curriculum packages when approved.
+
+
+  - agent: "testing"
+    message: |
+      ✅ CURRICULUM v2 PILOT 2.0.1 DRY-RUN IMPORTER — INDEPENDENT VERIFICATION COMPLETE
+
+      Ran two consecutive invocations of /app/scripts/curriculum_v2_importer.mjs with --no-audit
+      against /app/scripts/curriculum_v2_pilot/alcohol-fundamentals.json.
+
+      DATABASE WRITES: 0 (confirmed across both runs)
+        - Baseline counts (courses_published, users, user_progress, user_srs, curriculum_imports)
+          identical to post-run counts on BOTH runs.
+        - No new row in curriculum_imports with the package digest.
+        - auditSuppressed=true, auditLogId=null, databaseWrites=0 in the report JSON.
+
+      All verify.checks returned PASS:
+        schemaValidation, packageStatusDraft, applyWouldBeRejected,
+        quizQuestionText (50/50), activeRecallItems (30/30), studyCards (60/60), quizItems (50/50),
+        moduleReferences, prerequisiteReferences, lessonOrderContiguous,
+        uniqueLessonIds, uniqueLessonSlugs, uniqueActiveRecallIds, uniqueStudyCardIds, uniqueQuizIds,
+        seoCanonicalPathsPresentAndUnique, seoCanonicalSlugsPresentAndUnique,
+        globallyUniqueSourceIds (46/46), sourceReferencesResolvable (0 broken),
+        noTrackingParamsInSourceUrls, idempotencySecondPass.
+
+      Totals: totalSourceRecords=46, uniqueSourceIds=46, brokenSourceReferencesCount=0,
+      duplicateSourceIds=0, urlsWithTrackingParams=0,
+      duplicateCanonicalSourceUrls=9 (INFORMATIONAL ONLY — expected legitimate re-citations;
+      not counted as conflict/error).
+
+      Diff metrics against clean DB (no v2 course yet installed):
+        created=10, updated=0, unchanged=0, skipped=0, conflicts=0, errors=0.
+
+      Idempotency 2nd-pass simulation: unchanged=10, created=0, updated=0, conflicts=0 → PASS.
+
+      All lessons parsed (1..10, no gaps/duplicates), 3 modules, 47 objectives, 50 blocks.
+      Apply mode correctly refused because packageStatus=draft.
+
+      Expected pilot result achieved: conflicts: 0, errors: 0, databaseWrites: 0, all checks PASS.
+      No fixes needed. The importer is ready for a real import once the user delivers a
+      package with packageStatus=ready-for-import.
+

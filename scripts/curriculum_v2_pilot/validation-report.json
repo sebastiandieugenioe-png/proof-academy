@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "2.0.1-pilot",
+  "packageStatus": "draft",
+  "result": "PASS",
+  "summary": {
+    "learningPaths": 1,
+    "modules": 3,
+    "lessons": 10,
+    "objectives": 47,
+    "blocks": 50,
+    "activeRecallItems": 30,
+    "studyCards": 60,
+    "quizQuestions": 50,
+    "quizOptions": 150,
+    "sourceRecords": 46,
+    "globallyUniqueSourceIds": 46
+  },
+  "checks": {
+    "uniqueStableIds": true,
+    "uniqueSlugs": true,
+    "quizQuestionTextPresent": true,
+    "threeOptionCompatibility": true,
+    "globalSourceIdsUnique": true,
+    "sourceReferencesResolvable": true,
+    "draftPublishGateExpected": true
+  },
+  "errors": [],
+  "warnings": [
+    "Schema-validation only; do not publish to production.",
+    "Lessons 04–10 remain compact normalized representations, not the final full editorial prose.",
+    "A production package must be generated after importer validation."
+  ]
+}

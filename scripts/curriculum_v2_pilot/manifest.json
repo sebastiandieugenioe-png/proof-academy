@@ -1,0 +1,24 @@
+{
+  "package": "osc-curriculum-v2",
+  "schemaVersion": "2.0.1-pilot",
+  "status": "draft",
+  "purpose": "schema-validation",
+  "generatedAt": "2026-10-07",
+  "learningPaths": [
+    {
+      "id": "lp-alcohol-fundamentals",
+      "file": "learning-paths/alcohol-fundamentals.json",
+      "lessonCount": 10,
+      "contentVersion": 2
+    }
+  ],
+  "importPolicy": {
+    "mode": "upsert",
+    "dryRunRequired": true,
+    "blindDeleteForbidden": true,
+    "preserveLearnerProgress": true,
+    "preserveUnrelatedData": true,
+    "stableIdsAreCanonical": true,
+    "slugsAreMutable": true
+  }
+}

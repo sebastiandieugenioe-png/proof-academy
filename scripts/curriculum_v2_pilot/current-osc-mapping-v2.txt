@@ -1,0 +1,33 @@
+# OSC Curriculum v2 → Current OSC Import Contract (Pilot)
+
+## Purpose
+This package is a schema-validation pilot. It must be imported only in dry-run or preview mode until the adapter has passed regression tests.
+
+## Current OSC constraints confirmed from the 2026-10-07 export
+- Runtime hierarchy is Course → Lesson; no module entity is currently stored.
+- Active Recall is stored on the lesson in the `embedded` field.
+- Study Cards/flashcards and Quiz exist as current learning objects.
+- Quiz/Active Recall currently use single-choice, 3 options, fixed correct-index semantics.
+- Older bundled lessons do not consistently store SEO title/meta fields.
+- Older lesson identity is effectively slug-based.
+
+## Required importer behaviour
+1. Parse and validate this package before any write.
+2. Require `dryRun=true` on the first execution.
+3. Use `lesson.id` as the canonical curriculum stable ID.
+4. Never use slug as the permanent identity key for v2.
+5. Map `moduleId` to metadata until a first-class Module entity exists.
+6. Map `activeRecall[]` to the existing embedded lesson representation.
+7. Upsert Study Cards and Quiz by stable item ID.
+8. Preserve existing user accounts, progress, SRS history, comments, analytics and unrelated content.
+9. Never blind-delete records that are absent from the package.
+10. Produce an import report: created / updated / unchanged / skipped / conflicts / errors.
+11. Store `contentVersion`.
+12. Preserve source registry and block `sourceIds` even if the current renderer initially displays only a bibliography.
+13. Add SEO metadata backward-compatibly where supported.
+14. If a stable-ID field does not yet exist, add it through a safe idempotent migration before import.
+15. Progress migration must use an explicit mapping file; do not infer equivalence only from title or slug.
+
+## Publication gate
+The importer may load `packageStatus=draft` into preview/staging only.
+Production publication requires `packageStatus=ready-for-import` and a clean validation report.

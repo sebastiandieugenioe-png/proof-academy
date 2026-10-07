@@ -1,0 +1,303 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://onlinespiritsclub.com/schemas/curriculum-v2.0.1.schema.json",
+  "title": "OSC Curriculum v2 Learning Path",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "learningPath"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string"
+    },
+    "packageStatus": {
+      "enum": [
+        "draft",
+        "approved",
+        "ready-for-import"
+      ]
+    },
+    "learningPath": {
+      "type": "object",
+      "required": [
+        "id",
+        "title",
+        "slug",
+        "version",
+        "modules",
+        "lessons"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^lp-[a-z0-9-]+$"
+        },
+        "title": {
+          "type": "string"
+        },
+        "slug": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "modules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "title",
+              "order"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^mod-[a-z0-9-]+$"
+              },
+              "title": {
+                "type": "string"
+              },
+              "order": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          }
+        },
+        "lessons": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "contentVersion",
+              "moduleId",
+              "order",
+              "title",
+              "slug",
+              "difficulty",
+              "estimatedMinutes",
+              "objectives",
+              "blocks",
+              "activeRecall",
+              "studyCards",
+              "quiz",
+              "sources",
+              "seo",
+              "visuals"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^les-[a-z0-9-]+$"
+              },
+              "contentVersion": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "moduleId": {
+                "type": "string"
+              },
+              "order": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "title": {
+                "type": "string"
+              },
+              "slug": {
+                "type": "string"
+              },
+              "difficulty": {
+                "enum": [
+                  "Beginner",
+                  "Intermediate",
+                  "Advanced"
+                ]
+              },
+              "estimatedMinutes": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "prerequisites": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "knowledgeTags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "objectives": {
+                "type": "array",
+                "minItems": 3,
+                "items": {
+                  "type": "string"
+                }
+              },
+              "blocks": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "type",
+                    "content",
+                    "sourceIds"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "enum": [
+                        "paragraph",
+                        "heading",
+                        "definition",
+                        "key_fact",
+                        "comparison",
+                        "process",
+                        "hospitality_example",
+                        "common_misconception",
+                        "key_takeaway"
+                      ]
+                    },
+                    "content": {
+                      "type": "string"
+                    },
+                    "sourceIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              },
+              "activeRecall": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 3
+              },
+              "studyCards": {
+                "type": "array",
+                "minItems": 6,
+                "maxItems": 10
+              },
+              "quiz": {
+                "type": "array",
+                "minItems": 5,
+                "maxItems": 5,
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "type",
+                    "questionType",
+                    "question",
+                    "options",
+                    "correctIndex",
+                    "explanation",
+                    "sourceIds"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "const": "single-choice"
+                    },
+                    "questionType": {
+                      "type": "string"
+                    },
+                    "question": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "options": {
+                      "type": "array",
+                      "minItems": 3,
+                      "maxItems": 3,
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "correctIndex": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 2
+                    },
+                    "explanation": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "sourceIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              },
+              "sources": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "title",
+                    "organization",
+                    "url",
+                    "authorityType",
+                    "usedFor",
+                    "verified"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^src-[a-z0-9-]+$"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "organization": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "authorityType": {
+                      "type": "string"
+                    },
+                    "usedFor": {
+                      "type": "string"
+                    },
+                    "verified": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              },
+              "seo": {
+                "type": "object"
+              },
+              "visuals": {
+                "type": "array"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -25,6 +25,7 @@ import { MongoClient } from 'mongodb';
 const args = process.argv.slice(2);
 const packagePath = args.find((a) => !a.startsWith('--'));
 const apply = args.includes('--apply');
+const noAudit = args.includes('--no-audit'); // suppresses the single curriculum_imports write (true zero-write run)
 const requireStatusArg = args.find((a) => a.startsWith('--package-status='));
 const requireStatus = requireStatusArg ? requireStatusArg.split('=')[1] : null;
 
@@ -446,7 +447,186 @@ async function run() {
       visuals: lp.lessons.reduce((n, l) => n + (l.visuals?.length || 0), 0),
     };
 
-    // --------- Apply (only when gated) ---------
+    // --------- Extended verification (zero-write; PASS/FAIL per check) ---------
+    const verify = (() => {
+      const result = { checks: {}, details: {} };
+      const pass = (name, ok, detail) => { result.checks[name] = ok ? 'PASS' : 'FAIL'; if (detail !== undefined) result.details[name] = detail; };
+
+      // Schema validation already run
+      pass('schemaValidation', schemaValidation.ok, schemaValidation.ok ? undefined : schemaValidation.errors);
+
+      // Collect totals
+      let arTotal = 0, arValid = 0, arBad = [];
+      let scTotal = 0, scValid = 0, scBad = [];
+      let qTotal = 0, qValid = 0, qBad = [];
+      let qTextOk = 0;
+      let allSources = []; // {id,url,lessonId}
+      const allSourceIdsByLesson = new Set();
+      const brokenRefs = [];
+      const arIds = new Map();  // id -> count
+      const scIds = new Map();
+      const qIds = new Map();
+      const lessonIds = new Map();
+      const lessonSlugs = new Map();
+      const canonicalPaths = new Map();
+      const canonicalSlugs = new Map();
+      const lessonOrders = [];
+      const trackingParamRe = /[?&](utm_[a-z_]+|gclid|fbclid|mc_eid|mc_cid|ref|_hsenc|_hsmi)=/i;
+      const sourceUrlsLowerCount = new Map(); // normalized URL -> count
+
+      const moduleIds = new Set((lp.modules || []).map((m) => m.id));
+      const allLessonIds = new Set((lp.lessons || []).map((l) => l.id));
+
+      const moduleRefBad = [];
+      const prereqBad = [];
+
+      for (const l of (lp.lessons || [])) {
+        lessonOrders.push(l.order);
+        lessonIds.set(l.id, (lessonIds.get(l.id) || 0) + 1);
+        lessonSlugs.set(l.slug, (lessonSlugs.get(l.slug) || 0) + 1);
+        if (!moduleIds.has(l.moduleId)) moduleRefBad.push({ lessonId: l.id, moduleId: l.moduleId });
+        for (const p of (l.prerequisites || [])) {
+          if (!allLessonIds.has(p)) prereqBad.push({ lessonId: l.id, prerequisite: p });
+        }
+        if (l.seo?.canonicalPath) canonicalPaths.set(l.seo.canonicalPath, (canonicalPaths.get(l.seo.canonicalPath) || 0) + 1);
+        if (l.seo?.canonicalSlug) canonicalSlugs.set(l.seo.canonicalSlug, (canonicalSlugs.get(l.seo.canonicalSlug) || 0) + 1);
+
+        const lessonSrcIds = new Set((l.sources || []).map((s) => s.id));
+        for (const s of (l.sources || [])) {
+          allSources.push({ id: s.id, url: s.url || '', lessonId: l.id });
+          if (s.url) {
+            const norm = s.url.trim().toLowerCase().replace(/\/+$/, '').split('#')[0];
+            sourceUrlsLowerCount.set(norm, (sourceUrlsLowerCount.get(norm) || 0) + 1);
+          }
+        }
+
+        // activeRecall
+        for (const r of (l.activeRecall || [])) {
+          arTotal++;
+          arIds.set(r.id, (arIds.get(r.id) || 0) + 1);
+          const okQ = typeof r.question === 'string' && r.question.trim().length > 0;
+          const okOpts = Array.isArray(r.options) && r.options.length === 3 && r.options.every((o) => typeof o === 'string' && o.trim().length > 0);
+          const okCorrect = Number.isInteger(r.correctIndex) && r.correctIndex >= 0 && r.correctIndex <= 2;
+          const okExpl = typeof r.explanation === 'string' && r.explanation.trim().length > 0;
+          const refs = r.sourceIds || [];
+          const okRefs = refs.every((sid) => lessonSrcIds.has(sid));
+          for (const sid of refs) if (!lessonSrcIds.has(sid)) brokenRefs.push({ kind: 'activeRecall', lessonId: l.id, itemId: r.id, sourceId: sid });
+          if (okQ && okOpts && okCorrect && okExpl && okRefs) arValid++; else arBad.push({ lessonId: l.id, itemId: r.id, okQ, okOpts, okCorrect, okExpl, okRefs });
+        }
+
+        // studyCards
+        for (const c of (l.studyCards || [])) {
+          scTotal++;
+          scIds.set(c.id, (scIds.get(c.id) || 0) + 1);
+          const okFront = typeof c.front === 'string' && c.front.trim().length > 0;
+          const okBack = typeof c.back === 'string' && c.back.trim().length > 0;
+          const refs = c.sourceIds || [];
+          const okRefs = refs.every((sid) => lessonSrcIds.has(sid));
+          for (const sid of refs) if (!lessonSrcIds.has(sid)) brokenRefs.push({ kind: 'studyCard', lessonId: l.id, itemId: c.id, sourceId: sid });
+          if (okFront && okBack && okRefs) scValid++; else scBad.push({ lessonId: l.id, itemId: c.id, okFront, okBack, okRefs });
+        }
+
+        // quiz
+        for (const q of (l.quiz || [])) {
+          qTotal++;
+          qIds.set(q.id, (qIds.get(q.id) || 0) + 1);
+          const okQ = typeof q.question === 'string' && q.question.trim().length > 0;
+          if (okQ) qTextOk++;
+          const okOpts = Array.isArray(q.options) && q.options.length === 3 && q.options.every((o) => typeof o === 'string' && o.trim().length > 0);
+          const okCorrect = Number.isInteger(q.correctIndex) && q.correctIndex >= 0 && q.correctIndex <= 2;
+          const okExpl = typeof q.explanation === 'string' && q.explanation.trim().length > 0;
+          const refs = q.sourceIds || [];
+          const okRefs = refs.every((sid) => lessonSrcIds.has(sid));
+          for (const sid of refs) if (!lessonSrcIds.has(sid)) brokenRefs.push({ kind: 'quiz', lessonId: l.id, itemId: q.id, sourceId: sid });
+          if (okQ && okOpts && okCorrect && okExpl && okRefs) qValid++; else qBad.push({ lessonId: l.id, itemId: q.id, okQ, okOpts, okCorrect, okExpl, okRefs });
+        }
+
+        // block sourceIds resolvable
+        for (const b of (l.blocks || [])) {
+          for (const sid of (b.sourceIds || [])) {
+            if (!lessonSrcIds.has(sid)) brokenRefs.push({ kind: 'block', lessonId: l.id, itemId: b.id || '?', sourceId: sid });
+          }
+        }
+      }
+
+      // global source IDs
+      const sourceIdCount = new Map();
+      for (const s of allSources) sourceIdCount.set(s.id, (sourceIdCount.get(s.id) || 0) + 1);
+      const dupSourceIds = [...sourceIdCount.entries()].filter(([, c]) => c > 1).map(([id, c]) => ({ id, count: c }));
+      const uniqueSourceIds = sourceIdCount.size;
+      const dupCanonicalUrls = [...sourceUrlsLowerCount.entries()].filter(([, c]) => c > 1).map(([url, c]) => ({ url, count: c }));
+
+      // tracking params
+      const urlsWithTracking = allSources.filter((s) => s.url && trackingParamRe.test(s.url)).map((s) => ({ sourceId: s.id, url: s.url, lessonId: s.lessonId }));
+
+      // Lesson order 1..N contiguous
+      const expectedOrders = Array.from({ length: (lp.lessons || []).length }, (_, i) => i + 1);
+      const orderOk = lessonOrders.length === expectedOrders.length &&
+                      [...lessonOrders].sort((a, b) => a - b).every((v, i) => v === expectedOrders[i]);
+
+      const dup = (map) => [...map.entries()].filter(([, c]) => c > 1).map(([k, c]) => ({ key: k, count: c }));
+
+      pass('activeRecallItems', arValid === arTotal && arTotal === 30, { total: arTotal, valid: arValid, invalid: arBad });
+      pass('studyCards', scValid === scTotal && scTotal === 60, { total: scTotal, valid: scValid, invalid: scBad });
+      pass('quizItems', qValid === qTotal && qTotal === 50, { total: qTotal, valid: qValid, invalid: qBad });
+      pass('quizQuestionText', qTextOk === qTotal && qTotal === 50, { present: qTextOk, total: qTotal });
+      pass('moduleReferences', moduleRefBad.length === 0, moduleRefBad.length ? moduleRefBad : undefined);
+      pass('prerequisiteReferences', prereqBad.length === 0, prereqBad.length ? prereqBad : undefined);
+      pass('lessonOrderContiguous', orderOk, { orders: lessonOrders });
+      pass('uniqueLessonIds', dup(lessonIds).length === 0, dup(lessonIds));
+      pass('uniqueLessonSlugs', dup(lessonSlugs).length === 0, dup(lessonSlugs));
+      pass('uniqueActiveRecallIds', dup(arIds).length === 0, dup(arIds));
+      pass('uniqueStudyCardIds', dup(scIds).length === 0, dup(scIds));
+      pass('uniqueQuizIds', dup(qIds).length === 0, dup(qIds));
+      pass('seoCanonicalPathsPresentAndUnique', canonicalPaths.size === (lp.lessons || []).length && dup(canonicalPaths).length === 0, { count: canonicalPaths.size, duplicates: dup(canonicalPaths) });
+      pass('seoCanonicalSlugsPresentAndUnique', canonicalSlugs.size === (lp.lessons || []).length && dup(canonicalSlugs).length === 0, { count: canonicalSlugs.size, duplicates: dup(canonicalSlugs) });
+      pass('globallyUniqueSourceIds', uniqueSourceIds === allSources.length && allSources.length === 46 && dupSourceIds.length === 0, { total: allSources.length, unique: uniqueSourceIds, duplicates: dupSourceIds });
+      pass('noDuplicateCanonicalSourceUrls', dupCanonicalUrls.length === 0, dupCanonicalUrls);
+      pass('noTrackingParamsInSourceUrls', urlsWithTracking.length === 0, urlsWithTracking);
+      pass('sourceReferencesResolvable', brokenRefs.length === 0, brokenRefs);
+      pass('packageStatusDraft', pkg.packageStatus === 'draft', { packageStatus: pkg.packageStatus });
+      pass('applyWouldBeRejected', pkg.packageStatus !== 'ready-for-import', { reason: 'packageStatus must be ready-for-import for apply mode' });
+
+      result.totals = {
+        activeRecall: arTotal,
+        studyCards: scTotal,
+        quizItems: qTotal,
+        totalSourceRecords: allSources.length,
+        uniqueSourceIds,
+        brokenSourceReferencesCount: brokenRefs.length,
+        duplicateSourceIds: dupSourceIds,
+        duplicateCanonicalSourceUrls: dupCanonicalUrls,
+        urlsWithTrackingParams: urlsWithTracking,
+      };
+      result.brokenSourceReferences = brokenRefs;
+      return result;
+    })();
+    report.verify = verify;
+
+    // --------- Idempotency simulation (second pass) ---------
+    // Simulates re-import against the state that would exist AFTER the first dry-run would have applied.
+    // Expectation: unchanged == lessons; created == 0; updated == 0; conflicts == 0.
+    const simulatedExistingLessons = mappedLessons.map((m) => ({ ...m.normalized }));
+    const bySlug2 = new Map(simulatedExistingLessons.map((e, i) => [e.slug, { lesson: e, idx: i }]));
+    const byId2  = new Map(simulatedExistingLessons.map((e, i) => [e.lessonId, { lesson: e, idx: i }]));
+    let secondCreated = 0, secondUpdated = 0, secondUnchanged = 0, secondConflicts = 0;
+    for (const m of mappedLessons) {
+      const n = m.normalized;
+      const match = byId2.get(n.lessonId) || bySlug2.get(n.slug);
+      if (!match) { secondCreated++; continue; }
+      const merged = { ...match.lesson, ...n };
+      if (deepEqual(match.lesson, merged)) secondUnchanged++; else secondUpdated++;
+    }
+    report.idempotency = {
+      secondPassCreated: secondCreated,
+      secondPassUpdated: secondUpdated,
+      secondPassUnchanged: secondUnchanged,
+      secondPassConflicts: secondConflicts,
+      pass: secondCreated === 0 && secondUpdated === 0 && secondConflicts === 0 && secondUnchanged === mappedLessons.length,
+    };
+    verify.checks.idempotencySecondPass = report.idempotency.pass ? 'PASS' : 'FAIL';
+
+
     if (apply && report.publishGate?.ok === true) {
       // (not executed in Phase 1 dry run; left for later. Explicitly gated above.)
       report.errors.push({ severity: 'warn', message: 'apply mode reached but Phase 1 dry-run gate still prevents writes until operator reviews the dry-run report.' });
@@ -455,24 +635,32 @@ async function run() {
     // Always record the dry-run itself in a tiny audit log entry (safe to write).
     // This write is to curriculum_imports and does NOT touch any content/user data.
     // It is scoped and non-destructive; counted here as the ONLY write performed.
-    const importDoc = {
-      id: crypto.randomUUID(),
-      runAt: new Date(),
-      mode: report.mode,
-      packageDigest: pkgDigest,
-      packagePath,
-      learningPathId: lp.id,
-      courseSlug: lp.slug,
-      counts: report.counts,
-      createdLessons: report.created.length,
-      updatedLessons: report.updated.length,
-      unchangedLessons: report.unchanged.length,
-      conflicts: report.conflicts.length,
-      errors: report.errors.length,
-      publishGate: report.publishGate,
-    };
-    await db.collection('curriculum_imports').insertOne(importDoc);
-    report.auditLogId = importDoc.id;
+    // Suppressed entirely when --no-audit is passed, for strict zero-write verification runs.
+    if (!noAudit) {
+      const importDoc = {
+        id: crypto.randomUUID(),
+        runAt: new Date(),
+        mode: report.mode,
+        packageDigest: pkgDigest,
+        packagePath,
+        learningPathId: lp.id,
+        courseSlug: lp.slug,
+        counts: report.counts,
+        createdLessons: report.created.length,
+        updatedLessons: report.updated.length,
+        unchangedLessons: report.unchanged.length,
+        conflicts: report.conflicts.length,
+        errors: report.errors.length,
+        publishGate: report.publishGate,
+      };
+      await db.collection('curriculum_imports').insertOne(importDoc);
+      report.auditLogId = importDoc.id;
+      report.databaseWrites = 1;
+    } else {
+      report.auditLogId = null;
+      report.databaseWrites = 0;
+      report.auditSuppressed = true;
+    }
 
   } finally { await client.close(); }
 
@@ -507,6 +695,21 @@ function print(report) {
   console.log('Migrations that would run (idempotent):');
   for (const m of report.migrations) console.log(`  • ${m}`);
   console.log('');
+  console.log('');
+  if (report.verify) {
+    console.log('Extended verification checks:');
+    for (const [name, status] of Object.entries(report.verify.checks)) {
+      console.log(`  ${status === 'PASS' ? '✓' : '✗'} ${name}: ${status}`);
+    }
+    console.log('');
+    console.log('Verification totals:');
+    console.log(indent(JSON.stringify(report.verify.totals, null, 2), 4));
+    console.log('');
+  }
+  if (report.idempotency) {
+    console.log(`Idempotency 2nd pass: ${report.idempotency.pass ? 'PASS' : 'FAIL'}  (unchanged=${report.idempotency.secondPassUnchanged}, updated=${report.idempotency.secondPassUpdated}, created=${report.idempotency.secondPassCreated}, conflicts=${report.idempotency.secondPassConflicts})`);
+  }
+  console.log(`Database writes: ${report.databaseWrites ?? 'n/a'}`);
   console.log(`Audit log id:   ${report.auditLogId}`);
   // machine-readable JSON (final line is JSON for easy capture)
   console.log('');

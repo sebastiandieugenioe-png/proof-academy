@@ -1,0 +1,3329 @@
+{
+  "schemaVersion": "2.0.1-pilot",
+  "packageStatus": "draft",
+  "packagePurpose": "schema-validation",
+  "contentNote": "Schema-validation pilot. Lessons 01–03 are normalized to the source-linked v2 model. Lessons 04–10 use compact normalized representations of approved drafts for importer/schema testing. v2.0.1 fixes quiz question serialization and makes source IDs globally unique.",
+  "learningPath": {
+    "id": "lp-alcohol-fundamentals",
+    "title": "Alcohol Fundamentals",
+    "slug": "alcohol-fundamentals",
+    "version": 2,
+    "modules": [
+      {
+        "id": "mod-alcohol-fermentation",
+        "title": "Alcohol & Fermentation",
+        "order": 1
+      },
+      {
+        "id": "mod-distillation",
+        "title": "Distillation",
+        "order": 2
+      },
+      {
+        "id": "mod-maturation-classification",
+        "title": "Maturation & Classification",
+        "order": 3
+      }
+    ],
+    "lessons": [
+      {
+        "id": "les-alcohol-001",
+        "contentVersion": 2,
+        "moduleId": "mod-alcohol-fermentation",
+        "order": 1,
+        "title": "What Is Alcohol?",
+        "slug": "what-is-alcohol",
+        "difficulty": "Beginner",
+        "estimatedMinutes": 6,
+        "prerequisites": [],
+        "knowledgeTags": [
+          "alcohol",
+          "ethanol",
+          "abv",
+          "proof",
+          "beverage-alcohol"
+        ],
+        "objectives": [
+          "Explain the difference between ethanol and the broader chemical family of alcohols.",
+          "Explain what ABV measures.",
+          "Convert between ABV and U.S. proof.",
+          "Explain why alcohol concentration and serving size are different concepts."
+        ],
+        "blocks": [
+          {
+            "id": "les-alcohol-001-b01",
+            "type": "paragraph",
+            "content": "In beverage service, the word alcohol normally refers to ethanol, also called ethyl alcohol. Ethanol is one member of a broader chemical family called alcohols; methanol and isopropanol are different compounds and are not interchangeable with beverage ethanol.",
+            "sourceIds": [
+              "src-alcohol-001-s4"
+            ]
+          },
+          {
+            "id": "les-alcohol-001-b02",
+            "type": "key_fact",
+            "content": "Alcohol by volume (ABV) expresses the ratio of pure alcohol volume to total product volume at the same reference temperature. EU spirit legislation defines this at 20°C.",
+            "sourceIds": [
+              "src-alcohol-001-s1"
+            ]
+          },
+          {
+            "id": "les-alcohol-001-b03",
+            "type": "comparison",
+            "content": "ABV describes concentration, not the total amount consumed. A larger serving of a lower-ABV beverage can contain a similar amount of ethanol to a smaller serving of a higher-ABV spirit.",
+            "sourceIds": [
+              "src-alcohol-001-s1",
+              "src-alcohol-001-s3"
+            ]
+          },
+          {
+            "id": "les-alcohol-001-b04",
+            "type": "key_fact",
+            "content": "In the modern U.S. system, proof is twice the percentage of alcohol by volume: 40% ABV = 80 proof.",
+            "sourceIds": [
+              "src-alcohol-001-s2"
+            ]
+          },
+          {
+            "id": "les-alcohol-001-b05",
+            "type": "key_takeaway",
+            "content": "For hospitality, separate three ideas: what ethanol is, how concentrated it is (ABV), and how much ethanol is present in the serving.",
+            "sourceIds": [
+              "src-alcohol-001-s1",
+              "src-alcohol-001-s2",
+              "src-alcohol-001-s3"
+            ]
+          }
+        ],
+        "activeRecall": [
+          {
+            "id": "recall-alcohol-001-01",
+            "question": "Which alcohol is the principal beverage alcohol?",
+            "options": [
+              "Methanol",
+              "Ethanol",
+              "Isopropanol"
+            ],
+            "correctIndex": 1,
+            "explanation": "Ethanol is the alcohol present in alcoholic beverages.",
+            "sourceIds": [
+              "src-alcohol-001-s4"
+            ]
+          },
+          {
+            "id": "recall-alcohol-001-02",
+            "question": "What does ABV describe?",
+            "options": [
+              "Alcohol concentration by volume",
+              "Serving size",
+              "Age"
+            ],
+            "correctIndex": 0,
+            "explanation": "ABV is a concentration measure.",
+            "sourceIds": [
+              "src-alcohol-001-s1"
+            ]
+          },
+          {
+            "id": "recall-alcohol-001-03",
+            "question": "What ABV is 100 proof in the modern U.S. system?",
+            "options": [
+              "40%",
+              "50%",
+              "100%"
+            ],
+            "correctIndex": 1,
+            "explanation": "Proof is twice ABV.",
+            "sourceIds": [
+              "src-alcohol-001-s2"
+            ]
+          }
+        ],
+        "studyCards": [
+          {
+            "id": "card-alcohol-001-01",
+            "front": "What is beverage alcohol?",
+            "back": "Ethanol (ethyl alcohol).",
+            "sourceIds": [
+              "src-alcohol-001-s4"
+            ]
+          },
+          {
+            "id": "card-alcohol-001-02",
+            "front": "What does ABV stand for?",
+            "back": "Alcohol by Volume.",
+            "sourceIds": [
+              "src-alcohol-001-s1"
+            ]
+          },
+          {
+            "id": "card-alcohol-001-03",
+            "front": "What does ABV measure?",
+            "back": "Alcohol concentration by volume.",
+            "sourceIds": [
+              "src-alcohol-001-s1"
+            ]
+          },
+          {
+            "id": "card-alcohol-001-04",
+            "front": "How do you convert ABV to U.S. proof?",
+            "back": "Multiply ABV by 2.",
+            "sourceIds": [
+              "src-alcohol-001-s2"
+            ]
+          },
+          {
+            "id": "card-alcohol-001-05",
+            "front": "What is 80 proof in ABV?",
+            "back": "40% ABV.",
+            "sourceIds": [
+              "src-alcohol-001-s2"
+            ]
+          },
+          {
+            "id": "card-alcohol-001-06",
+            "front": "Does ABV alone tell you the ethanol in a serving?",
+            "back": "No; serving volume is also required.",
+            "sourceIds": [
+              "src-alcohol-001-s3"
+            ]
+          }
+        ],
+        "quiz": [
+          {
+            "id": "quiz-alcohol-001-q1",
+            "type": "single-choice",
+            "questionType": "knowledge",
+            "options": [
+              "Methanol",
+              "Ethanol",
+              "Isopropanol"
+            ],
+            "correctIndex": 1,
+            "explanation": "Beverage alcohol is ethanol.",
+            "sourceIds": [
+              "src-alcohol-001-s4"
+            ],
+            "question": "Which compound is beverage alcohol?"
+          },
+          {
+            "id": "quiz-alcohol-001-q2",
+            "type": "single-choice",
+            "questionType": "knowledge",
+            "options": [
+              "40% of the bottle is sugar",
+              "Alcohol concentration by volume",
+              "A 40 mL serving"
+            ],
+            "correctIndex": 1,
+            "explanation": "ABV is a concentration measure.",
+            "sourceIds": [
+              "src-alcohol-001-s1"
+            ],
+            "question": "What does 40% ABV describe?"
+          },
+          {
+            "id": "quiz-alcohol-001-q3",
+            "type": "single-choice",
+            "questionType": "application",
+            "options": [
+              "43",
+              "86",
+              "100"
+            ],
+            "correctIndex": 1,
+            "explanation": "43 × 2 = 86 proof.",
+            "sourceIds": [
+              "src-alcohol-001-s2"
+            ],
+            "question": "A spirit is 43% ABV. What is its U.S. proof?"
+          },
+          {
+            "id": "quiz-alcohol-001-q4",
+            "type": "single-choice",
+            "questionType": "application",
+            "options": [
+              "Serving volume",
+              "Bottle colour",
+              "Age"
+            ],
+            "correctIndex": 0,
+            "explanation": "ABV and serving volume together determine ethanol amount.",
+            "sourceIds": [
+              "src-alcohol-001-s1",
+              "src-alcohol-001-s3"
+            ],
+            "question": "Which is needed alongside ABV to estimate ethanol in a serve?"
+          },
+          {
+            "id": "quiz-alcohol-001-q5",
+            "type": "single-choice",
+            "questionType": "misconception",
+            "options": [
+              "Every alcohol is beverage-safe",
+              "ABV and serving size are different concepts",
+              "Proof equals ABV"
+            ],
+            "correctIndex": 1,
+            "explanation": "ABV is concentration; serving size is volume.",
+            "sourceIds": [
+              "src-alcohol-001-s1",
+              "src-alcohol-001-s2"
+            ],
+            "question": "Which statement is correct?"
+          }
+        ],
+        "sources": [
+          {
+            "id": "src-alcohol-001-s1",
+            "title": "Regulation (EU) 2019/787 — alcoholic strength by volume",
+            "organization": "European Union",
+            "url": "https://eur-lex.europa.eu/eli/reg/2019/787/oj",
+            "authorityType": "primary legislation",
+            "usedFor": "ABV definition at 20°C",
+            "verified": true
+          },
+          {
+            "id": "src-alcohol-001-s2",
+            "title": "Distilled Spirits FAQs — proof",
+            "organization": "TTB",
+            "url": "https://www.ttb.gov/regulated-commodities/beverage-alcohol/distilled-spirits/distilled-spirits-faqs",
+            "authorityType": "official regulator",
+            "usedFor": "U.S. proof = ABV × 2",
+            "verified": true
+          },
+          {
+            "id": "src-alcohol-001-s3",
+            "title": "What Is a Standard Drink?",
+            "organization": "NIAAA",
+            "url": "https://www.niaaa.nih.gov/alcohols-effects-health/what-standard-drink",
+            "authorityType": "official health authority",
+            "usedFor": "serving size and ethanol amount",
+            "verified": true
+          },
+          {
+            "id": "src-alcohol-001-s4",
+            "title": "Ethanol physical properties",
+            "organization": "NIST",
+            "url": "https://webbook.nist.gov/cgi/cbook.cgi?ID=C64175&Units=SI",
+            "authorityType": "government scientific reference",
+            "usedFor": "ethanol identity and properties",
+            "verified": true
+          }
+        ],
+        "seo": {
+          "title": "What Is Alcohol? Ethanol, ABV and Proof Explained",
+          "metaDescription": "Learn what ethanol is, what ABV means and how U.S. proof works for hospitality professionals.",
+          "canonicalSlug": "what-is-alcohol",
+          "canonicalPath": "/learn/alcohol-fundamentals/what-is-alcohol",
+          "primaryIntent": "informational/educational",
+          "relatedTopics": [
+            "ethanol",
+            "ABV",
+            "proof"
+          ]
+        },
+        "visuals": [
+          {
+            "id": "hero",
+            "role": "hero",
+            "brief": "Educational comparison of beer, wine and spirit with no brands.",
+            "altText": "Educational comparison of beer, wine and spirit with no brands."
+          },
+          {
+            "id": "diagram-1",
+            "role": "educational",
+            "brief": "Diagram: ethanol as beverage alcohol and ABV as concentration.",
+            "altText": "Diagram: ethanol as beverage alcohol and ABV as concentration."
+          },
+          {
+            "id": "diagram-2",
+            "role": "educational",
+            "brief": "Comparison: serving size versus alcohol concentration.",
+            "altText": "Comparison: serving size versus alcohol concentration."
+          }
+        ]
+      },
+      {
+        "id": "les-alcohol-002",
+        "contentVersion": 2,
+        "moduleId": "mod-alcohol-fermentation",
+        "order": 2,
+        "title": "How Fermentation Works",
+        "slug": "how-fermentation-works",
+        "difficulty": "Beginner",
+        "estimatedMinutes": 7,
+        "prerequisites": [
+          "les-alcohol-001"
+        ],
+        "knowledgeTags": [
+          "fermentation",
+          "yeast",
+          "ethanol",
+          "carbon-dioxide",
+          "saccharomyces"
+        ],
+        "objectives": [
+          "Explain the basic role of yeast in alcoholic fermentation.",
+          "Describe how fermentable sugars become ethanol and carbon dioxide.",
+          "Explain why fermentation influences aroma and flavour.",
+          "Recognise factors that can slow, stop or alter fermentation."
+        ],
+        "blocks": [
+          {
+            "id": "les-alcohol-002-b01",
+            "type": "definition",
+            "content": "Alcoholic fermentation transforms fermentable sugars into ethanol, carbon dioxide and secondary products. OIV uses this formulation for wine fermentation.",
+            "sourceIds": [
+              "src-alcohol-002-s1"
+            ]
+          },
+          {
+            "id": "les-alcohol-002-b02",
+            "type": "paragraph",
+            "content": "Saccharomyces yeasts are central to many beverage fermentations. Yeast strain, available nutrients, temperature and increasing ethanol concentration all influence fermentation performance.",
+            "sourceIds": [
+              "src-alcohol-002-s2",
+              "src-alcohol-002-s3"
+            ]
+          },
+          {
+            "id": "les-alcohol-002-b03",
+            "type": "key_fact",
+            "content": "Fermentation produces more than ethanol and CO2. Secondary metabolites can influence aroma and flavour.",
+            "sourceIds": [
+              "src-alcohol-002-s1",
+              "src-alcohol-002-s2"
+            ]
+          },
+          {
+            "id": "les-alcohol-002-b04",
+            "type": "common_misconception",
+            "content": "There is no single universal ABV at which all fermentation stops. Ethanol tolerance varies by yeast strain and environmental conditions.",
+            "sourceIds": [
+              "src-alcohol-002-s3"
+            ]
+          },
+          {
+            "id": "les-alcohol-002-b05",
+            "type": "key_takeaway",
+            "content": "Fermentation creates the alcohol. Distillation, when used later, concentrates alcohol that already exists.",
+            "sourceIds": [
+              "src-alcohol-002-s1"
+            ]
+          }
+        ],
+        "activeRecall": [
+          {
+            "id": "recall-alcohol-002-01",
+            "question": "What are the two principal products hospitality learners should recognise from alcoholic fermentation?",
+            "options": [
+              "Ethanol and CO2",
+              "Ethanol and oxygen",
+              "Sugar and water"
+            ],
+            "correctIndex": 0,
+            "explanation": "Yeast fermentation produces ethanol and carbon dioxide.",
+            "sourceIds": [
+              "src-alcohol-002-s1"
+            ]
+          },
+          {
+            "id": "recall-alcohol-002-02",
+            "question": "Why can fermentation change flavour?",
+            "options": [
+              "Yeast produces secondary compounds",
+              "It adds oak",
+              "It creates only water"
+            ],
+            "correctIndex": 0,
+            "explanation": "Secondary fermentation products contribute aroma and flavour.",
+            "sourceIds": [
+              "src-alcohol-002-s1",
+              "src-alcohol-002-s2"
+            ]
+          },
+          {
+            "id": "recall-alcohol-002-03",
+            "question": "Which statement is most accurate?",
+            "options": [
+              "Every yeast stops at exactly 15% ABV",
+              "Fermentation depends on strain and conditions",
+              "Temperature does not matter"
+            ],
+            "correctIndex": 1,
+            "explanation": "Tolerance and rate depend on yeast and environment.",
+            "sourceIds": [
+              "src-alcohol-002-s2",
+              "src-alcohol-002-s3"
+            ]
+          }
+        ],
+        "studyCards": [
+          {
+            "id": "card-alcohol-002-01",
+            "front": "What is alcoholic fermentation?",
+            "back": "Transformation of fermentable sugars into ethanol, CO2 and secondary products.",
+            "sourceIds": [
+              "src-alcohol-002-s1"
+            ]
+          },
+          {
+            "id": "card-alcohol-002-02",
+            "front": "A common beverage-fermentation yeast species?",
+            "back": "Saccharomyces cerevisiae.",
+            "sourceIds": [
+              "src-alcohol-002-s2"
+            ]
+          },
+          {
+            "id": "card-alcohol-002-03",
+            "front": "Why can fermentation affect aroma?",
+            "back": "Yeast produces flavour-active secondary metabolites.",
+            "sourceIds": [
+              "src-alcohol-002-s1",
+              "src-alcohol-002-s2"
+            ]
+          },
+          {
+            "id": "card-alcohol-002-04",
+            "front": "Name a key fermentation variable.",
+            "back": "Temperature, nutrients, yeast strain or ethanol concentration.",
+            "sourceIds": [
+              "src-alcohol-002-s2",
+              "src-alcohol-002-s3"
+            ]
+          },
+          {
+            "id": "card-alcohol-002-05",
+            "front": "Is there a universal yeast alcohol ceiling?",
+            "back": "No.",
+            "sourceIds": [
+              "src-alcohol-002-s3"
+            ]
+          },
+          {
+            "id": "card-alcohol-002-06",
+            "front": "Does distillation create the original ethanol?",
+            "back": "No; fermentation does.",
+            "sourceIds": [
+              "src-alcohol-002-s1"
+            ]
+          }
+        ],
+        "quiz": [
+          {
+            "id": "quiz-alcohol-002-q1",
+            "type": "single-choice",
+            "questionType": "knowledge",
+            "options": [
+              "Ethanol and CO2",
+              "Oak compounds",
+              "Water only"
+            ],
+            "correctIndex": 0,
+            "explanation": "These are the main products.",
+            "sourceIds": [
+              "src-alcohol-002-s1"
+            ],
+            "question": "What does yeast principally convert fermentable sugar into?"
+          },
+          {
+            "id": "quiz-alcohol-002-q2",
+            "type": "single-choice",
+            "questionType": "knowledge",
+            "options": [
+              "Temperature",
+              "Bottle label colour",
+              "Glassware"
+            ],
+            "correctIndex": 0,
+            "explanation": "Temperature is a major fermentation variable.",
+            "sourceIds": [
+              "src-alcohol-002-s2"
+            ],
+            "question": "Which can affect fermentation performance?"
+          },
+          {
+            "id": "quiz-alcohol-002-q3",
+            "type": "single-choice",
+            "questionType": "application",
+            "options": [
+              "Yeast stress",
+              "Distillation began",
+              "Sugar became oak"
+            ],
+            "correctIndex": 0,
+            "explanation": "Increasing ethanol can stress yeast.",
+            "sourceIds": [
+              "src-alcohol-002-s3"
+            ],
+            "question": "A fermentation slows as ethanol rises. What is plausible?"
+          },
+          {
+            "id": "quiz-alcohol-002-q4",
+            "type": "single-choice",
+            "questionType": "application",
+            "options": [
+              "Fermentation behaviour and aroma profile",
+              "Only bottle size",
+              "Nothing"
+            ],
+            "correctIndex": 0,
+            "explanation": "Yeast strains differ in tolerance and aroma production.",
+            "sourceIds": [
+              "src-alcohol-002-s2"
+            ],
+            "question": "A producer changes yeast strain. What may change?"
+          },
+          {
+            "id": "quiz-alcohol-002-q5",
+            "type": "single-choice",
+            "questionType": "misconception",
+            "options": [
+              "Fermentation makes ethanol",
+              "All yeast stops at one fixed ABV",
+              "Nutrients matter"
+            ],
+            "correctIndex": 1,
+            "explanation": "There is no universal fixed tolerance.",
+            "sourceIds": [
+              "src-alcohol-002-s2",
+              "src-alcohol-002-s3"
+            ],
+            "question": "Which statement is false?"
+          }
+        ],
+        "sources": [
+          {
+            "id": "src-alcohol-002-s1",
+            "title": "Alcoholic fermentation",
+            "organization": "OIV",
+            "url": "https://www.oiv.int/standards/international-code-of-oenological-practices/part-ii-oenological-treatments-and-practices/musts/alcoholic-fermentation",
+            "authorityType": "international technical standard",
+            "usedFor": "sugars → ethanol, CO2 and secondary products",
+            "verified": true
+          },
+          {
+            "id": "src-alcohol-002-s2",
+            "title": "Fermentation Management Practices",
+            "organization": "UC Davis Viticulture and Enology",
+            "url": "https://wine.ucdavis.edu/industry-info/enology/fermentation-management-guides/wine-fermentation/fermentation-management-practices",
+            "authorityType": "academic technical guidance",
+            "usedFor": "yeast, nutrients, temperature, aroma and fermentation conditions",
+            "verified": true
+          },
+          {
+            "id": "src-alcohol-002-s3",
+            "title": "Tips for Fermentation Management",
+            "organization": "UC Davis Viticulture and Enology",
+            "url": "https://wineserver.ucdavis.edu/industry-info/enology/fermentation-management-guides/wine-fermentation/tips-fermentation-management",
+            "authorityType": "academic technical guidance",
+            "usedFor": "ethanol tolerance and yeast strain selection",
+            "verified": true
+          }
+        ],
+        "seo": {
+          "title": "How Fermentation Works: Yeast, Sugar and Alcohol Explained",
+          "metaDescription": "Learn how yeast converts sugar into alcohol, why fermentation affects flavour and what controls the process.",
+          "canonicalSlug": "how-fermentation-works",
+          "canonicalPath": "/learn/alcohol-fundamentals/how-fermentation-works",
+          "primaryIntent": "informational/educational",
+          "relatedTopics": [
+            "yeast",
+            "alcoholic fermentation",
+            "ethanol"
+          ]
+        },
+        "visuals": [
+          {
+            "id": "hero",
+            "role": "hero",
+            "brief": "Active fermentation vessel with educational emphasis.",
+            "altText": "Active fermentation vessel with educational emphasis."
+          },
+          {
+            "id": "diagram-1",
+            "role": "educational",
+            "brief": "Process: sugar → yeast → ethanol + CO2 + secondary compounds.",
+            "altText": "Process: sugar → yeast → ethanol + CO2 + secondary compounds."
+          },
+          {
+            "id": "diagram-2",
+            "role": "educational",
+            "brief": "Diagram: sugar, temperature, nutrients and ethanol stress.",
+            "altText": "Diagram: sugar, temperature, nutrients and ethanol stress."
+          }
+        ]
+      },
+      {
+        "id": "les-alcohol-003",
+        "contentVersion": 2,
+        "moduleId": "mod-alcohol-fermentation",
+        "order": 3,
+        "title": "Sugar, Yeast and Raw Materials",
+        "slug": "sugar-yeast-and-raw-materials",
+        "difficulty": "Beginner",
+        "estimatedMinutes": 7,
+        "prerequisites": [
+          "les-alcohol-001",
+          "les-alcohol-002"
+        ],
+        "knowledgeTags": [
+          "raw-materials",
+          "fermentable-sugars",
+          "grain",
+          "grapes",
+          "sugarcane",
+          "agave",
+          "mashing",
+          "hydrolysis"
+        ],
+        "objectives": [
+          "Explain why yeast requires fermentable sugars rather than any carbohydrate-rich material.",
+          "Distinguish how grapes, grain, sugarcane and agave become suitable for fermentation.",
+          "Explain why starches or fructans may require conversion before fermentation.",
+          "Explain how raw material and yeast influence beverage character."
+        ],
+        "blocks": [
+          {
+            "id": "les-alcohol-003-b01",
+            "type": "key_fact",
+            "content": "Raw material is not the same as fermentable sugar. Different beverage crops store carbohydrate in different forms.",
+            "sourceIds": [
+              "src-alcohol-003-s1",
+              "src-alcohol-003-s2",
+              "src-alcohol-003-s4"
+            ]
+          },
+          {
+            "id": "les-alcohol-003-b02",
+            "type": "comparison",
+            "content": "Grapes contain readily fermentable sugars; grain contains large starch reserves that require enzymatic conversion during mashing; sugarcane provides sugar-rich juice or molasses; agave stores fructans that are hydrolysed during processing.",
+            "sourceIds": [
+              "src-alcohol-003-s1",
+              "src-alcohol-003-s2",
+              "src-alcohol-003-s4",
+              "src-alcohol-003-s5"
+            ]
+          },
+          {
+            "id": "les-alcohol-003-b03",
+            "type": "process",
+            "content": "Grain → starch conversion → fermentable sugars → yeast; agave → cooking/hydrolysis → fermentable sugars → yeast.",
+            "sourceIds": [
+              "src-alcohol-003-s2",
+              "src-alcohol-003-s4"
+            ]
+          },
+          {
+            "id": "les-alcohol-003-b04",
+            "type": "hospitality_example",
+            "content": "Professional explanations should go beyond 'whiskey is grain' or 'rum is sugar': explain how the raw material becomes fermentable.",
+            "sourceIds": [
+              "src-alcohol-003-s2",
+              "src-alcohol-003-s3",
+              "src-alcohol-003-s5"
+            ]
+          },
+          {
+            "id": "les-alcohol-003-b05",
+            "type": "key_takeaway",
+            "content": "Different raw materials take different routes to the same biological requirement: fermentable sugar available to yeast.",
+            "sourceIds": [
+              "src-alcohol-003-s1",
+              "src-alcohol-003-s2",
+              "src-alcohol-003-s4",
+              "src-alcohol-003-s5"
+            ]
+          }
+        ],
+        "activeRecall": [
+          {
+            "id": "recall-alcohol-003-01",
+            "question": "Why can grape must ferment relatively directly?",
+            "options": [
+              "It already contains fermentable sugars",
+              "Yeast ferments grape starch",
+              "It contains ethanol at harvest"
+            ],
+            "correctIndex": 0,
+            "explanation": "Grapes contain fermentable sugars.",
+            "sourceIds": [
+              "src-alcohol-003-s1"
+            ]
+          },
+          {
+            "id": "recall-alcohol-003-02",
+            "question": "What is a main purpose of mashing grain?",
+            "options": [
+              "Convert starch into smaller sugars",
+              "Create barrels",
+              "Remove all carbohydrate"
+            ],
+            "correctIndex": 0,
+            "explanation": "Mashing enables starch conversion.",
+            "sourceIds": [
+              "src-alcohol-003-s2"
+            ]
+          },
+          {
+            "id": "recall-alcohol-003-03",
+            "question": "Why is agave cooked/hydrolysed?",
+            "options": [
+              "Break fructans into fermentable sugars",
+              "Create final bottling alcohol",
+              "Remove all sugar"
+            ],
+            "correctIndex": 0,
+            "explanation": "Hydrolysis makes agave carbohydrates fermentable.",
+            "sourceIds": [
+              "src-alcohol-003-s4"
+            ]
+          }
+        ],
+        "studyCards": [
+          {
+            "id": "card-alcohol-003-01",
+            "front": "What does yeast need from a raw material?",
+            "back": "Fermentable sugars.",
+            "sourceIds": []
+          },
+          {
+            "id": "card-alcohol-003-02",
+            "front": "Main carbohydrate reserve in grain?",
+            "back": "Starch.",
+            "sourceIds": [
+              "src-alcohol-003-s2"
+            ]
+          },
+          {
+            "id": "card-alcohol-003-03",
+            "front": "Purpose of mashing?",
+            "back": "Convert starch into smaller sugars, including fermentable sugars.",
+            "sourceIds": [
+              "src-alcohol-003-s2"
+            ]
+          },
+          {
+            "id": "card-alcohol-003-04",
+            "front": "Two common rum raw materials?",
+            "back": "Sugarcane juice and molasses.",
+            "sourceIds": [
+              "src-alcohol-003-s5"
+            ]
+          },
+          {
+            "id": "card-alcohol-003-05",
+            "front": "Important stored carbohydrate in agave?",
+            "back": "Fructans.",
+            "sourceIds": [
+              "src-alcohol-003-s4"
+            ]
+          },
+          {
+            "id": "card-alcohol-003-06",
+            "front": "What makes agave sugars available to yeast?",
+            "back": "Hydrolysis during processing/cooking.",
+            "sourceIds": [
+              "src-alcohol-003-s4"
+            ]
+          }
+        ],
+        "quiz": [
+          {
+            "id": "quiz-alcohol-003-q1",
+            "type": "single-choice",
+            "questionType": "knowledge",
+            "options": [
+              "Ripe grapes",
+              "Unmashed grain",
+              "Raw agave fructans"
+            ],
+            "correctIndex": 0,
+            "explanation": "Ripe grape must contains fermentable sugars.",
+            "sourceIds": [
+              "src-alcohol-003-s1"
+            ],
+            "question": "Which material naturally contains readily fermentable grape sugars?"
+          },
+          {
+            "id": "quiz-alcohol-003-q2",
+            "type": "single-choice",
+            "questionType": "knowledge",
+            "options": [
+              "Convert starch to sugars",
+              "Add age",
+              "Remove ethanol"
+            ],
+            "correctIndex": 0,
+            "explanation": "Mashing supports starch conversion.",
+            "sourceIds": [
+              "src-alcohol-003-s2"
+            ],
+            "question": "Why is grain mashed?"
+          },
+          {
+            "id": "quiz-alcohol-003-q3",
+            "type": "single-choice",
+            "questionType": "application",
+            "options": [
+              "Hydrolyse stored carbohydrates",
+              "Age the spirit",
+              "Create ethanol without yeast"
+            ],
+            "correctIndex": 0,
+            "explanation": "Cooking/hydrolysis releases fermentable sugars.",
+            "sourceIds": [
+              "src-alcohol-003-s4"
+            ],
+            "question": "Why cook agave before fermentation?"
+          },
+          {
+            "id": "quiz-alcohol-003-q4",
+            "type": "single-choice",
+            "questionType": "application",
+            "options": [
+              "Sugarcane-derived material",
+              "Juniper only",
+              "Agave only"
+            ],
+            "correctIndex": 0,
+            "explanation": "Rum is based on sugarcane-derived material.",
+            "sourceIds": [
+              "src-alcohol-003-s5"
+            ],
+            "question": "Which is a rum raw-material family?"
+          },
+          {
+            "id": "quiz-alcohol-003-q5",
+            "type": "single-choice",
+            "questionType": "misconception",
+            "options": [
+              "Any plant carbohydrate is directly fermentable",
+              "Different raw materials need different preparation",
+              "All spirits start with glucose syrup"
+            ],
+            "correctIndex": 1,
+            "explanation": "Preparation differs by carbohydrate form.",
+            "sourceIds": [
+              "src-alcohol-003-s1",
+              "src-alcohol-003-s2",
+              "src-alcohol-003-s4"
+            ],
+            "question": "Which statement is correct?"
+          }
+        ],
+        "sources": [
+          {
+            "id": "src-alcohol-003-s1",
+            "title": "Alcoholic fermentation / grape sugars context",
+            "organization": "OIV",
+            "url": "https://www.oiv.int/standards/international-code-of-oenological-practices/part-ii-oenological-treatments-and-practices/musts/alcoholic-fermentation",
+            "authorityType": "international technical standard",
+            "usedFor": "grape sugar fermentation",
+            "verified": true
+          },
+          {
+            "id": "src-alcohol-003-s2",
+            "title": "Starch Conversion in Mashing",
+            "organization": "Brewers Association",
+            "url": "https://www.brewersassociation.org/seminars/starch-conversion-in-mashing-the-balance-between-fermentable-and-non-fermentable-sugars/",
+            "authorityType": "industry technical education",
+            "usedFor": "grain starch conversion to fermentable sugars",
+            "verified": true
+          },
+          {
+            "id": "src-alcohol-003-s3",
+            "title": "How Scotch Whisky Is Made",
+            "organization": "Scotch Whisky Association",
+            "url": "https://www.scotch-whisky.org.uk/discover-scotch/how-its-made/",
+            "authorityType": "official industry body",
+            "usedFor": "cereal mash, fermentation and whisky production",
+            "verified": true
+          },
+          {
+            "id": "src-alcohol-003-s4",
+            "title": "Tequila production",
+            "organization": "Consejo Regulador del Tequila",
+            "url": "https://www.crt.org.mx/en/our-tequila/",
+            "authorityType": "official regulator",
+            "usedFor": "agave cooking/hydrolysis and fermentation",
+            "verified": true
+          },
+          {
+            "id": "src-alcohol-003-s5",
+            "title": "Distilled spirits / rum standards",
+            "organization": "TTB",
+            "url": "https://www.ttb.gov/regulated-commodities/beverage-alcohol/distilled-spirits",
+            "authorityType": "official regulator",
+            "usedFor": "sugarcane-derived rum raw materials",
+            "verified": true
+          }
+        ],
+        "seo": {
+          "title": "How Grapes, Grain, Sugarcane and Agave Become Alcohol",
+          "metaDescription": "Learn how major beverage raw materials provide fermentable sugars and why each requires different processing.",
+          "canonicalSlug": "sugar-yeast-and-raw-materials",
+          "canonicalPath": "/learn/alcohol-fundamentals/sugar-yeast-and-raw-materials",
+          "primaryIntent": "informational/educational",
+          "relatedTopics": [
+            "raw materials",
+            "mashing",
+            "agave hydrolysis",
+            "sugarcane"
+          ]
+        },
+        "visuals": [
+          {
+            "id": "hero",
+            "role": "hero",
+            "brief": "Grapes, grain, sugarcane and agave in one educational composition.",
+            "altText": "Grapes, grain, sugarcane and agave in one educational composition."
+          },
+          {
+            "id": "diagram-1",
+            "role": "educational",
+            "brief": "Four routes to fermentable sugar.",
+            "altText": "Four routes to fermentable sugar."
+          },
+          {
+            "id": "diagram-2",
+            "role": "educational",
+            "brief": "Different inputs → fermentable sugar → yeast → ethanol.",
+            "altText": "Different inputs → fermentable sugar → yeast → ethanol."
+          }
+        ]
+      },
+      {
+        "id": "les-alcohol-004",
+        "contentVersion": 2,
+        "moduleId": "mod-alcohol-fermentation",
+        "order": 4,
+        "title": "Understanding Alcohol Strength",
+        "slug": "understanding-alcohol-strength",
+        "difficulty": "Beginner",
+        "estimatedMinutes": 8,
+        "prerequisites": [
+          "les-alcohol-003"
+        ],
+        "knowledgeTags": [
+          "abv",
+          "proof",
+          "standard-drink",
+          "alcohol-units",
+          "serving-size"
+        ],
+        "objectives": [
+          "Explain what ABV measures.",
+          "Convert between ABV and U.S. proof.",
+          "Calculate approximate pure ethanol in a serving.",
+          "Explain why serving size matters alongside ABV.",
+          "Recognise that standard-drink definitions vary by country."
+        ],
+        "blocks": [
+          {
+            "id": "les-alcohol-004-b01",
+            "type": "definition",
+            "content": "ABV measures alcohol concentration by volume; EU spirit legislation defines it using pure alcohol volume relative to total product volume at 20°C.",
+            "sourceIds": [
+              "src-alcohol-004-s1"
+            ]
+          },
+          {
+            "id": "les-alcohol-004-b02",
+            "type": "process",
+            "content": "Approximate pure ethanol volume = serving volume × ABV / 100. Serving size and concentration must be considered together.",
+            "sourceIds": [
+              "src-alcohol-004-s1"
+            ]
+          },
+          {
+            "id": "les-alcohol-004-b03",
+            "type": "key_fact",
+            "content": "U.S. proof = ABV × 2.",
+            "sourceIds": [
+              "src-alcohol-004-s2"
+            ]
+          },
+          {
+            "id": "les-alcohol-004-b04",
+            "type": "comparison",
+            "content": "Standard-drink systems are not universal: Ireland uses 10 g pure alcohol; the U.S. uses about 14 g; the UK commonly uses units based on 10 mL pure alcohol.",
+            "sourceIds": [
+              "src-alcohol-004-s3",
+              "src-alcohol-004-s4",
+              "src-alcohol-004-s5"
+            ]
+          },
+          {
+            "id": "les-alcohol-004-b05",
+            "type": "key_takeaway",
+            "content": "Separate strength, serving size and total ethanol.",
+            "sourceIds": [
+              "src-alcohol-004-s1",
+              "src-alcohol-004-s3",
+              "src-alcohol-004-s4"
+            ]
+          }
+        ],
+        "activeRecall": [
+          {
+            "id": "recall-alcohol-004-01",
+            "question": "What two values estimate ethanol in a serving?",
+            "options": [
+              "ABV and serving volume",
+              "Colour and temperature",
+              "Age and price"
+            ],
+            "correctIndex": 0,
+            "explanation": "Both concentration and volume are needed.",
+            "sourceIds": [
+              "src-alcohol-004-s1"
+            ]
+          },
+          {
+            "id": "recall-alcohol-004-02",
+            "question": "What is 100 proof in U.S. terms?",
+            "options": [
+              "40% ABV",
+              "50% ABV",
+              "100% ABV"
+            ],
+            "correctIndex": 1,
+            "explanation": "Proof is twice ABV.",
+            "sourceIds": [
+              "src-alcohol-004-s2"
+            ]
+          },
+          {
+            "id": "recall-alcohol-004-03",
+            "question": "Are standard drinks defined identically worldwide?",
+            "options": [
+              "Yes",
+              "No",
+              "Only for spirits"
+            ],
+            "correctIndex": 1,
+            "explanation": "National systems differ.",
+            "sourceIds": [
+              "src-alcohol-004-s3",
+              "src-alcohol-004-s4",
+              "src-alcohol-004-s5"
+            ]
+          }
+        ],
+        "studyCards": [
+          {
+            "id": "card-alcohol-004-01",
+            "front": "What does ABV measure?",
+            "back": "Alcohol concentration by volume.",
+            "sourceIds": [
+              "src-alcohol-004-s1"
+            ]
+          },
+          {
+            "id": "card-alcohol-004-02",
+            "front": "Pure ethanol volume formula?",
+            "back": "Serving volume × ABV / 100.",
+            "sourceIds": [
+              "src-alcohol-004-s1"
+            ]
+          },
+          {
+            "id": "card-alcohol-004-03",
+            "front": "Proof formula in the U.S.?",
+            "back": "ABV × 2.",
+            "sourceIds": [
+              "src-alcohol-004-s2"
+            ]
+          },
+          {
+            "id": "card-alcohol-004-04",
+            "front": "Irish standard drink?",
+            "back": "10 g pure alcohol.",
+            "sourceIds": [
+              "src-alcohol-004-s4"
+            ]
+          },
+          {
+            "id": "card-alcohol-004-05",
+            "front": "U.S. standard drink?",
+            "back": "About 14 g pure alcohol.",
+            "sourceIds": [
+              "src-alcohol-004-s3"
+            ]
+          },
+          {
+            "id": "card-alcohol-004-06",
+            "front": "Does dilution remove ethanol?",
+            "back": "No; it lowers concentration unless alcohol is physically removed.",
+            "sourceIds": [
+              "src-alcohol-004-s1"
+            ]
+          }
+        ],
+        "quiz": [
+          {
+            "id": "quiz-alcohol-004-q1",
+            "type": "single-choice",
+            "questionType": "knowledge",
+            "options": [
+              "Concentration",
+              "Age",
+              "Volume only"
+            ],
+            "correctIndex": 0,
+            "explanation": "ABV is concentration.",
+            "sourceIds": [
+              "src-alcohol-004-s1"
+            ],
+            "question": "What does ABV describe?"
+          },
+          {
+            "id": "quiz-alcohol-004-q2",
+            "type": "single-choice",
+            "questionType": "calculation",
+            "options": [
+              "12 mL",
+              "30 mL",
+              "48 mL"
+            ],
+            "correctIndex": 1,
+            "explanation": "250 × .12 = 30 mL.",
+            "sourceIds": [
+              "src-alcohol-004-s1"
+            ],
+            "question": "250 mL at 12% ABV contains approximately how much ethanol by volume?"
+          },
+          {
+            "id": "quiz-alcohol-004-q3",
+            "type": "single-choice",
+            "questionType": "knowledge",
+            "options": [
+              "43% ABV",
+              "46% ABV",
+              "86% ABV"
+            ],
+            "correctIndex": 0,
+            "explanation": "86/2=43.",
+            "sourceIds": [
+              "src-alcohol-004-s2"
+            ],
+            "question": "86 proof equals?"
+          },
+          {
+            "id": "quiz-alcohol-004-q4",
+            "type": "single-choice",
+            "questionType": "application",
+            "options": [
+              "330 mL beer at 5% and 40 mL spirit at 40%",
+              "Only identical ABV drinks",
+              "Never beer and spirits"
+            ],
+            "correctIndex": 0,
+            "explanation": "Their ethanol volumes are close.",
+            "sourceIds": [
+              "src-alcohol-004-s1"
+            ],
+            "question": "Which can contain similar ethanol?"
+          },
+          {
+            "id": "quiz-alcohol-004-q5",
+            "type": "single-choice",
+            "questionType": "misconception",
+            "options": [
+              "True",
+              "False",
+              "Only in EU"
+            ],
+            "correctIndex": 1,
+            "explanation": "Definitions vary.",
+            "sourceIds": [
+              "src-alcohol-004-s3",
+              "src-alcohol-004-s4",
+              "src-alcohol-004-s5"
+            ],
+            "question": "Standard drinks are universal."
+          }
+        ],
+        "sources": [
+          {
+            "id": "src-alcohol-004-s1",
+            "title": "Regulation (EU) 2019/787 — alcoholic strength by volume",
+            "organization": "European Union",
+            "url": "https://eur-lex.europa.eu/eli/reg/2019/787/oj",
+            "authorityType": "primary legislation",
+            "usedFor": "ABV definition",
+            "verified": true
+          },
+          {
+            "id": "src-alcohol-004-s2",
+            "title": "Distilled Spirits FAQs — proof",
+            "organization": "TTB",
+            "url": "https://www.ttb.gov/regulated-commodities/beverage-alcohol/distilled-spirits/distilled-spirits-faqs",
+            "authorityType": "official regulator",
+            "usedFor": "proof conversion",
+            "verified": true
+          },
+          {
+            "id": "src-alcohol-004-s3",
+            "title": "What Is a Standard Drink?",
+            "organization": "NIAAA",
+            "url": "https://www.niaaa.nih.gov/alcohols-effects-health/what-standard-drink",
+            "authorityType": "official health authority",
+            "usedFor": "U.S. standard drink",
+            "verified": true
+          },
+          {
+            "id": "src-alcohol-004-s4",
+            "title": "Weekly Low-Risk Alcohol Guidelines",
+            "organization": "HSE Ireland",
+            "url": "https://www2.hse.ie/living-well/alcohol/health/improve-your-health/weekly-low-risk-alcohol-guidelines/",
+            "authorityType": "official health authority",
+            "usedFor": "Irish standard drink",
+            "verified": true
+          },
+          {
+            "id": "src-alcohol-004-s5",
+            "title": "Alcohol units",
+            "organization": "NHS",
+            "url": "https://www.nhs.uk/live-well/alcohol-advice/calculating-alcohol-units/",
+            "authorityType": "official health authority",
+            "usedFor": "UK alcohol units",
+            "verified": true
+          }
+        ],
+        "seo": {
+          "title": "ABV Explained: Alcohol Strength, Proof and Standard Drinks",
+          "metaDescription": "Learn what ABV means, how U.S. proof works and why serving size changes total alcohol.",
+          "canonicalSlug": "understanding-alcohol-strength",
+          "canonicalPath": "/learn/alcohol-fundamentals/understanding-alcohol-strength",
+          "primaryIntent": "informational/educational",
+          "relatedTopics": [
+            "abv",
+            "proof",
+            "standard-drink",
+            "alcohol-units"
+          ]
+        },
+        "visuals": [
+          {
+            "id": "hero",
+            "role": "hero",
+            "brief": "Beer, wine and spirit serves with ABV labels.",
+            "altText": "Beer, wine and spirit serves with ABV labels."
+          },
+          {
+            "id": "diagram-1",
+            "role": "educational",
+            "brief": "ABV concentration diagram.",
+            "altText": "ABV concentration diagram."
+          },
+          {
+            "id": "diagram-2",
+            "role": "educational",
+            "brief": "Same ethanol, different serving sizes.",
+            "altText": "Same ethanol, different serving sizes."
+          }
+        ]
+      },
+      {
+        "id": "les-alcohol-005",
+        "contentVersion": 2,
+        "moduleId": "mod-distillation",
+        "order": 5,
+        "title": "How Distillation Works",
+        "slug": "how-distillation-works",
+        "difficulty": "Beginner",
+        "estimatedMinutes": 7,
+        "prerequisites": [
+          "les-alcohol-004"
+        ],
+        "knowledgeTags": [
+          "distillation",
+          "vapour",
+          "condensation",
+          "azeotrope",
+          "ethanol"
+        ],
+        "objectives": [
+          "Explain what distillation does to fermented liquid.",
+          "Explain ethanol-water vapour enrichment.",
+          "Distinguish vaporisation, condensation and collection.",
+          "Explain why distillation does not create alcohol.",
+          "Understand the azeotropic limit."
+        ],
+        "blocks": [
+          {
+            "id": "les-alcohol-005-b01",
+            "type": "key_fact",
+            "content": "Fermentation creates ethanol; distillation separates and concentrates it.",
+            "sourceIds": [
+              "src-alcohol-005-s4"
+            ]
+          },
+          {
+            "id": "les-alcohol-005-b02",
+            "type": "common_misconception",
+            "content": "A wash does not release all ethanol first and water later. Both enter the vapour; in relevant dilute mixtures the vapour is enriched in ethanol.",
+            "sourceIds": [
+              "src-alcohol-005-s1",
+              "src-alcohol-005-s2",
+              "src-alcohol-005-s3"
+            ]
+          },
+          {
+            "id": "les-alcohol-005-b03",
+            "type": "process",
+            "content": "Heat → vapour enriched in volatile components → cooling → condensation → distillate.",
+            "sourceIds": [
+              "src-alcohol-005-s3",
+              "src-alcohol-005-s4"
+            ]
+          },
+          {
+            "id": "les-alcohol-005-b04",
+            "type": "key_fact",
+            "content": "Repeated separation or reflux can increase strength, but ordinary ethanol-water distillation approaches an azeotropic limit below 100% ethanol.",
+            "sourceIds": [
+              "src-alcohol-005-s3"
+            ]
+          },
+          {
+            "id": "les-alcohol-005-b05",
+            "type": "hospitality_example",
+            "content": "Distillation strength and bottling strength are not necessarily the same; water may be added later.",
+            "sourceIds": [
+              "src-alcohol-005-s6"
+            ]
+          }
+        ],
+        "activeRecall": [
+          {
+            "id": "recall-alcohol-005-01",
+            "question": "Does distillation create ethanol?",
+            "options": [
+              "Yes",
+              "No",
+              "Only in columns"
+            ],
+            "correctIndex": 1,
+            "explanation": "Fermentation creates it.",
+            "sourceIds": [
+              "src-alcohol-005-s4"
+            ]
+          },
+          {
+            "id": "recall-alcohol-005-02",
+            "question": "Why can distillate be stronger than wash?",
+            "options": [
+              "Vapour is enriched in ethanol",
+              "Water becomes alcohol",
+              "Condenser creates ethanol"
+            ],
+            "correctIndex": 0,
+            "explanation": "Vapour-liquid composition differs.",
+            "sourceIds": [
+              "src-alcohol-005-s3"
+            ]
+          },
+          {
+            "id": "recall-alcohol-005-03",
+            "question": "Why not ordinary-distil to 100% ethanol?",
+            "options": [
+              "Azeotrope",
+              "40% legal cap",
+              "Water stops boiling"
+            ],
+            "correctIndex": 0,
+            "explanation": "Ethanol-water forms an azeotrope.",
+            "sourceIds": [
+              "src-alcohol-005-s3"
+            ]
+          }
+        ],
+        "studyCards": [
+          {
+            "id": "card-alcohol-005-01",
+            "front": "Does distillation create ethanol?",
+            "back": "No.",
+            "sourceIds": [
+              "src-alcohol-005-s4"
+            ]
+          },
+          {
+            "id": "card-alcohol-005-02",
+            "front": "What is distillate?",
+            "back": "Condensed liquid collected after vaporisation.",
+            "sourceIds": [
+              "src-alcohol-005-s4"
+            ]
+          },
+          {
+            "id": "card-alcohol-005-03",
+            "front": "Is distillation vapour pure ethanol?",
+            "back": "No.",
+            "sourceIds": [
+              "src-alcohol-005-s3"
+            ]
+          },
+          {
+            "id": "card-alcohol-005-04",
+            "front": "What is reflux?",
+            "back": "Condensed vapour returning for further separation.",
+            "sourceIds": [
+              "src-alcohol-005-s4"
+            ]
+          },
+          {
+            "id": "card-alcohol-005-05",
+            "front": "Why can repeated distillation raise ABV?",
+            "back": "Repeated vapour-liquid separation enriches ethanol.",
+            "sourceIds": [
+              "src-alcohol-005-s3"
+            ]
+          },
+          {
+            "id": "card-alcohol-005-06",
+            "front": "What limits ordinary ethanol-water separation?",
+            "back": "The azeotrope.",
+            "sourceIds": [
+              "src-alcohol-005-s3"
+            ]
+          }
+        ],
+        "quiz": [
+          {
+            "id": "quiz-alcohol-005-q1",
+            "type": "single-choice",
+            "questionType": "knowledge",
+            "options": [
+              "Create ethanol",
+              "Separate/concentrate existing ethanol",
+              "Create sugar"
+            ],
+            "correctIndex": 1,
+            "explanation": "Fermentation already created ethanol.",
+            "sourceIds": [
+              "src-alcohol-005-s4"
+            ],
+            "question": "Primary role of distillation?"
+          },
+          {
+            "id": "quiz-alcohol-005-q2",
+            "type": "single-choice",
+            "questionType": "concept",
+            "options": [
+              "Only ethanol",
+              "Both water and ethanol; ethanol-enriched",
+              "Only water"
+            ],
+            "correctIndex": 1,
+            "explanation": "Both can enter vapour.",
+            "sourceIds": [
+              "src-alcohol-005-s3"
+            ],
+            "question": "What is true of vapour from dilute ethanol-water mixtures?"
+          },
+          {
+            "id": "quiz-alcohol-005-q3",
+            "type": "single-choice",
+            "questionType": "application",
+            "options": [
+              "Yes",
+              "No",
+              "Only in pot stills"
+            ],
+            "correctIndex": 1,
+            "explanation": "It was concentrated.",
+            "sourceIds": [
+              "src-alcohol-005-s3",
+              "src-alcohol-005-s4"
+            ],
+            "question": "A stronger distillate emerges. Was new ethanol created?"
+          },
+          {
+            "id": "quiz-alcohol-005-q4",
+            "type": "single-choice",
+            "questionType": "knowledge",
+            "options": [
+              "Vapour returning to liquid",
+              "Sugar fermentation",
+              "Barrel ageing"
+            ],
+            "correctIndex": 0,
+            "explanation": "Cooling vapour forms liquid.",
+            "sourceIds": [
+              "src-alcohol-005-s4"
+            ],
+            "question": "What is condensation?"
+          },
+          {
+            "id": "quiz-alcohol-005-q5",
+            "type": "single-choice",
+            "questionType": "misconception",
+            "options": [
+              "True",
+              "False",
+              "Only for whisky"
+            ],
+            "correctIndex": 1,
+            "explanation": "Mixture behaviour is more complex.",
+            "sourceIds": [
+              "src-alcohol-005-s1",
+              "src-alcohol-005-s2",
+              "src-alcohol-005-s3"
+            ],
+            "question": "A still simply holds 78°C to boil only ethanol."
+          }
+        ],
+        "sources": [
+          {
+            "id": "src-alcohol-005-s1",
+            "title": "Ethanol physical properties",
+            "organization": "NIST",
+            "url": "https://webbook.nist.gov/cgi/cbook.cgi?ID=C64175&Units=SI",
+            "authorityType": "government scientific reference",
+            "usedFor": "ethanol boiling point",
+            "verified": true
+          },
+          {
+            "id": "src-alcohol-005-s2",
+            "title": "Water physical properties",
+            "organization": "NIST",
+            "url": "https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185&Units=SI",
+            "authorityType": "government scientific reference",
+            "usedFor": "water boiling point",
+            "verified": true
+          },
+          {
+            "id": "src-alcohol-005-s3",
+            "title": "Fractional Distillation of Non-Ideal Mixtures",
+            "organization": "Chemistry LibreTexts",
+            "url": "https://chem.libretexts.org/Bookshelves/Physical_and_Theoretical_Chemistry_Textbook_Maps/Supplemental_Modules_(Physical_and_Theoretical_Chemistry)/Equilibria/Physical_Equilibria/Fractional_Distillation_of_Non-ideal_Mixtures_(Azeotropes)",
+            "authorityType": "academic educational reference",
+            "usedFor": "vapour-liquid behaviour and azeotrope",
+            "verified": true
+          },
+          {
+            "id": "src-alcohol-005-s4",
+            "title": "Irish Whiskey Technical File",
+            "organization": "Drinks Ireland",
+            "url": "https://www.ibec.ie/drinksireland/-/media/documents/drinks-ireland-new-website/irish-whiskey-technical/irish-whiskey-technical-file.pdf",
+            "authorityType": "official GI technical specification",
+            "usedFor": "real beverage distillation process",
+            "verified": true
+          },
+          {
+            "id": "src-alcohol-005-s5",
+            "title": "Scotch Whisky Regulations 2009",
+            "organization": "UK Government",
+            "url": "https://www.legislation.gov.uk/uksi/2009/2890/body/made",
+            "authorityType": "primary legislation",
+            "usedFor": "94.8% distillation limit and character retention",
+            "verified": true
+          },
+          {
+            "id": "src-alcohol-005-s6",
+            "title": "Formula Approval with Laboratory Sample Analysis",
+            "organization": "TTB",
+            "url": "https://www.ttb.gov/regulated-commodities/formulation/formula-approval-with-laboratory-sample-analysis-2",
+            "authorityType": "official regulator",
+            "usedFor": "proof at distillation vs final strength",
+            "verified": true
+          }
+        ],
+        "seo": {
+          "title": "How Distillation Works: Alcohol, Vapour and Condensation",
+          "metaDescription": "Learn how distillation concentrates alcohol, why ethanol-rich vapour forms and how condensation works.",
+          "canonicalSlug": "how-distillation-works",
+          "canonicalPath": "/learn/alcohol-fundamentals/how-distillation-works",
+          "primaryIntent": "informational/educational",
+          "relatedTopics": [
+            "distillation",
+            "vapour",
+            "condensation",
+            "azeotrope"
+          ]
+        },
+        "visuals": [
+          {
+            "id": "hero",
+            "role": "hero",
+            "brief": "Working copper still system.",
+            "altText": "Working copper still system."
+          },
+          {
+            "id": "diagram-1",
+            "role": "educational",
+            "brief": "Vaporisation → condensation process.",
+            "altText": "Vaporisation → condensation process."
+          },
+          {
+            "id": "diagram-2",
+            "role": "educational",
+            "brief": "Repeated separation approaching azeotropic limit.",
+            "altText": "Repeated separation approaching azeotropic limit."
+          }
+        ]
+      },
+      {
+        "id": "les-alcohol-006",
+        "contentVersion": 2,
+        "moduleId": "mod-distillation",
+        "order": 6,
+        "title": "Pot Stills vs Column Stills",
+        "slug": "pot-stills-vs-column-stills",
+        "difficulty": "Beginner",
+        "estimatedMinutes": 8,
+        "prerequisites": [
+          "les-alcohol-005"
+        ],
+        "knowledgeTags": [
+          "pot-still",
+          "column-still",
+          "continuous-distillation",
+          "batch-distillation",
+          "reflux"
+        ],
+        "objectives": [
+          "Distinguish batch pot from continuous column distillation.",
+          "Explain repeated vapour-liquid contact in columns.",
+          "Explain how still design and reflux influence character.",
+          "Avoid pot=flavour/column=neutral oversimplification.",
+          "Recognise categories where still type matters legally."
+        ],
+        "blocks": [
+          {
+            "id": "les-alcohol-006-b01",
+            "type": "comparison",
+            "content": "Pot stills are typically batch systems; column stills commonly enable continuous operation with repeated separation stages.",
+            "sourceIds": [
+              "src-alcohol-006-s1"
+            ]
+          },
+          {
+            "id": "les-alcohol-006-b02",
+            "type": "key_fact",
+            "content": "Pot-still shape and reflux influence spirit character; column plates create repeated vapour-liquid contact.",
+            "sourceIds": [
+              "src-alcohol-006-s1"
+            ]
+          },
+          {
+            "id": "les-alcohol-006-b03",
+            "type": "common_misconception",
+            "content": "Column still does not automatically mean neutral spirit. Draw-off points and operating choices can create a range of styles.",
+            "sourceIds": [
+              "src-alcohol-006-s1"
+            ]
+          },
+          {
+            "id": "les-alcohol-006-b04",
+            "type": "key_fact",
+            "content": "Single Malt Scotch requires pot stills; Irish Grain Whiskey requires column stills under its technical specification.",
+            "sourceIds": [
+              "src-alcohol-006-s1",
+              "src-alcohol-006-s2"
+            ]
+          },
+          {
+            "id": "les-alcohol-006-b05",
+            "type": "key_takeaway",
+            "content": "Still type is a separation strategy, not a quality ranking.",
+            "sourceIds": [
+              "src-alcohol-006-s1",
+              "src-alcohol-006-s2",
+              "src-alcohol-006-s3"
+            ]
+          }
+        ],
+        "activeRecall": [
+          {
+            "id": "recall-alcohol-006-01",
+            "question": "What makes pot distillation a batch process?",
+            "options": [
+              "Fixed charge distilled then reloaded",
+              "Continuous feed forever",
+              "No heating"
+            ],
+            "correctIndex": 0,
+            "explanation": "Pot systems process discrete charges.",
+            "sourceIds": [
+              "src-alcohol-006-s1"
+            ]
+          },
+          {
+            "id": "recall-alcohol-006-02",
+            "question": "What do column plates provide?",
+            "options": [
+              "Repeated vapour-liquid contact",
+              "Ageing",
+              "Fermentation"
+            ],
+            "correctIndex": 0,
+            "explanation": "They create separation stages.",
+            "sourceIds": [
+              "src-alcohol-006-s1"
+            ]
+          },
+          {
+            "id": "recall-alcohol-006-03",
+            "question": "Do column stills only make neutral spirits?",
+            "options": [
+              "Yes",
+              "No",
+              "Only outside Ireland"
+            ],
+            "correctIndex": 1,
+            "explanation": "Operation can create varied styles.",
+            "sourceIds": [
+              "src-alcohol-006-s1"
+            ]
+          }
+        ],
+        "studyCards": [
+          {
+            "id": "card-alcohol-006-01",
+            "front": "Typical pot-still mode?",
+            "back": "Batch.",
+            "sourceIds": [
+              "src-alcohol-006-s1"
+            ]
+          },
+          {
+            "id": "card-alcohol-006-02",
+            "front": "Typical column-still mode?",
+            "back": "Continuous.",
+            "sourceIds": [
+              "src-alcohol-006-s1"
+            ]
+          },
+          {
+            "id": "card-alcohol-006-03",
+            "front": "What do plates do?",
+            "back": "Create repeated separation stages.",
+            "sourceIds": [
+              "src-alcohol-006-s1"
+            ]
+          },
+          {
+            "id": "card-alcohol-006-04",
+            "front": "Do columns always make neutral spirit?",
+            "back": "No.",
+            "sourceIds": [
+              "src-alcohol-006-s1"
+            ]
+          },
+          {
+            "id": "card-alcohol-006-05",
+            "front": "Single Malt Scotch still type?",
+            "back": "Pot still.",
+            "sourceIds": [
+              "src-alcohol-006-s2"
+            ]
+          },
+          {
+            "id": "card-alcohol-006-06",
+            "front": "Why does copper matter?",
+            "back": "It can alter sulphur chemistry and aroma.",
+            "sourceIds": [
+              "src-alcohol-006-s4"
+            ]
+          }
+        ],
+        "quiz": [
+          {
+            "id": "quiz-alcohol-006-q1",
+            "type": "single-choice",
+            "questionType": "knowledge",
+            "options": [
+              "Batch",
+              "Continuous only",
+              "Non-distilling"
+            ],
+            "correctIndex": 0,
+            "explanation": "Pot stills process discrete charges.",
+            "sourceIds": [
+              "src-alcohol-006-s1"
+            ],
+            "question": "Pot stills are typically?"
+          },
+          {
+            "id": "quiz-alcohol-006-q2",
+            "type": "single-choice",
+            "questionType": "concept",
+            "options": [
+              "Vapour-liquid contact",
+              "Wood ageing",
+              "Yeast nutrition"
+            ],
+            "correctIndex": 0,
+            "explanation": "They improve separation.",
+            "sourceIds": [
+              "src-alcohol-006-s1"
+            ],
+            "question": "Column plates mainly provide?"
+          },
+          {
+            "id": "quiz-alcohol-006-q3",
+            "type": "single-choice",
+            "questionType": "application",
+            "options": [
+              "Always",
+              "Not necessarily",
+              "Only for rum"
+            ],
+            "correctIndex": 1,
+            "explanation": "Operation matters.",
+            "sourceIds": [
+              "src-alcohol-006-s1"
+            ],
+            "question": "Column still equals flavourless?"
+          },
+          {
+            "id": "quiz-alcohol-006-q4",
+            "type": "single-choice",
+            "questionType": "professional",
+            "options": [
+              "Pot stills",
+              "Columns only",
+              "Either"
+            ],
+            "correctIndex": 0,
+            "explanation": "It is legally required.",
+            "sourceIds": [
+              "src-alcohol-006-s2"
+            ],
+            "question": "Single Malt Scotch requires?"
+          },
+          {
+            "id": "quiz-alcohol-006-q5",
+            "type": "single-choice",
+            "questionType": "misconception",
+            "options": [
+              "True",
+              "False",
+              "Only in Cognac"
+            ],
+            "correctIndex": 1,
+            "explanation": "It is a process choice.",
+            "sourceIds": [
+              "src-alcohol-006-s1",
+              "src-alcohol-006-s3"
+            ],
+            "question": "Still type alone determines quality."
+          }
+        ],
+        "sources": [
+          {
+            "id": "src-alcohol-006-s1",
+            "title": "Irish Whiskey Technical File",
+            "organization": "Drinks Ireland",
+            "url": "https://www.ibec.ie/drinksireland/-/media/documents/drinks-ireland-new-website/irish-whiskey-technical/irish-whiskey-technical-file.pdf",
+            "authorityType": "official GI technical specification",
+            "usedFor": "pot vs column, reflux, plates, continuous operation",
+            "verified": true
+          },
+          {
+            "id": "src-alcohol-006-s2",
+            "title": "Scotch Whisky Regulations 2009",
+            "organization": "UK Government",
+            "url": "https://www.legislation.gov.uk/uksi/2009/2890/body/made",
+            "authorityType": "primary legislation",
+            "usedFor": "Single Malt Scotch pot-still requirement",
+            "verified": true
+          },
+          {
+            "id": "src-alcohol-006-s3",
+            "title": "Cognac official site",
+            "organization": "BNIC",
+            "url": "https://www.cognac.fr/en/discover/cognac/the-production-process/distillation/",
+            "authorityType": "official appellation body",
+            "usedFor": "Charentaise double distillation",
+            "verified": true
+          },
+          {
+            "id": "src-alcohol-006-s4",
+            "title": "Review of Sulfur Compounds in Whisk(e)y",
+            "organization": "Molecules",
+            "url": "https://www.mdpi.com/1420-3049/27/5/1672",
+            "authorityType": "peer-reviewed review",
+            "usedFor": "copper contact and sulphur compounds",
+            "verified": true
+          }
+        ],
+        "seo": {
+          "title": "Pot Still vs Column Still: How Spirit Distillation Differs",
+          "metaDescription": "Learn the difference between pot and column stills and how design influences strength and flavour.",
+          "canonicalSlug": "pot-stills-vs-column-stills",
+          "canonicalPath": "/learn/alcohol-fundamentals/pot-stills-vs-column-stills",
+          "primaryIntent": "informational/educational",
+          "relatedTopics": [
+            "pot-still",
+            "column-still",
+            "continuous-distillation",
+            "batch-distillation"
+          ]
+        },
+        "visuals": [
+          {
+            "id": "hero",
+            "role": "hero",
+            "brief": "Pot and column still side by side.",
+            "altText": "Pot and column still side by side."
+          },
+          {
+            "id": "diagram-1",
+            "role": "educational",
+            "brief": "Batch vs continuous flow.",
+            "altText": "Batch vs continuous flow."
+          },
+          {
+            "id": "diagram-2",
+            "role": "educational",
+            "brief": "Column plate/reflux diagram.",
+            "altText": "Column plate/reflux diagram."
+          }
+        ]
+      },
+      {
+        "id": "les-alcohol-007",
+        "contentVersion": 2,
+        "moduleId": "mod-distillation",
+        "order": 7,
+        "title": "Heads, Hearts, Tails and Congeners",
+        "slug": "heads-hearts-tails-and-congeners",
+        "difficulty": "Beginner",
+        "estimatedMinutes": 8,
+        "prerequisites": [
+          "les-alcohol-006"
+        ],
+        "knowledgeTags": [
+          "heads",
+          "hearts",
+          "tails",
+          "congeners",
+          "methanol",
+          "cut-points"
+        ],
+        "objectives": [
+          "Explain heads, hearts and tails.",
+          "Explain that cut boundaries are deliberate decisions.",
+          "Define congeners and their sensory role.",
+          "Explain recycling of non-heart fractions.",
+          "Avoid the methanol=heads myth."
+        ],
+        "blocks": [
+          {
+            "id": "les-alcohol-007-b01",
+            "type": "definition",
+            "content": "Batch distillation is commonly described as heads/foreshots, heart/spirit cut and tails/feints. The producer chooses cut points.",
+            "sourceIds": [
+              "src-alcohol-007-s1",
+              "src-alcohol-007-s2"
+            ]
+          },
+          {
+            "id": "les-alcohol-007-b02",
+            "type": "key_fact",
+            "content": "Congeners are compounds other than the main ethanol-water components that contribute to spirit composition and sensory character.",
+            "sourceIds": [
+              "src-alcohol-007-s2"
+            ]
+          },
+          {
+            "id": "les-alcohol-007-b03",
+            "type": "common_misconception",
+            "content": "Heads are not simply 'the methanol'. Methanol can remain distributed across a run depending on raw material and process.",
+            "sourceIds": [
+              "src-alcohol-007-s3",
+              "src-alcohol-007-s4"
+            ]
+          },
+          {
+            "id": "les-alcohol-007-b04",
+            "type": "key_fact",
+            "content": "Foreshots and feints may be collected and recycled into later whiskey distillations rather than simply discarded.",
+            "sourceIds": [
+              "src-alcohol-007-s1"
+            ]
+          },
+          {
+            "id": "les-alcohol-007-b05",
+            "type": "key_takeaway",
+            "content": "Cuts are flavour-selection decisions as well as separation decisions.",
+            "sourceIds": [
+              "src-alcohol-007-s1",
+              "src-alcohol-007-s2"
+            ]
+          }
+        ],
+        "activeRecall": [
+          {
+            "id": "recall-alcohol-007-01",
+            "question": "What is the heart?",
+            "options": [
+              "Selected middle fraction",
+              "Only ethanol",
+              "Last liquid"
+            ],
+            "correctIndex": 0,
+            "explanation": "It is the selected product fraction.",
+            "sourceIds": [
+              "src-alcohol-007-s1"
+            ]
+          },
+          {
+            "id": "recall-alcohol-007-02",
+            "question": "Are all congeners undesirable?",
+            "options": [
+              "Yes",
+              "No",
+              "Only in whisky"
+            ],
+            "correctIndex": 1,
+            "explanation": "Many contribute desirable aroma and flavour.",
+            "sourceIds": [
+              "src-alcohol-007-s2"
+            ]
+          },
+          {
+            "id": "recall-alcohol-007-03",
+            "question": "Are foreshots and feints always waste?",
+            "options": [
+              "Yes",
+              "No; they may be recycled",
+              "Only in vodka"
+            ],
+            "correctIndex": 1,
+            "explanation": "They can be recycled.",
+            "sourceIds": [
+              "src-alcohol-007-s1"
+            ]
+          }
+        ],
+        "studyCards": [
+          {
+            "id": "card-alcohol-007-01",
+            "front": "Three common batch fractions?",
+            "back": "Heads/foreshots, heart/spirit cut, tails/feints.",
+            "sourceIds": [
+              "src-alcohol-007-s1"
+            ]
+          },
+          {
+            "id": "card-alcohol-007-02",
+            "front": "What is a congener?",
+            "back": "A minor compound that contributes to spirit composition and character.",
+            "sourceIds": [
+              "src-alcohol-007-s2"
+            ]
+          },
+          {
+            "id": "card-alcohol-007-03",
+            "front": "Are all congeners bad?",
+            "back": "No.",
+            "sourceIds": [
+              "src-alcohol-007-s2"
+            ]
+          },
+          {
+            "id": "card-alcohol-007-04",
+            "front": "What determines heart composition?",
+            "back": "Cut points plus compound behaviour.",
+            "sourceIds": [
+              "src-alcohol-007-s2"
+            ]
+          },
+          {
+            "id": "card-alcohol-007-05",
+            "front": "Can heads/tails be recycled?",
+            "back": "Yes.",
+            "sourceIds": [
+              "src-alcohol-007-s1"
+            ]
+          },
+          {
+            "id": "card-alcohol-007-06",
+            "front": "Is methanol only in heads?",
+            "back": "No.",
+            "sourceIds": [
+              "src-alcohol-007-s3",
+              "src-alcohol-007-s4"
+            ]
+          }
+        ],
+        "quiz": [
+          {
+            "id": "quiz-alcohol-007-q1",
+            "type": "single-choice",
+            "questionType": "knowledge",
+            "options": [
+              "Selected central fraction",
+              "All heads",
+              "Barrel loss"
+            ],
+            "correctIndex": 0,
+            "explanation": "The heart is selected for product use.",
+            "sourceIds": [
+              "src-alcohol-007-s1"
+            ],
+            "question": "What is the heart?"
+          },
+          {
+            "id": "quiz-alcohol-007-q2",
+            "type": "single-choice",
+            "questionType": "concept",
+            "options": [
+              "Always contaminants",
+              "Minor compounds that can shape flavour",
+              "Only water"
+            ],
+            "correctIndex": 1,
+            "explanation": "They contribute character.",
+            "sourceIds": [
+              "src-alcohol-007-s2"
+            ],
+            "question": "Congeners are?"
+          },
+          {
+            "id": "quiz-alcohol-007-q3",
+            "type": "single-choice",
+            "questionType": "application",
+            "options": [
+              "Different congener profiles",
+              "Only different colour",
+              "Identical spirit"
+            ],
+            "correctIndex": 0,
+            "explanation": "Cut points change composition.",
+            "sourceIds": [
+              "src-alcohol-007-s2"
+            ],
+            "question": "Different cut points can produce?"
+          },
+          {
+            "id": "quiz-alcohol-007-q4",
+            "type": "single-choice",
+            "questionType": "professional",
+            "options": [
+              "Recycled",
+              "Always bottled",
+              "Converted to grain"
+            ],
+            "correctIndex": 0,
+            "explanation": "They may be recycled.",
+            "sourceIds": [
+              "src-alcohol-007-s1"
+            ],
+            "question": "Foreshots/feints may be?"
+          },
+          {
+            "id": "quiz-alcohol-007-q5",
+            "type": "single-choice",
+            "questionType": "misconception",
+            "options": [
+              "True",
+              "False",
+              "Only in whisky"
+            ],
+            "correctIndex": 1,
+            "explanation": "It can be distributed across the run.",
+            "sourceIds": [
+              "src-alcohol-007-s3",
+              "src-alcohol-007-s4"
+            ],
+            "question": "Methanol always exists exclusively in heads."
+          }
+        ],
+        "sources": [
+          {
+            "id": "src-alcohol-007-s1",
+            "title": "Irish Whiskey Technical File",
+            "organization": "Drinks Ireland",
+            "url": "https://www.ibec.ie/drinksireland/-/media/documents/drinks-ireland-new-website/irish-whiskey-technical/irish-whiskey-technical-file.pdf",
+            "authorityType": "official GI technical specification",
+            "usedFor": "foreshots, spirit cut, feints and recycling",
+            "verified": true
+          },
+          {
+            "id": "src-alcohol-007-s2",
+            "title": "Sources of Volatile Aromatic Congeners in Whiskey",
+            "organization": "Beverages",
+            "url": "https://www.mdpi.com/2306-5710/9/3/64",
+            "authorityType": "peer-reviewed review",
+            "usedFor": "congeners and cut points",
+            "verified": true
+          },
+          {
+            "id": "src-alcohol-007-s3",
+            "title": "Methanol Mitigation During Manufacturing of Fruit Spirits",
+            "organization": "Molecules",
+            "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC8125215/",
+            "authorityType": "peer-reviewed review",
+            "usedFor": "methanol distribution",
+            "verified": true
+          },
+          {
+            "id": "src-alcohol-007-s4",
+            "title": "Absorbance Spectroscopy of Heads, Hearts and Tails Fractions",
+            "organization": "Beverages",
+            "url": "https://www.mdpi.com/2306-5710/7/2/21",
+            "authorityType": "peer-reviewed study",
+            "usedFor": "fraction composition",
+            "verified": true
+          }
+        ],
+        "seo": {
+          "title": "Heads, Hearts and Tails: Spirit Distillation Cuts Explained",
+          "metaDescription": "Learn what distillation cuts mean, what congeners are and why the methanol myth is misleading.",
+          "canonicalSlug": "heads-hearts-tails-and-congeners",
+          "canonicalPath": "/learn/alcohol-fundamentals/heads-hearts-tails-and-congeners",
+          "primaryIntent": "informational/educational",
+          "relatedTopics": [
+            "heads",
+            "hearts",
+            "tails",
+            "congeners"
+          ]
+        },
+        "visuals": [
+          {
+            "id": "hero",
+            "role": "hero",
+            "brief": "Distillate collection with three conceptual fractions.",
+            "altText": "Distillate collection with three conceptual fractions."
+          },
+          {
+            "id": "diagram-1",
+            "role": "educational",
+            "brief": "Distillation-run timeline.",
+            "altText": "Distillation-run timeline."
+          },
+          {
+            "id": "diagram-2",
+            "role": "educational",
+            "brief": "Narrow vs wide heart cut.",
+            "altText": "Narrow vs wide heart cut."
+          }
+        ]
+      },
+      {
+        "id": "les-alcohol-008",
+        "contentVersion": 2,
+        "moduleId": "mod-maturation-classification",
+        "order": 8,
+        "title": "How Barrel Maturation Works",
+        "slug": "how-barrel-maturation-works",
+        "difficulty": "Beginner",
+        "estimatedMinutes": 8,
+        "prerequisites": [
+          "les-alcohol-007"
+        ],
+        "knowledgeTags": [
+          "maturation",
+          "oak",
+          "angel-share",
+          "evaporation",
+          "vanillin",
+          "cask"
+        ],
+        "objectives": [
+          "Explain extraction, oxidation, evaporation and transformation.",
+          "Identify important oak-derived flavour compounds.",
+          "Explain cask history and heat treatment.",
+          "Explain the angel's share and ABV change.",
+          "Explain why older is not automatically better."
+        ],
+        "blocks": [
+          {
+            "id": "les-alcohol-008-b01",
+            "type": "process",
+            "content": "Maturation combines extraction, chemical transformation, oxidation, subtraction and evaporation.",
+            "sourceIds": [
+              "src-alcohol-008-s1",
+              "src-alcohol-008-s2",
+              "src-alcohol-008-s3"
+            ]
+          },
+          {
+            "id": "les-alcohol-008-b02",
+            "type": "key_fact",
+            "content": "Oak can contribute vanillin, lactones, furans, tannins and related compounds; heat treatment changes what becomes available for extraction.",
+            "sourceIds": [
+              "src-alcohol-008-s1"
+            ]
+          },
+          {
+            "id": "les-alcohol-008-b03",
+            "type": "common_misconception",
+            "content": "There is no universal annual angel's-share percentage. Temperature, humidity, cask and warehouse conditions matter.",
+            "sourceIds": [
+              "src-alcohol-008-s1"
+            ]
+          },
+          {
+            "id": "les-alcohol-008-b04",
+            "type": "comparison",
+            "content": "Bourbon uses new charred oak containers; Scotch requires oak but does not require new casks; Irish Whiskey has its own GI maturation rules.",
+            "sourceIds": [
+              "src-alcohol-008-s4",
+              "src-alcohol-008-s5",
+              "src-alcohol-008-s6"
+            ]
+          },
+          {
+            "id": "les-alcohol-008-b05",
+            "type": "key_takeaway",
+            "content": "Age is time under qualifying maturation conditions, not a guarantee of quality.",
+            "sourceIds": [
+              "src-alcohol-008-s1",
+              "src-alcohol-008-s4"
+            ]
+          }
+        ],
+        "activeRecall": [
+          {
+            "id": "recall-alcohol-008-01",
+            "question": "Which process moves wood compounds into spirit?",
+            "options": [
+              "Extraction",
+              "Fermentation",
+              "Rectification"
+            ],
+            "correctIndex": 0,
+            "explanation": "Extraction transfers compounds from oak.",
+            "sourceIds": [
+              "src-alcohol-008-s1"
+            ]
+          },
+          {
+            "id": "recall-alcohol-008-02",
+            "question": "Is angel's share a universal 2% per year?",
+            "options": [
+              "Yes",
+              "No",
+              "Only in Scotch"
+            ],
+            "correctIndex": 1,
+            "explanation": "Loss varies by environment.",
+            "sourceIds": [
+              "src-alcohol-008-s1"
+            ]
+          },
+          {
+            "id": "recall-alcohol-008-03",
+            "question": "Which statement is correct?",
+            "options": [
+              "Bourbon and Scotch both require new oak",
+              "Bourbon requires new charred oak; Scotch need not use new oak",
+              "Scotch cannot use oak"
+            ],
+            "correctIndex": 1,
+            "explanation": "Rules differ.",
+            "sourceIds": [
+              "src-alcohol-008-s4",
+              "src-alcohol-008-s5"
+            ]
+          }
+        ],
+        "studyCards": [
+          {
+            "id": "card-alcohol-008-01",
+            "front": "Four maturation processes?",
+            "back": "Extraction, transformation/oxidation, subtraction and evaporation.",
+            "sourceIds": [
+              "src-alcohol-008-s1",
+              "src-alcohol-008-s2"
+            ]
+          },
+          {
+            "id": "card-alcohol-008-02",
+            "front": "Vanilla-associated oak compound?",
+            "back": "Vanillin.",
+            "sourceIds": [
+              "src-alcohol-008-s1"
+            ]
+          },
+          {
+            "id": "card-alcohol-008-03",
+            "front": "What is angel's share?",
+            "back": "Evaporative loss during maturation.",
+            "sourceIds": [
+              "src-alcohol-008-s1"
+            ]
+          },
+          {
+            "id": "card-alcohol-008-04",
+            "front": "Universal annual angel's share?",
+            "back": "No.",
+            "sourceIds": [
+              "src-alcohol-008-s1"
+            ]
+          },
+          {
+            "id": "card-alcohol-008-05",
+            "front": "Bourbon container requirement?",
+            "back": "New charred oak.",
+            "sourceIds": [
+              "src-alcohol-008-s5"
+            ]
+          },
+          {
+            "id": "card-alcohol-008-06",
+            "front": "Does older automatically mean better?",
+            "back": "No.",
+            "sourceIds": [
+              "src-alcohol-008-s1"
+            ]
+          }
+        ],
+        "quiz": [
+          {
+            "id": "quiz-alcohol-008-q1",
+            "type": "single-choice",
+            "questionType": "knowledge",
+            "options": [
+              "Extraction",
+              "Fermentation",
+              "Filtration"
+            ],
+            "correctIndex": 0,
+            "explanation": "It is extracted from oak.",
+            "sourceIds": [
+              "src-alcohol-008-s1"
+            ],
+            "question": "Vanillin reaches spirit mainly through?"
+          },
+          {
+            "id": "quiz-alcohol-008-q2",
+            "type": "single-choice",
+            "questionType": "concept",
+            "options": [
+              "Only extraction",
+              "Multiple additive/subtractive/transformative processes",
+              "Continued distillation"
+            ],
+            "correctIndex": 1,
+            "explanation": "It is chemically dynamic.",
+            "sourceIds": [
+              "src-alcohol-008-s1",
+              "src-alcohol-008-s2",
+              "src-alcohol-008-s3"
+            ],
+            "question": "Maturation involves?"
+          },
+          {
+            "id": "quiz-alcohol-008-q3",
+            "type": "single-choice",
+            "questionType": "application",
+            "options": [
+              "Evaporation and ABV evolution",
+              "Legal category only",
+              "Grain mash"
+            ],
+            "correctIndex": 0,
+            "explanation": "Environment affects cask losses.",
+            "sourceIds": [
+              "src-alcohol-008-s1"
+            ],
+            "question": "Different humidity may change?"
+          },
+          {
+            "id": "quiz-alcohol-008-q4",
+            "type": "single-choice",
+            "questionType": "professional",
+            "options": [
+              "Yes",
+              "No",
+              "Only after 12 years"
+            ],
+            "correctIndex": 1,
+            "explanation": "Scotch requires oak, not new oak.",
+            "sourceIds": [
+              "src-alcohol-008-s4"
+            ],
+            "question": "Scotch casks must be new?"
+          },
+          {
+            "id": "quiz-alcohol-008-q5",
+            "type": "single-choice",
+            "questionType": "misconception",
+            "options": [
+              "True",
+              "False",
+              "Only bourbon"
+            ],
+            "correctIndex": 1,
+            "explanation": "Age is not a quality guarantee.",
+            "sourceIds": [
+              "src-alcohol-008-s1"
+            ],
+            "question": "Older always means better."
+          }
+        ],
+        "sources": [
+          {
+            "id": "src-alcohol-008-s1",
+            "title": "Wood-derived compounds and alcoholic beverage quality",
+            "organization": "Molecules",
+            "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC13164676/",
+            "authorityType": "peer-reviewed review",
+            "usedFor": "oak extraction, barrel history, storage conditions",
+            "verified": true
+          },
+          {
+            "id": "src-alcohol-008-s2",
+            "title": "Review of Sulfur Compounds in Whisk(e)y",
+            "organization": "Molecules",
+            "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC8911989/",
+            "authorityType": "peer-reviewed review",
+            "usedFor": "maturation extraction and adsorption",
+            "verified": true
+          },
+          {
+            "id": "src-alcohol-008-s3",
+            "title": "Sources of Volatile Aromatic Congeners in Whiskey",
+            "organization": "Beverages",
+            "url": "https://www.mdpi.com/2306-5710/9/3/64",
+            "authorityType": "peer-reviewed review",
+            "usedFor": "maturation chemistry",
+            "verified": true
+          },
+          {
+            "id": "src-alcohol-008-s4",
+            "title": "Scotch Whisky Regulations 2009",
+            "organization": "UK Government",
+            "url": "https://www.legislation.gov.uk/uksi/2009/2890/body/made",
+            "authorityType": "primary legislation",
+            "usedFor": "Scotch maturation requirements",
+            "verified": true
+          },
+          {
+            "id": "src-alcohol-008-s5",
+            "title": "Distilled Spirits FAQs",
+            "organization": "TTB",
+            "url": "https://www.ttb.gov/regulated-commodities/beverage-alcohol/distilled-spirits/distilled-spirits-faqs",
+            "authorityType": "official regulator",
+            "usedFor": "bourbon new charred oak",
+            "verified": true
+          },
+          {
+            "id": "src-alcohol-008-s6",
+            "title": "Irish Whiskey Technical File",
+            "organization": "Drinks Ireland",
+            "url": "https://www.ibec.ie/drinksireland/-/media/documents/drinks-ireland-new-website/irish-whiskey-technical/irish-whiskey-technical-file.pdf",
+            "authorityType": "official GI technical specification",
+            "usedFor": "Irish whiskey maturation",
+            "verified": true
+          }
+        ],
+        "seo": {
+          "title": "How Barrel Maturation Works: Oak, Ageing and the Angel's Share",
+          "metaDescription": "Learn how oak barrels transform spirits through extraction, oxidation, evaporation and chemical reactions.",
+          "canonicalSlug": "how-barrel-maturation-works",
+          "canonicalPath": "/learn/alcohol-fundamentals/how-barrel-maturation-works",
+          "primaryIntent": "informational/educational",
+          "relatedTopics": [
+            "maturation",
+            "oak",
+            "angel-share",
+            "evaporation"
+          ]
+        },
+        "visuals": [
+          {
+            "id": "hero",
+            "role": "hero",
+            "brief": "Cutaway barrel with extraction and evaporation arrows.",
+            "altText": "Cutaway barrel with extraction and evaporation arrows."
+          },
+          {
+            "id": "diagram-1",
+            "role": "educational",
+            "brief": "Five maturation processes.",
+            "altText": "Five maturation processes."
+          },
+          {
+            "id": "diagram-2",
+            "role": "educational",
+            "brief": "New vs refill cask comparison.",
+            "altText": "New vs refill cask comparison."
+          }
+        ]
+      },
+      {
+        "id": "les-alcohol-009",
+        "contentVersion": 2,
+        "moduleId": "mod-maturation-classification",
+        "order": 9,
+        "title": "Age Statements, Cask Strength and Bottling Terms",
+        "slug": "age-statements-cask-strength-and-bottling-terms",
+        "difficulty": "Beginner",
+        "estimatedMinutes": 8,
+        "prerequisites": [
+          "les-alcohol-008"
+        ],
+        "knowledgeTags": [
+          "age-statement",
+          "cask-strength",
+          "bottled-in-bond",
+          "single-cask",
+          "small-batch",
+          "reserve"
+        ],
+        "objectives": [
+          "Explain age statements and jurisdiction differences.",
+          "Explain cask strength without assuming fixed ABV.",
+          "Explain Bottled in Bond.",
+          "Distinguish regulated from contextual terminology.",
+          "Avoid treating marketing language as a guarantee."
+        ],
+        "blocks": [
+          {
+            "id": "les-alcohol-009-b01",
+            "type": "key_fact",
+            "content": "For Scotch, an age claim refers to the youngest whisky represented and is not an average age.",
+            "sourceIds": [
+              "src-alcohol-009-s1",
+              "src-alcohol-009-s2"
+            ]
+          },
+          {
+            "id": "les-alcohol-009-b02",
+            "type": "comparison",
+            "content": "U.S. whisky labelling has its own age rules; international rules are not identical.",
+            "sourceIds": [
+              "src-alcohol-009-s3"
+            ]
+          },
+          {
+            "id": "les-alcohol-009-b03",
+            "type": "definition",
+            "content": "Cask strength generally means bottled at the alcoholic strength at which whisky comes from the cask; it is not one fixed ABV.",
+            "sourceIds": [
+              "src-alcohol-009-s4"
+            ]
+          },
+          {
+            "id": "les-alcohol-009-b04",
+            "type": "key_fact",
+            "content": "Bottled in Bond is a regulated U.S. designation including same distiller/distillery/season, at least four years in qualifying bonded storage, and bottling at 100 proof.",
+            "sourceIds": [
+              "src-alcohol-009-s5"
+            ]
+          },
+          {
+            "id": "les-alcohol-009-b05",
+            "type": "common_misconception",
+            "content": "Reserve, premium, small batch and similar language should not be treated as universal technical guarantees without a specific applicable definition.",
+            "sourceIds": []
+          }
+        ],
+        "activeRecall": [
+          {
+            "id": "recall-alcohol-009-01",
+            "question": "A 15-year Scotch age claim refers to?",
+            "options": [
+              "Average age",
+              "Youngest whisky represented",
+              "Oldest whisky"
+            ],
+            "correctIndex": 1,
+            "explanation": "Scotch uses the youngest component for age claims.",
+            "sourceIds": [
+              "src-alcohol-009-s1",
+              "src-alcohol-009-s2"
+            ]
+          },
+          {
+            "id": "recall-alcohol-009-02",
+            "question": "Is cask strength a fixed ABV?",
+            "options": [
+              "Yes",
+              "No",
+              "Only 57%"
+            ],
+            "correctIndex": 1,
+            "explanation": "It varies by cask.",
+            "sourceIds": [
+              "src-alcohol-009-s4"
+            ]
+          },
+          {
+            "id": "recall-alcohol-009-03",
+            "question": "Bottled in Bond is bottled at?",
+            "options": [
+              "80 proof",
+              "100 proof",
+              "114 proof"
+            ],
+            "correctIndex": 1,
+            "explanation": "100 proof = 50% ABV.",
+            "sourceIds": [
+              "src-alcohol-009-s5"
+            ]
+          }
+        ],
+        "studyCards": [
+          {
+            "id": "card-alcohol-009-01",
+            "front": "Scotch age statement means?",
+            "back": "Youngest whisky represented.",
+            "sourceIds": [
+              "src-alcohol-009-s1",
+              "src-alcohol-009-s2"
+            ]
+          },
+          {
+            "id": "card-alcohol-009-02",
+            "front": "Is Scotch age an average?",
+            "back": "No.",
+            "sourceIds": [
+              "src-alcohol-009-s1"
+            ]
+          },
+          {
+            "id": "card-alcohol-009-03",
+            "front": "Are age rules universal?",
+            "back": "No.",
+            "sourceIds": [
+              "src-alcohol-009-s1",
+              "src-alcohol-009-s3"
+            ]
+          },
+          {
+            "id": "card-alcohol-009-04",
+            "front": "Cask strength?",
+            "back": "Bottled at the strength at which whisky comes from the cask.",
+            "sourceIds": [
+              "src-alcohol-009-s4"
+            ]
+          },
+          {
+            "id": "card-alcohol-009-05",
+            "front": "Bottled in Bond proof?",
+            "back": "100 proof / 50% ABV.",
+            "sourceIds": [
+              "src-alcohol-009-s5"
+            ]
+          },
+          {
+            "id": "card-alcohol-009-06",
+            "front": "Are single cask and cask strength synonyms?",
+            "back": "No.",
+            "sourceIds": []
+          }
+        ],
+        "quiz": [
+          {
+            "id": "quiz-alcohol-009-q1",
+            "type": "single-choice",
+            "questionType": "knowledge",
+            "options": [
+              "Average 12",
+              "Youngest at least 12",
+              "Oldest 12"
+            ],
+            "correctIndex": 1,
+            "explanation": "Youngest governs the claim.",
+            "sourceIds": [
+              "src-alcohol-009-s1",
+              "src-alcohol-009-s2"
+            ],
+            "question": "A 12-year Scotch statement means?"
+          },
+          {
+            "id": "quiz-alcohol-009-q2",
+            "type": "single-choice",
+            "questionType": "concept",
+            "options": [
+              "Identical",
+              "Jurisdiction-specific",
+              "Optional everywhere"
+            ],
+            "correctIndex": 1,
+            "explanation": "Rules vary.",
+            "sourceIds": [
+              "src-alcohol-009-s1",
+              "src-alcohol-009-s3"
+            ],
+            "question": "International whisky age rules are?"
+          },
+          {
+            "id": "quiz-alcohol-009-q3",
+            "type": "single-choice",
+            "questionType": "professional",
+            "options": [
+              "40%",
+              "50%",
+              "57%"
+            ],
+            "correctIndex": 1,
+            "explanation": "100 proof = 50% ABV.",
+            "sourceIds": [
+              "src-alcohol-009-s5"
+            ],
+            "question": "Bottled in Bond strength?"
+          },
+          {
+            "id": "quiz-alcohol-009-q4",
+            "type": "single-choice",
+            "questionType": "application",
+            "options": [
+              "Always",
+              "Not necessarily",
+              "Only Scotch"
+            ],
+            "correctIndex": 1,
+            "explanation": "Source and strength are different claims.",
+            "sourceIds": [],
+            "question": "Single cask means cask strength?"
+          },
+          {
+            "id": "quiz-alcohol-009-q5",
+            "type": "single-choice",
+            "questionType": "misconception",
+            "options": [
+              "True",
+              "False",
+              "Only U.S."
+            ],
+            "correctIndex": 1,
+            "explanation": "It needs specific regulatory context.",
+            "sourceIds": [],
+            "question": "Premium Reserve automatically guarantees a legal quality grade."
+          }
+        ],
+        "sources": [
+          {
+            "id": "src-alcohol-009-s1",
+            "title": "Scotch Whisky Regulations 2009",
+            "organization": "UK Government",
+            "url": "https://www.legislation.gov.uk/uksi/2009/2890/body/made",
+            "authorityType": "primary legislation",
+            "usedFor": "Scotch age and category rules",
+            "verified": true
+          },
+          {
+            "id": "src-alcohol-009-s2",
+            "title": "Guidance for Bottlers and Producers 2025",
+            "organization": "Scotch Whisky Association",
+            "url": "https://www.scotch-whisky.org.uk/media/2387/guidance-for-bottlers-and-producers_2025.pdf",
+            "authorityType": "official industry legal guidance",
+            "usedFor": "age statements",
+            "verified": true
+          },
+          {
+            "id": "src-alcohol-009-s3",
+            "title": "Distilled Spirits FAQs",
+            "organization": "TTB",
+            "url": "https://www.ttb.gov/regulated-commodities/beverage-alcohol/distilled-spirits/distilled-spirits-faqs",
+            "authorityType": "official regulator",
+            "usedFor": "U.S. whisky age rules",
+            "verified": true
+          },
+          {
+            "id": "src-alcohol-009-s4",
+            "title": "Responsible Marketing Code",
+            "organization": "Scotch Whisky Association",
+            "url": "https://www.scotch-whisky.org.uk/media/2030/swa-responsible-marketing-code-fifth-edition-july-2022.pdf",
+            "authorityType": "official industry guidance",
+            "usedFor": "cask-strength description",
+            "verified": true
+          },
+          {
+            "id": "src-alcohol-009-s5",
+            "title": "Whisky Webinar / Bottled in Bond guidance",
+            "organization": "TTB",
+            "url": "https://www.ttb.gov/images/pdfs/whisky-webinar.pdf",
+            "authorityType": "official regulator",
+            "usedFor": "Bottled in Bond requirements",
+            "verified": true
+          }
+        ],
+        "seo": {
+          "title": "Whisky Age Statements, Cask Strength & Bottling Terms Explained",
+          "metaDescription": "Learn what whisky age statements, cask strength, Bottled in Bond and common marketing terms actually mean.",
+          "canonicalSlug": "age-statements-cask-strength-and-bottling-terms",
+          "canonicalPath": "/learn/alcohol-fundamentals/age-statements-cask-strength-and-bottling-terms",
+          "primaryIntent": "informational/educational",
+          "relatedTopics": [
+            "age-statement",
+            "cask-strength",
+            "bottled-in-bond",
+            "single-cask"
+          ]
+        },
+        "visuals": [
+          {
+            "id": "hero",
+            "role": "hero",
+            "brief": "Educational whisky label with age and strength terms.",
+            "altText": "Educational whisky label with age and strength terms."
+          },
+          {
+            "id": "diagram-1",
+            "role": "educational",
+            "brief": "Legal vs technical vs marketing language.",
+            "altText": "Legal vs technical vs marketing language."
+          },
+          {
+            "id": "diagram-2",
+            "role": "educational",
+            "brief": "Single cask vs cask strength.",
+            "altText": "Single cask vs cask strength."
+          }
+        ]
+      },
+      {
+        "id": "les-alcohol-010",
+        "contentVersion": 2,
+        "moduleId": "mod-maturation-classification",
+        "order": 10,
+        "title": "How to Read a Spirits Label",
+        "slug": "how-to-read-a-spirits-label",
+        "difficulty": "Beginner",
+        "estimatedMinutes": 8,
+        "prerequisites": [
+          "les-alcohol-009"
+        ],
+        "knowledgeTags": [
+          "spirits-label",
+          "legal-name",
+          "abv",
+          "geographical-indication",
+          "age-statement",
+          "marketing-language"
+        ],
+        "objectives": [
+          "Use a repeatable professional label-reading method.",
+          "Distinguish brand from legal category/type.",
+          "Identify alcoholic strength and net contents.",
+          "Recognise GI/origin claims without overgeneralising.",
+          "Distinguish regulated information from production claims and marketing."
+        ],
+        "blocks": [
+          {
+            "id": "les-alcohol-010-b01",
+            "type": "process",
+            "content": "Read labels by evidence value: category/type → ABV → net contents → origin/GI → responsible operator → age → production claims → marketing language.",
+            "sourceIds": [
+              "src-alcohol-010-s1",
+              "src-alcohol-010-s2",
+              "src-alcohol-010-s3"
+            ]
+          },
+          {
+            "id": "les-alcohol-010-b02",
+            "type": "key_fact",
+            "content": "Brand name and spirit category are different pieces of information.",
+            "sourceIds": [
+              "src-alcohol-010-s1"
+            ]
+          },
+          {
+            "id": "les-alcohol-010-b03",
+            "type": "key_fact",
+            "content": "EU spirit legislation establishes legal category names and GI protections; U.S. labelling has its own mandatory-information framework.",
+            "sourceIds": [
+              "src-alcohol-010-s1",
+              "src-alcohol-010-s2",
+              "src-alcohol-010-s3"
+            ]
+          },
+          {
+            "id": "les-alcohol-010-b04",
+            "type": "common_misconception",
+            "content": "Origin is not mandatory in identical form on every spirits label worldwide. Requirements vary by market and product.",
+            "sourceIds": [
+              "src-alcohol-010-s1",
+              "src-alcohol-010-s2",
+              "src-alcohol-010-s3"
+            ]
+          },
+          {
+            "id": "les-alcohol-010-b05",
+            "type": "hospitality_example",
+            "content": "A professional recommendation should prioritise category, age, ABV and verified production claims before repeating words such as premium or reserve.",
+            "sourceIds": [
+              "src-alcohol-010-s4"
+            ]
+          }
+        ],
+        "activeRecall": [
+          {
+            "id": "recall-alcohol-010-01",
+            "question": "A prominent invented name on a bottle usually tells you?",
+            "options": [
+              "Brand",
+              "Legal category automatically",
+              "Age"
+            ],
+            "correctIndex": 0,
+            "explanation": "Brand and category are separate.",
+            "sourceIds": [
+              "src-alcohol-010-s1"
+            ]
+          },
+          {
+            "id": "recall-alcohol-010-02",
+            "question": "700 mL describes?",
+            "options": [
+              "ABV",
+              "Net quantity",
+              "Age"
+            ],
+            "correctIndex": 1,
+            "explanation": "It is container volume.",
+            "sourceIds": [
+              "src-alcohol-010-s1",
+              "src-alcohol-010-s3"
+            ]
+          },
+          {
+            "id": "recall-alcohol-010-03",
+            "question": "Which carries stronger regulated category information?",
+            "options": [
+              "Reserve Collection",
+              "Single Malt Scotch Whisky",
+              "Brand name"
+            ],
+            "correctIndex": 1,
+            "explanation": "Single Malt Scotch is a defined category.",
+            "sourceIds": [
+              "src-alcohol-010-s2",
+              "src-alcohol-010-s4"
+            ]
+          }
+        ],
+        "studyCards": [
+          {
+            "id": "card-alcohol-010-01",
+            "front": "First thing to identify on an unfamiliar spirit?",
+            "back": "Legal category or type.",
+            "sourceIds": [
+              "src-alcohol-010-s1",
+              "src-alcohol-010-s2"
+            ]
+          },
+          {
+            "id": "card-alcohol-010-02",
+            "front": "Brand = category?",
+            "back": "No.",
+            "sourceIds": [
+              "src-alcohol-010-s1"
+            ]
+          },
+          {
+            "id": "card-alcohol-010-03",
+            "front": "What does ABV tell you?",
+            "back": "Alcoholic strength.",
+            "sourceIds": [
+              "src-alcohol-010-s1",
+              "src-alcohol-010-s3"
+            ]
+          },
+          {
+            "id": "card-alcohol-010-04",
+            "front": "What does 700 mL mean?",
+            "back": "Net quantity.",
+            "sourceIds": [
+              "src-alcohol-010-s1",
+              "src-alcohol-010-s3"
+            ]
+          },
+          {
+            "id": "card-alcohol-010-05",
+            "front": "Is origin mandatory identically worldwide?",
+            "back": "No.",
+            "sourceIds": [
+              "src-alcohol-010-s1",
+              "src-alcohol-010-s2",
+              "src-alcohol-010-s3"
+            ]
+          },
+          {
+            "id": "card-alcohol-010-06",
+            "front": "What should be prioritised over prestige wording?",
+            "back": "Regulated facts and verified production information.",
+            "sourceIds": [
+              "src-alcohol-010-s1",
+              "src-alcohol-010-s2",
+              "src-alcohol-010-s4"
+            ]
+          }
+        ],
+        "quiz": [
+          {
+            "id": "quiz-alcohol-010-q1",
+            "type": "single-choice",
+            "questionType": "knowledge",
+            "options": [
+              "Brand",
+              "Legal category/type",
+              "Award"
+            ],
+            "correctIndex": 1,
+            "explanation": "Category/type identifies the product.",
+            "sourceIds": [
+              "src-alcohol-010-s1",
+              "src-alcohol-010-s2"
+            ],
+            "question": "What most directly tells you what spirit is inside?"
+          },
+          {
+            "id": "quiz-alcohol-010-q2",
+            "type": "single-choice",
+            "questionType": "application",
+            "options": [
+              "Strength and net quantity",
+              "Age and price",
+              "Origin and proof"
+            ],
+            "correctIndex": 0,
+            "explanation": "They are separate measurements.",
+            "sourceIds": [
+              "src-alcohol-010-s1",
+              "src-alcohol-010-s3"
+            ],
+            "question": "46% vol. and 700 mL describe?"
+          },
+          {
+            "id": "quiz-alcohol-010-q3",
+            "type": "single-choice",
+            "questionType": "application",
+            "options": [
+              "Assume older",
+              "Check whether it has a defined meaning",
+              "Assume small batch"
+            ],
+            "correctIndex": 1,
+            "explanation": "Marketing terms need context.",
+            "sourceIds": [],
+            "question": "Premium Reserve appears on label. What next?"
+          },
+          {
+            "id": "quiz-alcohol-010-q4",
+            "type": "single-choice",
+            "questionType": "professional",
+            "options": [
+              "Only marketing",
+              "A legally defined category",
+              "One cask only"
+            ],
+            "correctIndex": 1,
+            "explanation": "It is regulated.",
+            "sourceIds": [
+              "src-alcohol-010-s2",
+              "src-alcohol-010-s4"
+            ],
+            "question": "Single Malt Scotch Whisky is?"
+          },
+          {
+            "id": "quiz-alcohol-010-q5",
+            "type": "single-choice",
+            "questionType": "misconception",
+            "options": [
+              "True",
+              "False",
+              "Only in EU"
+            ],
+            "correctIndex": 1,
+            "explanation": "Rules differ by jurisdiction.",
+            "sourceIds": [
+              "src-alcohol-010-s1",
+              "src-alcohol-010-s2",
+              "src-alcohol-010-s3"
+            ],
+            "question": "All spirits labels worldwide follow identical rules."
+          }
+        ],
+        "sources": [
+          {
+            "id": "src-alcohol-010-s1",
+            "title": "Distilled Spirits Labeling — Mandatory Label Information",
+            "organization": "TTB",
+            "url": "https://www.ttb.gov/regulated-commodities/beverage-alcohol/distilled-spirits/labeling",
+            "authorityType": "official regulator",
+            "usedFor": "U.S. spirits label requirements",
+            "verified": true
+          },
+          {
+            "id": "src-alcohol-010-s2",
+            "title": "Regulation (EU) 2019/787",
+            "organization": "European Union",
+            "url": "https://eur-lex.europa.eu/eli/reg/2019/787/oj",
+            "authorityType": "primary legislation",
+            "usedFor": "EU spirit categories and GIs",
+            "verified": true
+          },
+          {
+            "id": "src-alcohol-010-s3",
+            "title": "Regulation (EU) No 1169/2011",
+            "organization": "European Union",
+            "url": "https://eur-lex.europa.eu/eli/reg/2011/1169/oj",
+            "authorityType": "primary legislation",
+            "usedFor": "EU general food label information",
+            "verified": true
+          },
+          {
+            "id": "src-alcohol-010-s4",
+            "title": "Guidance for Bottlers and Producers 2025",
+            "organization": "Scotch Whisky Association",
+            "url": "https://www.scotch-whisky.org.uk/media/2387/guidance-for-bottlers-and-producers_2025.pdf",
+            "authorityType": "official industry legal guidance",
+            "usedFor": "Scotch label interpretation",
+            "verified": true
+          }
+        ],
+        "seo": {
+          "title": "How to Read a Spirits Label: ABV, Age, Category & Origin",
+          "metaDescription": "Learn how to read a spirits label, including legal category, ABV, age, origin, cask information and marketing terms.",
+          "canonicalSlug": "how-to-read-a-spirits-label",
+          "canonicalPath": "/learn/alcohol-fundamentals/how-to-read-a-spirits-label",
+          "primaryIntent": "informational/educational",
+          "relatedTopics": [
+            "spirits-label",
+            "legal-name",
+            "abv",
+            "geographical-indication"
+          ]
+        },
+        "visuals": [
+          {
+            "id": "hero",
+            "role": "hero",
+            "brief": "Fictional educational spirits label.",
+            "altText": "Fictional educational spirits label."
+          },
+          {
+            "id": "diagram-1",
+            "role": "educational",
+            "brief": "Eight-step label scan.",
+            "altText": "Eight-step label scan."
+          },
+          {
+            "id": "diagram-2",
+            "role": "educational",
+            "brief": "Annotated fictional bottle.",
+            "altText": "Annotated fictional bottle."
+          }
+        ]
+      }
+    ]
+  },
+  "migrationNotes": {
+    "lessons01to03": {
+      "status": "normalized-to-inline-source-model",
+      "changes": [
+        "Added sourceIds to factual content blocks, Active Recall, Study Cards and Quiz items.",
+        "Added per-lesson Source Registry records.",
+        "Removed the legacy universal ~15% fermentation ceiling.",
+        "Separated raw-material conversion from fermentation mechanics.",
+        "Preserved Lesson 01 ABV/proof as an introduction while Lesson 04 owns calculations and standard-drink depth."
+      ]
+    }
+  }
+}
