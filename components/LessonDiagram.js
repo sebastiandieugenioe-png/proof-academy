@@ -513,6 +513,470 @@ D['beer-styles-overview'] = {
   },
 }
 
+
+// ---------- data-driven templates (used by the diagrams below) ----------
+// Rough word-wrap for SVG text: ~0.56 × font-size per character.
+function wrap(text, width, size) {
+  const max = Math.max(6, Math.floor(width / (size * 0.56)))
+  const words = String(text).split(' ')
+  const out = []
+  let cur = ''
+  for (const w of words) {
+    if (!cur) cur = w
+    else if ((cur + ' ' + w).length <= max) cur += ' ' + w
+    else { out.push(cur); cur = w }
+  }
+  if (cur) out.push(cur)
+  return out
+}
+const TONES = {
+  paper: [C.paper, C.line, C.ink], blue: [C.blueBg, C.blueLine, C.blue], amber: [C.amberBg, C.amberLine, C.amber],
+  green: [C.greenBg, C.greenLine, C.green], red: [C.redBg, C.redLine, C.red],
+}
+// Card whose height fits its wrapped text. Returns { el, h }.
+function fitCard({ x, y, w, title, text, tone = 'paper', titleSize = 13, size = 11 }) {
+  const t = TONES[tone]
+  const lines = text ? (Array.isArray(text) ? text.flatMap((s) => wrap(s, w - 16, size)) : wrap(text, w - 16, size)) : []
+  const h = 30 + lines.length * (size + 3) + (lines.length ? 6 : 0)
+  const el = (
+    <g key={`${x}-${y}-${title}`}>
+      <Box x={x} y={y} w={w} h={h} fill={t[0]} stroke={t[1]} />
+      <Txt x={x + w / 2} y={y + 20} size={titleSize} weight={700} fill={t[2]}>{title}</Txt>
+      {lines.length > 0 && <Lines x={x + w / 2} y={y + 38} lines={lines} size={size} lh={size + 3} />}
+    </g>
+  )
+  return { el, h }
+}
+// Vertical flow of steps with arrows. steps: [{ t, text, tone }]
+function flow(steps, { note } = {}) {
+  let y = 6
+  const els = []
+  steps.forEach((s, i) => {
+    const { el, h } = fitCard({ x: 50, y, w: 300, title: s.t, text: s.text, tone: s.tone || 'blue' })
+    els.push(el)
+    y += h
+    if (i < steps.length - 1) { els.push(<Arrow key={`a${i}`} x1={200} y1={y + 3} x2={200} y2={y + 21} />); y += 24 }
+  })
+  if (note) { els.push(<Txt key="note" x={200} y={y + 22} size={10.5} fill={C.mute}>{note}</Txt>); y += 30 }
+  return { h: y + 8, body: () => <g>{els}</g> }
+}
+// Grid of cards (2 columns by default), rows sized to the tallest card.
+function grid(cards, { cols = 2, footer, header } = {}) {
+  const gap = 8, w = (400 - 12 - gap * (cols - 1)) / cols
+  let y = header ? 34 : 6
+  const els = []
+  if (header) els.push(<Txt key="hdr" x={200} y={22} size={11.5} weight={700} fill={C.mute}>{header}</Txt>)
+  for (let r = 0; r < cards.length; r += cols) {
+    const row = cards.slice(r, r + cols)
+    const built = row.map((c, i) => fitCard({ x: 6 + i * (w + gap), y, w, title: c.t, text: c.text, tone: c.tone || 'paper' }))
+    const rowH = Math.max(...built.map((b) => b.h))
+    // re-build at uniform height so the row lines up
+    row.forEach((c, i) => {
+      const t = TONES[c.tone || 'paper']
+      const lines = c.text ? (Array.isArray(c.text) ? c.text.flatMap((s) => wrap(s, w - 16, 11)) : wrap(c.text, w - 16, 11)) : []
+      const x = 6 + i * (w + gap)
+      els.push(
+        <g key={`${r}-${i}`}>
+          <Box x={x} y={y} w={w} h={rowH} fill={t[0]} stroke={t[1]} />
+          <Txt x={x + w / 2} y={y + 20} size={13} weight={700} fill={t[2]}>{c.t}</Txt>
+          {lines.length > 0 && <Lines x={x + w / 2} y={y + 38} lines={lines} size={11} lh={14} />}
+        </g>
+      )
+    })
+    y += rowH + gap
+  }
+  if (footer) {
+    const { el, h } = fitCard({ x: 6, y, w: 388, title: footer.t, text: footer.text, tone: footer.tone || 'blue' })
+    els.push(el); y += h + gap
+  }
+  return { h: y, body: () => <g>{els}</g> }
+}
+// Two-column comparison. rows: [[label, left, right]]
+function compare(left, right, rows, { note } = {}) {
+  const els = []
+  const colW = 150, lx = 96, rx = 248
+  els.push(<g key="hl"><Box x={lx} y={6} w={colW - 4} h={44} fill={TONES[left.tone][0]} stroke={TONES[left.tone][1]} /><Txt x={lx + (colW - 4) / 2} y={28} size={13.5} weight={800} fill={TONES[left.tone][2]}>{left.t}</Txt>{left.sub && <Txt x={lx + (colW - 4) / 2} y={43} size={10} fill={C.mute}>{left.sub}</Txt>}</g>)
+  els.push(<g key="hr"><Box x={rx} y={6} w={colW - 4} h={44} fill={TONES[right.tone][0]} stroke={TONES[right.tone][1]} /><Txt x={rx + (colW - 4) / 2} y={28} size={13.5} weight={800} fill={TONES[right.tone][2]}>{right.t}</Txt>{right.sub && <Txt x={rx + (colW - 4) / 2} y={43} size={10} fill={C.mute}>{right.sub}</Txt>}</g>)
+  let y = 58
+  rows.forEach(([label, l, r], i) => {
+    const ll = wrap(l, colW - 14, 10.5), rl = wrap(r, colW - 14, 10.5), lab = wrap(label, 84, 10.5)
+    const h = Math.max(ll.length, rl.length, lab.length) * 13.5 + 14
+    els.push(
+      <g key={`r${i}`}>
+        <rect x={6} y={y} width={388} height={h} fill={i % 2 ? '#fff' : C.paper} />
+        <Lines x={10} y={y + 17} lines={lab} size={10.5} lh={13.5} weight={700} fill={C.mute} anchor="start" />
+        <Lines x={lx + (colW - 4) / 2} y={y + 17} lines={ll} size={10.5} lh={13.5} />
+        <Lines x={rx + (colW - 4) / 2} y={y + 17} lines={rl} size={10.5} lh={13.5} />
+      </g>
+    )
+    y += h
+  })
+  if (note) { els.push(<Txt key="n" x={200} y={y + 20} size={10.5} fill={C.mute}>{note}</Txt>); y += 28 }
+  return { h: y + 8, body: () => <g>{els}</g> }
+}
+// Horizontal range bars on a numeric scale. items: [{ label, lo, hi, tone, text }]
+function ranges({ unit = '', min, max, ticks, items, title, note }) {
+  const X0 = 120, X1 = 384
+  const sx = (v) => X0 + ((X1 - X0) * (v - min)) / (max - min)
+  const els = []
+  let y = title ? 34 : 14
+  if (title) els.push(<Txt key="t" x={200} y={20} size={11.5} weight={700} fill={C.mute}>{title}</Txt>)
+  const top = y
+  items.forEach((it, i) => {
+    const col = TONES[it.tone || 'blue']
+    const lab = wrap(it.label, 108, 11)
+    els.push(
+      <g key={i}>
+        <Lines x={8} y={y + 15} lines={lab} size={11} lh={13} weight={700} anchor="start" />
+        <rect x={X0} y={y + 4} width={X1 - X0} height={16} rx={8} fill={C.paper} stroke={C.line} />
+        <rect x={sx(it.lo)} y={y + 4} width={Math.max(6, sx(it.hi) - sx(it.lo))} height={16} rx={8} fill={col[2]} opacity={0.85} />
+        <Txt x={(sx(it.lo) + sx(it.hi)) / 2} y={y + 33} size={10} fill={col[2]} weight={700}>{it.text || `${it.lo}–${it.hi}${unit}`}</Txt>
+      </g>
+    )
+    y += Math.max(42, lab.length * 13 + 22)
+  })
+  ticks.forEach((v) => els.push(<g key={`t${v}`}><line x1={sx(v)} y1={top} x2={sx(v)} y2={y - 4} stroke={C.line} strokeDasharray="2 4" /><Txt x={sx(v)} y={y + 8} size={10} fill={C.mute}>{v}{unit}</Txt></g>))
+  y += 16
+  if (note) { els.push(<Txt key="n" x={200} y={y + 10} size={10.5} fill={C.mute}>{note}</Txt>); y += 20 }
+  return { h: y + 6, body: () => <g>{els}</g> }
+}
+const mk = (title, tpl) => ({ title, h: tpl.h, body: tpl.body })
+
+// ===================== Gin =====================
+D['what-is-gin'] = mk('Gin: a neutral spirit flavoured with juniper', flow([
+  { t: 'Neutral spirit', text: 'near-neutral, high purity (~96% ABV)', tone: 'paper' },
+  { t: 'Juniper + botanicals', text: 'juniper must dominate · coriander, angelica, orris root, citrus peel, cardamom', tone: 'green' },
+  { t: 'Usually redistilled with them', text: 'the botanicals flavour the spirit', tone: 'blue' },
+  { t: 'Gin', text: 'no ageing needed: it can be sold straight away', tone: 'amber' },
+], { note: 'Genever: malt-based, richer · London Dry: dry, juniper-led' }))
+
+D['london-dry-gin'] = mk('London Dry: a method, not a place', grid([
+  { t: 'Style, not location', text: 'it can be made anywhere', tone: 'blue' },
+  { t: 'Base spirit ≥ 96% ABV', text: 'redistilled with botanicals', tone: 'blue' },
+  { t: 'Botanicals in the still', text: 'all added before or during redistillation: nothing after', tone: 'green' },
+  { t: 'Sugar ≤ 0.1 g/L', text: 'effectively none: truly dry', tone: 'green' },
+], { footer: { t: 'Classic London Dry drinks', text: 'Gin & Tonic · Dry Martini · Negroni', tone: 'amber' } }))
+
+D['old-tom-gin'] = mk('Old Tom: the bridge between Genever and London Dry', flow([
+  { t: 'Dutch Genever', text: 'malt-based, richer, less juniper', tone: 'amber' },
+  { t: 'Old Tom', text: 'slightly sweetened, softer, rounder', tone: 'green' },
+  { t: 'London Dry', text: 'dry, juniper-led: took over the market', tone: 'blue' },
+], { note: 'Old Tom cocktails: Tom Collins · Martinez' }))
+
+D['navy-strength-gin'] = mk('Navy Strength: a strength, not a style', grid([
+  { t: 'About 57% ABV or more', text: 'by convention: no legal definition', tone: 'blue' },
+  { t: 'Not a style', text: 'the style (e.g. London Dry) is separate', tone: 'paper' },
+  { t: 'The naval story', text: 'gunpowder soaked in spirit above ~57% could still ignite (partly legend)', tone: 'amber' },
+  { t: 'Behind the bar', text: 'stands up to strong mixers and citrus', tone: 'green' },
+]))
+
+D['botanical-families'] = mk('The seven botanical families of gin', grid([
+  { t: 'Juniper', text: 'mandatory and dominant', tone: 'green' },
+  { t: 'Coriander', text: 'second most common', tone: 'green' },
+  { t: 'Roots', text: 'orris root fixes and binds aromas', tone: 'amber' },
+  { t: 'Citrus', text: 'citrus peels', tone: 'amber' },
+  { t: 'Warm spices', text: 'e.g. cardamom', tone: 'amber' },
+  { t: 'Florals', text: 'lead in Contemporary gins', tone: 'blue' },
+  { t: 'Local / wild', text: 'regional botanicals', tone: 'blue' },
+  { t: 'How they go in', text: 'steeped in the still or in a vapour basket', tone: 'paper' },
+]))
+
+// ===================== Popular beer styles =====================
+D['pilsner'] = mk('Pilsner at a glance', grid([
+  { t: 'Born 1842', text: 'Josef Groll, Plzeň (Bohemia)', tone: 'amber' },
+  { t: 'Saaz hops', text: 'from Žatec: the traditional Czech hop', tone: 'green' },
+  { t: 'Lager yeast', text: 'bottom-fermenting, cold fermentation', tone: 'blue' },
+  { t: '4.2–5.8% ABV', text: 'Czech premium pale lager', tone: 'blue' },
+], { footer: { t: 'Serve at 3–7 °C', text: 'tall tapered pilsner glass or Willi Becher', tone: 'paper' } }))
+
+D['ipa'] = mk('Three faces of IPA (India Pale Ale)', grid([
+  { t: 'English IPA', text: 'Fuggles and East Kent Goldings hops', tone: 'amber' },
+  { t: 'American IPA', text: '5.5–7.5% ABV · citrus, pine, tropical and stone fruit', tone: 'green' },
+  { t: 'Hazy IPA', text: 'haze from proteins and hop compounds (oats/wheat, heavy dry-hopping) plus some yeast', tone: 'blue' },
+  { t: 'Serve at 7–10 °C', tone: 'paper' },
+]))
+
+D['stout'] = mk('Stout: dark, roasted, many strengths', ranges({
+  title: 'TYPICAL STRENGTH (ABV)', unit: '%', min: 3, max: 13, ticks: [4, 6, 8, 10, 12],
+  items: [
+    { label: 'Irish dry stout', lo: 4, hi: 5, tone: 'blue', text: '4–5% · draught ~6 °C' },
+    { label: 'Imperial stout', lo: 8, hi: 12, tone: 'amber', text: '8–12% · serve 10–13 °C' },
+  ],
+  note: 'Roasted barley = black · nitrogen = creamy · lactose = milk stout',
+}))
+
+D['wheat-beer'] = mk('German Weissbier vs Belgian Witbier', compare(
+  { t: 'Weissbier', sub: 'Germany', tone: 'amber' }, { t: 'Witbier', sub: 'Belgium', tone: 'blue' },
+  [
+    ['Grain', '≥ 50% wheat malt · 4.3–5.6% ABV', 'wheat · unfiltered'],
+    ['Flavour', 'banana and clove from the yeast', 'coriander and dried Curaçao orange peel'],
+    ['Story', 'German classic', 'revived in 1966 by Pierre Celis (Hoegaarden)'],
+  ], { note: 'Both cloudy (yeast + wheat proteins) · weizen glass · 7–10 °C' }))
+
+D['belgian-beers'] = mk('Belgian beers: yeast-driven styles', grid([
+  { t: 'Belgian yeast', text: 'phenols (clove, pepper) + esters (banana, bubblegum)', tone: 'green' },
+  { t: 'Witbier', text: 'unfiltered wheat beer with coriander and orange peel', tone: 'blue' },
+  { t: 'Dubbel', text: 'dark, malty, fruity · 6–7.6% ABV', tone: 'amber' },
+  { t: 'Tripel', text: 'strong, golden · 7.5–9.5% ABV', tone: 'amber' },
+  { t: 'Saison', text: 'farmhouse ale for seasonal workers', tone: 'paper' },
+  { t: 'Lambic → Gueuze', text: 'spontaneous fermentation · Gueuze blends aged lambics', tone: 'paper' },
+], { footer: { t: 'Trappist', text: 'around 10 breweries worldwide hold the label · 5 in Belgium', tone: 'blue' } }))
+
+// ===================== Beer service =====================
+D['glassware'] = mk('Which glass for which beer', grid([
+  { t: 'Shaker pint', text: 'versatile, durable, stackable', tone: 'paper' },
+  { t: 'Pilsner glass', text: 'shows clarity and bubbles of lagers', tone: 'blue' },
+  { t: 'Tulip / thistle', text: 'Belgian ales', tone: 'amber' },
+  { t: 'Snifter', text: 'imperial stouts, barleywines: concentrates aroma', tone: 'amber' },
+], { footer: { t: 'Beer-clean glass', text: 'no oils, detergent or lint · rinse with cold water before pouring · the foam head protects aroma', tone: 'green' } }))
+
+D['serving-temperatures'] = mk('Serving temperatures by style', ranges({
+  title: 'IDEAL SERVING TEMPERATURE', unit: ' °C', min: 0, max: 16, ticks: [0, 4, 8, 12, 16],
+  items: [
+    { label: 'Light lagers & pilsners', lo: 3, hi: 7, tone: 'blue', text: '3–7 °C' },
+    { label: 'IPAs & pale ales', lo: 7, hi: 10, tone: 'green', text: '7–10 °C' },
+    { label: 'Stouts & barleywines', lo: 10, hi: 13, tone: 'amber', text: '10–13 °C (cellar)' },
+  ],
+  note: 'Too cold mutes aroma · too warm makes alcohol harsh · no frosted glasses',
+}))
+
+D['food-pairing-basics'] = mk('Six principles of beer and food pairing', grid([
+  { t: 'Match intensity', text: 'light with delicate, robust with hearty', tone: 'blue' },
+  { t: 'Complement', text: 'e.g. stout or porter with chocolate', tone: 'green' },
+  { t: 'Contrast', text: 'hop bitterness cuts through fat', tone: 'green' },
+  { t: 'Cleanse', text: 'carbonation lifts oils between bites', tone: 'blue' },
+  { t: 'Regional traditions', text: 'consider classic local pairings', tone: 'paper' },
+  { t: 'Avoid clashes', text: 'high IBU amplifies chilli heat', tone: 'red' },
+]))
+
+// ===================== Rum =====================
+D['what-is-rum'] = mk('Rum starts with sugarcane', grid([
+  { t: 'Fresh cane juice', text: '→ rhum agricole: grassy, vegetal, fresh · AOC Martinique', tone: 'green' },
+  { t: 'Molasses', text: '→ most rum: the thick syrup left after sugar is extracted', tone: 'amber' },
+], { header: 'TWO ROUTES FROM THE SAME PLANT', footer: { t: 'Not one country', text: 'made in dozens of countries, mostly where sugarcane grows', tone: 'blue' } }))
+
+D['rum-production'] = mk('How rum is made', flow([
+  { t: 'Raw material', text: 'molasses, or fresh cane juice for rhum agricole', tone: 'amber' },
+  { t: 'Fermentation', text: 'dunder (acidic residue) can drive funky, ester-rich rums', tone: 'blue' },
+  { t: 'Distillation', text: 'column = lighter, cleaner · pot = heavier', tone: 'blue' },
+  { t: 'Ageing', text: 'tropical heat: up to 10% a year lost to evaporation · solera blending', tone: 'amber' },
+  { t: 'Bottling', text: 'EU: up to 20 g/L of sugar allowed', tone: 'green' },
+]))
+
+D['white-gold-and-dark-rum'] = mk('White, gold and dark rum', grid([
+  { t: 'White', text: 'unaged, or aged then charcoal-filtered', tone: 'paper' },
+  { t: 'Gold', text: 'about 1–3 years in oak', tone: 'amber' },
+  { t: 'Dark', text: 'longer ageing: molasses, toffee, dried fruit, spice', tone: 'amber' },
+], { cols: 3, footer: { t: 'Colour is not a legal category', text: 'caramel colour (E150a) is legal and used to standardise batches', tone: 'blue' } }))
+
+D['rhum-agricole-vs-molasses-rum'] = mk('Rhum agricole vs molasses rum', compare(
+  { t: 'Agricole', sub: 'fresh cane juice', tone: 'green' }, { t: 'Molasses rum', sub: 'most Caribbean rum', tone: 'amber' },
+  [
+    ['Base', 'juice pressed within 24–48 h of harvest', 'molasses: syrup left after sugar crystallises'],
+    ['Flavour', 'fresh grass, herbs, olive brine, white pepper', 'toffee, brown sugar, caramel, dried fruit'],
+    ['Protection', 'AOC Martinique (1996)', 'rules vary by country'],
+    ['Classic serve', 'Ti’ Punch: rhum, lime, cane syrup', 'cocktails and sipping'],
+  ]))
+
+D['caribbean-rum-traditions'] = mk('Three Caribbean rum traditions', grid([
+  { t: 'English-style', text: 'Jamaica, Barbados · Jamaica: dunder, high-ester rums', tone: 'amber' },
+  { t: 'French-style', text: 'Martinique, Guadeloupe · fresh cane juice, grassy · AOC Martinique', tone: 'green' },
+  { t: 'Spanish-style', text: 'Cuba, Puerto Rico, Dominican Rep. · molasses, column stills, lighter', tone: 'blue' },
+], { cols: 3, footer: { t: 'Tropical ageing', text: 'heat speeds up the reactions between rum and barrel', tone: 'paper' } }))
+
+// ===================== Tequila =====================
+D['what-is-tequila'] = mk('Tequila essentials', grid([
+  { t: 'Blue Weber agave', text: 'Agave tequilana Weber var. azul · 6–8 years to mature', tone: 'green' },
+  { t: 'The piña', text: 'the agave heart: looks like a pineapple', tone: 'amber' },
+  { t: '100% agave vs mixto', text: 'mixto: at least 51% agave sugars', tone: 'blue' },
+  { t: 'CRT + NOM', text: 'regulator; every bottle shows its distillery NOM number', tone: 'paper' },
+], { footer: { t: 'Five states', text: 'Jalisco · Guanajuato · Michoacán · Nayarit · Tamaulipas', tone: 'blue' } }))
+
+D['blue-weber-agave'] = mk('From plant to piña', flow([
+  { t: 'Blue Weber agave grows', text: 'a succulent, not a cactus · 6–8 years, up to 12', tone: 'green' },
+  { t: 'The jimador harvests', text: 'by hand, with a coa (flat blade on a long pole)', tone: 'amber' },
+  { t: 'The piña', text: 'the heart, often tens of kilograms, full of sugars', tone: 'amber' },
+  { t: '“100% agave”', text: 'every fermentable sugar from blue Weber agave', tone: 'blue' },
+]))
+
+D['blanco-reposado-and-a-ejo'] = mk('How long each tequila rests in oak', ranges({
+  title: 'TIME IN OAK (MONTHS)', unit: '', min: 0, max: 36, ticks: [0, 12, 24, 36],
+  items: [
+    { label: 'Blanco', lo: 0, hi: 2, tone: 'blue', text: 'under 2 months' },
+    { label: 'Reposado', lo: 2, hi: 12, tone: 'amber', text: '2–12 months' },
+    { label: 'Añejo', lo: 12, hi: 36, tone: 'amber', text: '1–3 years · barrels ≤ 600 L' },
+  ],
+  note: 'Blanco shows the agave · reposado adds vanilla, caramel, light oak',
+}))
+
+D['tequila-production-process'] = mk('How tequila is made', flow([
+  { t: 'Harvest', text: 'jimador cuts the piña with a coa', tone: 'green' },
+  { t: 'Cook', text: 'stone or brick horno, 24–48 h', tone: 'red' },
+  { t: 'Crush', text: 'traditionally with a tahona (volcanic stone wheel) → aguamiel', tone: 'amber' },
+  { t: 'Ferment', text: 'yeast turns the agave sugars into alcohol', tone: 'blue' },
+  { t: 'Distil twice', text: '1st: ordinario ~20–25% ABV · 2nd: tequila', tone: 'blue' },
+], { note: 'All governed by NOM-006-SCFI-2012' }))
+
+D['tequila-vs-mezcal'] = mk('Tequila vs mezcal', compare(
+  { t: 'Tequila', sub: 'DO: five states', tone: 'blue' }, { t: 'Mezcal', sub: 'mostly Oaxaca', tone: 'amber' },
+  [
+    ['Agave', 'blue Weber only (≥ 51%; 100% in premium)', 'over 30 species: Espadín, Tobalá, Tepeztate…'],
+    ['Region', 'mainly Jalisco', 'Oaxaca: roughly 80–90%'],
+    ['Cooking', 'steam: autoclaves or brick hornos', 'underground pits heated with wood fire'],
+    ['Result', 'cleaner agave character', 'smoky'],
+    ['Rules', 'CRT · NOM-006-SCFI-2012', 'its own denomination of origin'],
+  ]))
+
+// ===================== Vodka =====================
+D['what-is-vodka'] = mk('Vodka at a glance', grid([
+  { t: 'Many bases', text: 'wheat, rye, corn, potatoes, grapes, sugar beet', tone: 'amber' },
+  { t: 'Neutral character', text: 'minimal taste, aroma and colour', tone: 'paper' },
+  { t: 'Charcoal filtration', text: 'polishes out remaining impurities', tone: 'blue' },
+  { t: 'Minimum strength', text: 'EU 37.5% ABV · US 40% ABV (80 proof)', tone: 'blue' },
+], { footer: { t: 'A blank canvas', text: 'lets the other cocktail ingredients shine', tone: 'green' } }))
+
+D['vodka-production'] = mk('How vodka is made', flow([
+  { t: 'Ferment the base', text: 'creates a wash of about 8–12% ABV', tone: 'amber' },
+  { t: 'Column distillation', text: 'to 95–96% ABV: strips out congeners', tone: 'blue' },
+  { t: 'Filtration', text: 'usually activated charcoal', tone: 'paper' },
+  { t: 'Dilute with water', text: 'water quality shapes taste and mouthfeel · US ≥ 40% ABV', tone: 'green' },
+]))
+
+D['traditional-producing-countries'] = mk('Three vodka traditions', grid([
+  { t: 'Poland', text: 'potato (e.g. Podlasie) · slight viscosity and gentle sweetness', tone: 'amber' },
+  { t: 'Russia', text: 'purity and neutrality: high-proof distillation and filtration', tone: 'blue' },
+  { t: 'Sweden', text: 'winter wheat · continuous distillation', tone: 'green' },
+], { cols: 3, footer: { t: 'EU rule', text: 'vodka is distilled to at least 96% ABV', tone: 'paper' } }))
+
+D['types-of-vodka'] = mk('Vodka by base ingredient', grid([
+  { t: 'Grain', text: 'wheat, rye, corn · rye adds a peppery spice', tone: 'amber' },
+  { t: 'Potato', text: 'traditional in Poland', tone: 'paper' },
+  { t: 'Grape / fruit', text: 'e.g. vodka from French wine grapes', tone: 'green' },
+], { cols: 3, footer: { t: 'Premium vs standard', text: 'multiple distillations, better filtration, better water', tone: 'blue' } }))
+
+D['common-myths-about-vodka'] = mk('Vodka myths vs facts', compare(
+  { t: 'Myth', tone: 'red' }, { t: 'Fact', tone: 'green' },
+  [
+    ['Taste', 'vodka must be tasteless', 'base materials leave subtle character'],
+    ['Distillations', '“7 times” means better', 'one modern column pass can be purer'],
+    ['Filters', 'diamonds or gold purify', 'activated charcoal does the work'],
+    ['Hangovers', 'premium vodka prevents them', 'they come from alcohol volume and dehydration'],
+    ['Sameness', 'all vodkas taste the same', 'base, water and distillation differ'],
+  ]))
+
+// ===================== Liqueurs =====================
+D['what-are-liqueurs'] = mk('What makes a liqueur', grid([
+  { t: 'Maceration', text: 'steep flavourings in spirit', tone: 'amber' },
+  { t: 'Distillation', text: 'redistil spirit with the flavourings', tone: 'blue' },
+  { t: 'Compounding', text: 'blend spirit with extracts and sugar', tone: 'paper' },
+], { cols: 3, header: 'THREE PRODUCTION METHODS', footer: { t: 'EU definition', text: 'at least 15% ABV and at least 100 g/L of sugar', tone: 'green' } }))
+
+D['triple-sec-and-orange-liqueurs'] = mk('The orange liqueur family', grid([
+  { t: 'Curaçao', text: 'Laraha orange, a bitter citrus from the island of Curaçao', tone: 'amber' },
+  { t: 'Triple sec', text: '“sec” = dry in French · origin of “triple” debated', tone: 'paper' },
+  { t: 'Cointreau', text: 'launched 1875 · 40% ABV', tone: 'blue' },
+  { t: 'Grand Marnier', text: 'Cognac + bitter orange · 40% ABV', tone: 'blue' },
+], { footer: { t: 'Where quality shows', text: 'spirit-forward drinks like the Sidecar and Margarita', tone: 'green' } }))
+
+D['coffee-liqueurs'] = mk('Coffee liqueurs', grid([
+  { t: 'Extraction', text: 'maceration (steeping beans) or percolation', tone: 'amber' },
+  { t: 'Base spirit', text: 'neutral grain spirit or rum', tone: 'paper' },
+  { t: 'Kahlúa', text: 'Mexico, launched 1936', tone: 'blue' },
+  { t: 'Tia Maria', text: 'Jamaican Blue Mountain coffee', tone: 'blue' },
+], { footer: { t: 'Espresso Martini', text: 'created by Dick Bradsell, 1980s London · an opened bottle keeps its best flavour 12–18 months', tone: 'green' } }))
+
+D['herbal-liqueurs'] = mk('Herbal liqueurs and amari', grid([
+  { t: 'Amaro = “bitter”', text: 'bitter-sweet herbal liqueurs, often digestifs', tone: 'amber' },
+  { t: 'How they’re made', text: 'macerate or distil botanicals, then sweeten', tone: 'paper' },
+  { t: 'Cinchona bark', text: 'the source of quinine', tone: 'green' },
+  { t: 'Fernet-Branca', text: '27 herbs and spices', tone: 'blue' },
+], { footer: { t: 'Aperitif vs digestif', text: 'before the meal: wakes the appetite · after: aids digestion', tone: 'blue' } }))
+
+D['italian-bitters-and-aperitifs'] = mk('Italian bitters: key dates and numbers', grid([
+  { t: '1845 · Fernet-Branca', text: 'Bernardino Branca, Milan', tone: 'amber' },
+  { t: '1860 · Campari', text: 'Gaspare Campari, Novara · recipe secret', tone: 'red' },
+  { t: 'Aperol', text: '11% ABV · the lighter aperitivo', tone: 'amber' },
+  { t: 'Amaro / amari', text: 'Italian for “bitter” / plural', tone: 'paper' },
+], { footer: { t: 'Aperitivo vs digestivo', text: 'before meals to stimulate appetite · after meals to aid digestion', tone: 'blue' } }))
+
+// ===================== Cocktail foundations =====================
+D['what-is-a-cocktail'] = mk('The 1806 definition: four ingredients', grid([
+  { t: 'Spirit', tone: 'amber' }, { t: 'Sugar', tone: 'paper' }, { t: 'Water', tone: 'blue' }, { t: 'Bitters', tone: 'red' },
+], { cols: 4, header: 'THE BALANCE AND COLUMBIAN REPOSITORY, 1806', footer: { t: 'Today', text: 'a cocktail is built with intentional, balanced proportions · the IBA list has about 100 official cocktails', tone: 'green' } }))
+
+D['cocktail-families'] = mk('Cocktail families', grid([
+  { t: 'Sour', text: 'spirit + citrus + sweetener', tone: 'green' },
+  { t: 'Spirit-forward', text: 'mostly spirit, stirred · Martini, Manhattan, Negroni', tone: 'amber' },
+  { t: 'Highball', text: 'spirit + a larger mixer, built in the glass', tone: 'blue' },
+  { t: 'Flips & Fizzes', text: 'egg, cream or emulsifiers for texture', tone: 'paper' },
+  { t: 'Tiki', text: 'many ingredients, often several rums', tone: 'red' },
+  { t: 'Embury’s sour', text: '8 : 2 : 1 (spirit : sour : sweet) · modern specs ~2 : 1 : ¾', tone: 'paper' },
+]))
+
+D['understanding-balance'] = mk('The four pillars of balance', grid([
+  { t: 'Sweet', text: 'sugar, syrups, liqueurs, sweet vermouth', tone: 'amber' },
+  { t: 'Sour', text: 'citrus and other acids', tone: 'green' },
+  { t: 'Strong', text: 'the base spirit', tone: 'red' },
+  { t: 'Weak', text: 'dilution from ice and mixers', tone: 'blue' },
+], { footer: { t: 'Two reference points', text: 'Embury’s sour 8 : 2 : 1 · the Negroni in equal parts (gin, Campari, sweet vermouth)', tone: 'paper' } }))
+
+D['essential-bartending-techniques'] = mk('Shake or stir?', compare(
+  { t: 'Shake', tone: 'amber' }, { t: 'Stir', tone: 'blue' },
+  [
+    ['When', 'citrus, cream, egg or other opaque ingredients', 'spirit-forward drinks'],
+    ['Why', 'emulsifies and aerates', 'keeps clarity and a silky texture'],
+    ['How long', '—', '30–40 seconds in a mixing glass'],
+    ['Dilution', 'roughly 25–40%', 'less: large, hard cubes'],
+    ['Examples', 'Margarita · Whiskey Sour', 'Martini'],
+  ], { note: 'Three pillars of quality: temperature, dilution, texture' }))
+
+D['essential-cocktail-ingredients'] = mk('Five building blocks of a cocktail', grid([
+  { t: 'Base spirit', text: 'the foundation and star: never mask it', tone: 'red' },
+  { t: 'Modifiers', text: 'vermouth, liqueurs, cream', tone: 'amber' },
+  { t: 'Sweeteners', text: 'balance acidity and bitterness, add texture', tone: 'paper' },
+  { t: 'Citrus / acids', text: 'freshness and lift', tone: 'green' },
+  { t: 'Water / dilution', text: 'from ice when shaking or stirring', tone: 'blue' },
+  { t: 'Embury’s formula', text: '8 strong : 2 sour : 1 sweet', tone: 'paper' },
+]))
+
+// ===================== Wine =====================
+D['what-is-wine'] = mk('What wine is', flow([
+  { t: 'Wine grapes', text: 'Vitis vinifera: smaller, sweeter, thicker skins than table grapes', tone: 'green' },
+  { t: 'Crush', text: 'releases the sugary juice', tone: 'paper' },
+  { t: 'Ferment', text: 'Saccharomyces cerevisiae: sugar → alcohol + CO₂', tone: 'blue' },
+  { t: 'Wine', text: 'table wines usually 8–15% ABV', tone: 'amber' },
+]))
+
+D['red-wine-basics'] = mk('Red wine basics', grid([
+  { t: 'Maceration', text: 'juice ferments with skins and seeds: colour, tannin, flavour', tone: 'red' },
+  { t: 'Tannins', text: 'from skins and seeds: the drying feel', tone: 'red' },
+  { t: 'Body', text: 'from alcohol, tannin and residual sugar', tone: 'amber' },
+  { t: 'Light reds', text: 'Pinot Noir, Gamay · serve 12–15 °C', tone: 'blue' },
+], { footer: { t: 'Pairing tip', text: 'high-tannin reds love protein and fat · cool climates give higher acidity', tone: 'green' } }))
+
+D['white-wine-basics'] = mk('What shapes a white wine', grid([
+  { t: 'No skin contact', text: 'the key difference from red wine', tone: 'paper' },
+  { t: 'Grapes', text: 'Chardonnay (most planted), Sauvignon Blanc, Riesling, Pinot Gris, Chenin', tone: 'green' },
+  { t: 'Malolactic', text: 'malic → lactic acid: buttery, creamy', tone: 'amber' },
+  { t: 'Lees contact', text: 'resting on dead yeast: creamy, complex', tone: 'amber' },
+], { footer: { t: 'Cool climate', text: 'higher acidity, lower alcohol, citrus and green fruit', tone: 'blue' } }))
+
+D['sparkling-wine-basics'] = mk('Sparkling wine essentials', grid([
+  { t: 'Traditional method', text: 'second fermentation in the bottle', tone: 'amber' },
+  { t: 'Lees', text: 'dead yeast: biscuit and brioche notes', tone: 'amber' },
+  { t: 'Champagne grapes', text: 'Chardonnay, Pinot Noir, Pinot Meunier', tone: 'green' },
+  { t: 'Prosecco', text: 'made from Glera', tone: 'green' },
+  { t: '5–6 atmospheres', text: 'two to three times a car tyre', tone: 'red' },
+  { t: 'Brut vs Extra Dry', text: 'Brut 0–12 g/L is drier than Extra Dry 12–17 g/L', tone: 'blue' },
+], { footer: { t: 'Serve at 6–10 °C', tone: 'paper' } }))
+
+D['fortified-and-sweet-wines'] = mk('Fortified and sweet wines', grid([
+  { t: 'Fortification', text: 'grape spirit added: 15–22% ABV', tone: 'blue' },
+  { t: 'Port', text: 'fortified during fermentation: stays sweet · Tawny (nutty) vs Ruby', tone: 'red' },
+  { t: 'Sherry', text: 'flor yeast protects Fino and Manzanilla · solera blending', tone: 'amber' },
+  { t: 'Botrytis', text: 'noble rot concentrates the sugars', tone: 'green' },
+], { footer: { t: 'Ice wine', text: 'grapes frozen on the vine, pressed while frozen', tone: 'paper' } }))
+
 export const DIAGRAM_SLUGS = Object.keys(D)
 
 export default function LessonDiagram({ slug, className = '' }) {

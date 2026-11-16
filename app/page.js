@@ -368,7 +368,7 @@ const Landing = ({ courses, onNav }) => {
           </h2>
           <div className="mt-14 grid gap-10 md:gap-14 md:grid-cols-2">
             {[
-              { n: '01', t: 'Learning Paths', b: 'Choose a discipline — spirits and cocktails today; wine, coffee, service and leadership soon.' },
+              { n: '01', t: 'Learning Paths', b: 'Choose a discipline — spirits, cocktails, beer and wine today; coffee, service and leadership soon.' },
               { n: '02', t: 'Modules', b: 'Short lessons of 3–5 minutes, designed to be studied between shifts or over coffee.' },
               { n: '03', t: 'Study Cards', b: 'Memorize what matters through active recall — the most effective form of learning.' },
               { n: '04', t: 'Knowledge Checks', b: 'Prove what you know before moving forward. Retention over speed.' },
@@ -461,7 +461,7 @@ const Landing = ({ courses, onNav }) => {
               <div className="text-xs text-slate-500 uppercase tracking-wider">Coming</div>
             </div>
             <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-y-3 gap-x-8">
-              {['Wine', 'Beer', 'Coffee', 'Tea', 'Luxury Service', 'Restaurant Management', 'Hotel Management', 'Leadership', 'Career Development'].map((d) => (
+              {['Coffee', 'Tea', 'Luxury Service', 'Restaurant Management', 'Hotel Management', 'Leadership', 'Career Development'].map((d) => (
                 <div key={d} className="border-t border-slate-100 pt-3 text-base font-medium text-slate-500">{d}</div>
               ))}
             </div>
