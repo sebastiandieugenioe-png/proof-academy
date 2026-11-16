@@ -70,10 +70,13 @@ export default function AboutPage() {
             Two ways to start.
           </h2>
           <p className="mt-6 text-base md:text-lg text-slate-600 leading-relaxed">
-            Create a free account and start a Learning Path.
+            Open the first Learning Path and start now — no account needed. Create a free account later if you want to save your progress.
           </p>
           <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
-            <Link href="/register" className="h-12 px-7 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium inline-flex items-center gap-2 transition">
+            <Link href="/?course=alcohol-fundamentals" className="h-12 px-7 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium inline-flex items-center gap-2 transition">
+              Start Learning
+            </Link>
+            <Link href="/register" className="h-12 px-5 text-slate-700 hover:text-slate-900 font-medium inline-flex items-center transition">
               Create a free account
             </Link>
           </div>

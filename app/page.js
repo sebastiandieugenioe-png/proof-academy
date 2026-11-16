@@ -16,6 +16,10 @@ const ICONS = { Flame, GlassWater, Sparkles }
 
 const SLUG_OK = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
+// Every "Start Learning" button opens this learning path directly (the "Start here" path).
+const START_PATH = 'alcohol-fundamentals'
+const START_HREF = `/?course=${START_PATH}`
+
 // Read ?course=&lesson= from the current URL and turn it into an in-app route.
 function routeFromUrl() {
   if (typeof window === 'undefined') return null
@@ -225,7 +229,7 @@ const TopBar = ({ user, onNav, onLogout }) => {
             <>
               <a href="/#paths"  onClick={closeAnd()} className="h-12 flex items-center border-b border-slate-100 text-slate-900 text-base font-medium">Learning Paths</a>
               <a href="/about"   onClick={closeAnd()} className="h-12 flex items-center border-b border-slate-100 text-slate-900 text-base font-medium">About</a>
-              <a href="/#paths" onClick={closeAnd()} className="mt-4 h-12 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium inline-flex items-center justify-center gap-2">Start Learning</a>
+              <a href={START_HREF} onClick={(e) => { e.preventDefault(); setMobileOpen(false); onNav({ name: 'course', slug: START_PATH }) }} className="mt-4 h-12 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium inline-flex items-center justify-center gap-2">Start Learning</a>
             </>
           )}
           {user && (
@@ -273,10 +277,9 @@ const BottomNav = ({ user, route, onNav }) => {
 // =====================================================================
 const Landing = ({ courses, onNav }) => {
   const publishedCount = courses?.length || 0
-  const firstCourse = courses?.[0]?.slug
+  // Start Learning → straight into the starter learning path.
   const startFirst = (e) => {
-    if (!firstCourse) return // courses not loaded yet: let the #paths anchor scroll instead
-    e.preventDefault(); onNav({ name: 'course', slug: firstCourse })
+    e.preventDefault(); onNav({ name: 'course', slug: START_PATH })
   }
   return (
     <div className="pb-8">
@@ -293,7 +296,7 @@ const Landing = ({ courses, onNav }) => {
           Free. Structured. Evidence-based. Built for your career.
         </p>
         <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
-          <a href="#paths" onClick={startFirst} className="h-12 px-7 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium inline-flex items-center gap-2 transition">
+          <a href={START_HREF} onClick={startFirst} className="h-12 px-7 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium inline-flex items-center gap-2 transition">
             Start Learning <ArrowRight className="h-4 w-4" />
           </a>
           <a href="#paths" className="h-12 px-5 text-slate-700 hover:text-slate-900 font-medium inline-flex items-center gap-1 transition">
@@ -590,7 +593,7 @@ const Landing = ({ courses, onNav }) => {
             No account needed. Open a module and start. No games. Just learning.
           </p>
           <div className="mt-10">
-            <a href="#paths" onClick={startFirst} className="h-12 px-8 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium inline-flex items-center gap-2 transition">
+            <a href={START_HREF} onClick={startFirst} className="h-12 px-8 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium inline-flex items-center gap-2 transition">
               Begin <ArrowRight className="h-4 w-4" />
             </a>
           </div>

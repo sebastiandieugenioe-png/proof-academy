@@ -93,7 +93,7 @@ export default function PublicNav({ active = null, links = DEFAULT_LINKS }) {
             </Link>
           ))}
           <Link
-            href="/register"
+            href="/?course=alcohol-fundamentals"
             onClick={closeAnd()}
             className="mt-4 h-12 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium inline-flex items-center justify-center gap-2"
           >
