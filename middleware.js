@@ -70,6 +70,6 @@ export function middleware(request) {
 export const config = {
   // Skip static assets, api routes, and the /go redirect (which does its own cookie work).
   matcher: [
-    '/((?!api/|_next/|go/|icons/|assets/|images/|favicon.ico|placeholder-lesson.svg|manifest.json|sw.js|robots.txt|sitemap.xml).*)',
+    '/((?!api/|_next/|go/|icons/|assets/|images/|favicon.ico|placeholder-lesson.svg|manifest.json|sw.js|robots.txt|sitemap.xml|ads.txt).*)',
   ],
 };

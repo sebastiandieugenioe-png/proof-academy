@@ -301,7 +301,7 @@ const Landing = ({ courses, onNav }) => {
           </a>
         </div>
         <p className="mt-8 text-xs text-slate-400 tracking-wide">
-          Free forever · No ads · No account needed
+          Free forever · No account needed
         </p>
       </section>
 
@@ -535,7 +535,7 @@ const Landing = ({ courses, onNav }) => {
           <div className="grid md:grid-cols-2 gap-x-16 gap-y-10 mt-4">
             {[
               { t: 'Free forever', b: 'Every path, every module, every study card. No paywalls, no upsells, no premium tier.' },
-              { t: 'No ads', b: 'Your attention is not for sale. No banners, no sponsored content, no tracking beyond what runs the site.' },
+              { t: 'No account needed', b: 'Open any module and start learning. A free account only adds saved progress and daily review cards.' },
               { t: 'Evidence-based', b: 'Every method we use is grounded in learning science, not entertainment.' },
               { t: 'Continuously updated', b: 'Modules are revised as knowledge evolves. This is a living curriculum.' },
             ].map((p) => (
@@ -1377,7 +1377,8 @@ const ChangePasswordCard = () => {
 
 const ProfileView = ({ user, setUser, onNav }) => {
   const [name, setName] = useState(user?.name || '')
-  const [newsletter, setNewsletter] = useState(user?.newsletter || false)
+  // Newsletter UI removed (no newsletter for now). The stored preference is sent back unchanged.
+  const newsletter = !!user?.newsletter
   const [country, setCountry] = useState(user?.country || '')
   const [city, setCity] = useState(user?.city || '')
   const [role, setRole] = useState(user?.role || '')
@@ -1439,30 +1440,6 @@ const ProfileView = ({ user, setUser, onNav }) => {
         <div>
           <label className="block text-xs font-medium text-slate-700 mb-1.5">Authentication</label>
           <div className="text-sm text-slate-600">Signed in via <strong className="font-medium">{user.provider}</strong>. Google login coming soon.</div>
-        </div>
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
-          <label className="flex items-start gap-2.5 text-sm text-slate-800 cursor-pointer">
-            <input type="checkbox" checked={newsletter} onChange={(e) => setNewsletter(e.target.checked)} className="mt-0.5 h-4 w-4 rounded accent-blue-600" />
-            <span>
-              <span className="font-medium">Subscribe to the free weekly newsletter.</span>
-              <span className="block text-xs text-slate-600 mt-0.5 leading-relaxed">
-                One short email per week — new mini-modules, curated study cards, cocktail history and hospitality tips. No ads. Unsubscribe anytime.
-              </span>
-            </span>
-          </label>
-          {user?.newsletter && user?.newsletterConsentAt && (
-            <p className="text-[11px] text-slate-500">
-              Subscribed since {new Date(user.newsletterConsentAt).toLocaleDateString()}.
-            </p>
-          )}
-          {!user?.newsletter && user?.newsletterWithdrawnAt && (
-            <p className="text-[11px] text-slate-500">
-              Unsubscribed on {new Date(user.newsletterWithdrawnAt).toLocaleDateString()}. You can re-subscribe by ticking the box.
-            </p>
-          )}
-          <p className="text-[11px] text-slate-500 leading-relaxed">
-            Service emails (password reset, security, account deletion) are sent regardless — they&rsquo;re required to run your account.
-          </p>
         </div>
         <button onClick={save} className="h-10 px-5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium inline-flex items-center gap-2">
           {saved ? <><Check className="h-4 w-4" /> Saved</> : 'Save changes'}

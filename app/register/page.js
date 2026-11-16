@@ -179,43 +179,6 @@ export default function RegisterPage() {
             {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
           </select>
         </Field>
-        <div className="pt-1 rounded-xl border border-slate-300 bg-white p-5 space-y-4">
-          <div className="flex items-baseline justify-between">
-            <div className="text-[10px] uppercase tracking-[0.22em] text-slate-500 font-medium">
-              Editorial &middot; Free
-            </div>
-            <div className="text-[10px] uppercase tracking-[0.18em] text-slate-400">Optional</div>
-          </div>
-          <div>
-            <div className="text-lg font-semibold tracking-tight text-slate-900">
-              Subscribe to the Online Spirits Club Journal
-            </div>
-            <p className="mt-2 text-sm text-slate-600 leading-relaxed">
-              Receive carefully curated hospitality knowledge designed to help you become a better hospitality professional.
-            </p>
-          </div>
-          <ul className="space-y-2 text-sm text-slate-700 border-t border-slate-100 pt-4">
-            <li className="flex items-baseline gap-2.5">
-              <span className="text-slate-900 font-medium">✓</span>
-              <span><span className="font-medium text-slate-900">Hospitality Weekly</span> &mdash; every Monday</span>
-            </li>
-          </ul>
-          <label className="flex items-start gap-2.5 cursor-pointer border-t border-slate-100 pt-4">
-            <input
-              type="checkbox"
-              checked={newsletter}
-              onChange={(e) => setNewsletter(e.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded accent-slate-900"
-            />
-            <span className="text-sm text-slate-800 font-medium">
-              Yes, send me the Journal.
-            </span>
-          </label>
-          <p className="text-[11px] text-slate-500 leading-relaxed">
-            Free forever. Unsubscribe anytime. See our{' '}
-            <Link href="/privacy" className="text-slate-700 hover:text-slate-900 underline underline-offset-2">Privacy Policy</Link>.
-          </p>
-        </div>
         {error && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md p-2">{error}</div>}
         <button disabled={loading} className="w-full h-11 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium disabled:opacity-60 inline-flex items-center justify-center gap-2">
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Create account <ArrowRight className="h-4 w-4" /></>}

@@ -52,8 +52,8 @@ export default function AboutPage() {
           </div>
           <div className="space-y-8">
             {[
-              { t: 'Free forever', b: 'Every learning path, every module, every issue of the Journal. No paywall. No premium tier.' },
-              { t: 'No advertising', b: 'Your attention is not for sale. No banners, no sponsored posts.' },
+              { t: 'Free forever', b: 'Every learning path, every module, every study card. No paywall. No premium tier.' },
+              { t: 'Free, supported by ads', b: 'Online Spirits Club is funded by advertising so the curriculum can stay free for everyone. Ads never change what we teach.' },
               { t: 'Evidence-based', b: 'Curriculum grounded in learning science: active recall, spaced repetition, deliberate structure.' },
               { t: 'European, independent', b: 'Ireland-based. Independent. Continuously updated.' },
             ].map((p) => (

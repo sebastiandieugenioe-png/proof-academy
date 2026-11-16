@@ -2,6 +2,7 @@ import './globals.css'
 import { Manrope } from 'next/font/google'
 import { Providers } from './providers'
 import AttributionTracker from '@/components/AttributionTracker'
+import { adsenseClientId } from '@/lib/adsense'
 
 // Manrope \u2014 modern geometric sans, used for the OSC wordmark and headings.
 // display: 'swap' avoids FOIT; variable exposed as --font-manrope for CSS use.
@@ -55,6 +56,7 @@ export const viewport = {
 }
 
 export default function RootLayout({ children }) {
+  const adClient = adsenseClientId() // null until the publisher ID is set in lib/adsense.js
   return (
     <html lang="en" className={manrope.variable}>
       <head>
@@ -63,6 +65,10 @@ export default function RootLayout({ children }) {
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="OSC" />
         <meta name="format-detection" content="telephone=no" />
+        {adClient && <meta name="google-adsense-account" content={adClient} />}
+        {adClient && (
+          <script async src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${adClient}`} crossOrigin="anonymous" />
+        )}
         <script dangerouslySetInnerHTML={{__html:'window.addEventListener("error",function(e){if(e.error instanceof DOMException&&e.error.name==="DataCloneError"&&e.message&&e.message.includes("PerformanceServerTiming")){e.stopImmediatePropagation();e.preventDefault()}},true);'}} />
         <script dangerouslySetInnerHTML={{__html:'if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("/sw.js").then(function(r){console.log("[OSC] SW registered, scope:",r.scope)}).catch(function(e){console.warn("[OSC] SW registration failed:",e)})})}'}} />
       </head>

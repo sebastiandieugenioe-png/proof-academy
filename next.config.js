@@ -6,6 +6,19 @@ try {
   if (baseUrl) allowedOrigin = new URL(baseUrl).origin;
 } catch { /* fall through */ }
 
+// Google AdSense + Google's consent banner (Funding Choices) need these origins.
+// Without them the browser blocks the ad script and the ad iframes.
+const GOOGLE_ADS = [
+  'https://pagead2.googlesyndication.com',
+  'https://*.googlesyndication.com',
+  'https://*.doubleclick.net',
+  'https://adservice.google.com',
+  'https://*.adtrafficquality.google',
+  'https://fundingchoicesmessages.google.com',
+  'https://www.google.com',
+  'https://*.gstatic.com',
+].join(' ');
+
 // Content Security Policy.
 // script-src includes 'unsafe-inline' because Next.js 15 App Router streams RSC
 // payloads through inline <script> tags (self.__next_f.push). A stricter,
@@ -17,14 +30,15 @@ const csp = [
   "form-action 'self'",
   "frame-ancestors 'self'",
   "img-src 'self' data: blob: https:",
-  "font-src 'self' data:",
+  "font-src 'self' data: https://fonts.gstatic.com",
   "connect-src 'self' https:",
   "media-src 'self' https:",
   "object-src 'none'",
   isProd
-    ? "script-src 'self' 'unsafe-inline'"
-    : "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
-  "style-src 'self' 'unsafe-inline'",
+    ? `script-src 'self' 'unsafe-inline' ${GOOGLE_ADS}`
+    : `script-src 'self' 'unsafe-eval' 'unsafe-inline' ${GOOGLE_ADS}`,
+  `frame-src 'self' ${GOOGLE_ADS}`,
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
 ].join('; ');
 
 const nextConfig = {
