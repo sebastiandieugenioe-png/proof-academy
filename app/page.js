@@ -11,6 +11,8 @@ import {
 import PublicFooter from '@/components/PublicFooter'
 import OscLogo from '@/components/OscLogo'
 import FeedbackButton from '@/components/FeedbackButton'
+import LessonDiagram from '@/components/LessonDiagram'
+import { HERO_PHOTO, PROCESS_PHOTOS, courseCover, unsplash } from '@/lib/visuals'
 
 const ICONS = { Flame, GlassWater, Sparkles }
 
@@ -306,6 +308,14 @@ const Landing = ({ courses, onNav }) => {
         <p className="mt-8 text-xs text-slate-400 tracking-wide">
           Free forever · No account needed
         </p>
+        <div className="mt-12 md:mt-16 rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-slate-100">
+          <img
+            src={unsplash(HERO_PHOTO.id, 2000)}
+            alt={HERO_PHOTO.alt}
+            className="w-full aspect-[4/3] sm:aspect-[16/9] md:aspect-[21/9] object-cover"
+            loading="eager"
+          />
+        </div>
       </section>
 
       {/* 2. PREMISE ---------------------------------------------------- */}
@@ -373,6 +383,30 @@ const Landing = ({ courses, onNav }) => {
         </div>
       </section>
 
+      {/* 4b. FROM GRAIN TO GLASS (photo strip) ------------------------- */}
+      <section className="border-t border-slate-200 py-20 md:py-28">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500 font-medium mb-6">
+            From grain to glass
+          </div>
+          <h2 className="text-3xl md:text-5xl font-semibold tracking-tight text-slate-900 leading-[1.1] max-w-3xl">
+            Everything behind the bar, step by step.
+          </h2>
+          <div className="mt-12 grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+            {PROCESS_PHOTOS.map((ph, i) => (
+              <figure key={ph.id} className="relative rounded-xl overflow-hidden bg-slate-100 aspect-[3/4]">
+                <img src={unsplash(ph.id, 800)} alt={ph.alt} className="absolute inset-0 h-full w-full object-cover" loading="lazy" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/0 to-transparent" />
+                <figcaption className="absolute bottom-0 inset-x-0 p-3 md:p-4 text-white">
+                  <div className="text-[10px] font-mono opacity-80">0{i + 1}</div>
+                  <div className="text-sm md:text-base font-semibold tracking-tight">{ph.label}</div>
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* 5. CURRICULUM ------------------------------------------------ */}
       <section id="paths" className="border-t border-slate-200 py-20 md:py-28 scroll-mt-20">
         <div className="max-w-4xl mx-auto">
@@ -403,9 +437,12 @@ const Landing = ({ courses, onNav }) => {
                   onClick={(e) => { e.preventDefault(); onNav({ name: 'course', slug: c.slug }) }}
                   className="flex items-baseline justify-between py-5 group hover:bg-slate-50 -mx-4 px-4 rounded-md transition"
                 >
-                  <div className="min-w-0 pr-4">
-                    <div className="text-base md:text-lg font-semibold text-slate-900 tracking-tight">{c.title}</div>
-                    <div className="mt-1 text-sm text-slate-500 line-clamp-1">{c.tagline}</div>
+                  <div className="min-w-0 pr-4 flex items-center gap-4">
+                    <CourseThumb course={c} className="h-14 w-14 md:h-16 md:w-16 shrink-0 rounded-lg" />
+                    <div className="min-w-0">
+                      <div className="text-base md:text-lg font-semibold text-slate-900 tracking-tight">{c.title}</div>
+                      <div className="mt-1 text-sm text-slate-500 line-clamp-1">{c.tagline}</div>
+                    </div>
                   </div>
                   <div className="flex items-baseline gap-4 md:gap-6 text-xs text-slate-500 shrink-0">
                     <span className="hidden sm:inline uppercase tracking-wider">{c.level}</span>
@@ -607,16 +644,33 @@ const Landing = ({ courses, onNav }) => {
   )
 }
 
+// Course cover photo (lib/visuals.js). Falls back to the course's accent gradient + icon.
+const CourseThumb = ({ course, className = '', eager = false }) => {
+  const cover = courseCover(course?.slug)
+  const Icon = ICONS[course?.icon] || BookOpen
+  if (cover) {
+    return (
+      <div className={`relative overflow-hidden bg-slate-100 ${className}`}>
+        <img src={cover.url} alt={cover.alt} className="absolute inset-0 h-full w-full object-cover" loading={eager ? 'eager' : 'lazy'} />
+      </div>
+    )
+  }
+  return (
+    <div className={`bg-gradient-to-br ${course?.accent || 'from-slate-700 to-slate-900'} grid place-items-center text-white ${className}`}>
+      <Icon className="h-6 w-6" />
+    </div>
+  )
+}
+
 const CourseCard = ({ course, onClick, progressMap }) => {
   const Icon = ICONS[course.icon] || BookOpen
   const done = progressMap ? course.lessons.filter((l) => progressMap[`${course.slug}/${l.slug}`]?.completed).length : 0
   const pct = Math.round((done / course.lessons.length) * 100)
   return (
-    <button onClick={onClick} className="text-left rounded-xl border border-slate-200 bg-white p-5 card-hover overflow-hidden">
-      <div className={`h-10 w-10 rounded-lg bg-gradient-to-br ${course.accent} grid place-items-center text-white shadow-sm`}>
-        <Icon className="h-5 w-5" />
-      </div>
-      <div className="mt-4">
+    <button onClick={onClick} className="text-left rounded-xl border border-slate-200 bg-white card-hover overflow-hidden">
+      <CourseThumb course={course} className="h-36 w-full" />
+      <div className="p-5 pt-4">
+      <div>
         <div className="text-xs font-medium uppercase tracking-wide text-slate-500">{course.level} · {course.lessonCount} modules</div>
         <h3 className="mt-1 text-lg font-semibold text-slate-900">{course.title}</h3>
         <p className="mt-1 text-sm text-slate-600 leading-relaxed">{course.tagline}</p>
@@ -629,6 +683,7 @@ const CourseCard = ({ course, onClick, progressMap }) => {
           <div className="mt-1.5 text-xs text-slate-500">{done}/{course.lessonCount} complete</div>
         </div>
       )}
+      </div>
     </button>
   )
 }
@@ -768,14 +823,13 @@ const CourseView = ({ slug, onNav, user }) => {
   return (
     <div className="space-y-8">
       <button onClick={() => onNav({ name: user ? 'dashboard' : 'landing' })} className="text-sm text-slate-500 hover:text-slate-800 inline-flex items-center gap-1"><ChevronLeft className="h-4 w-4" /> {user ? 'Dashboard' : 'All learning paths'}</button>
-      <div className="flex items-start gap-4">
-        <div className={`h-14 w-14 rounded-xl bg-gradient-to-br ${accent} grid place-items-center text-white shadow-sm`}>
-          <Icon className="h-7 w-7" />
-        </div>
-        <div>
-          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">{course.level || ''} · {lessons.length} modules</div>
-          <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-slate-900">{course.title || 'Learning path'}</h1>
-          {course.tagline && <p className="mt-1.5 text-slate-600 max-w-2xl">{course.tagline}</p>}
+      <div className="relative rounded-2xl overflow-hidden border border-slate-200">
+        <CourseThumb course={{ ...course, slug: course.slug || slug, accent }} className="h-48 md:h-64 w-full" eager />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/30 to-transparent" />
+        <div className="absolute bottom-0 inset-x-0 p-5 md:p-8 text-white">
+          <div className="text-xs font-medium uppercase tracking-wide text-white/80">{course.level || ''} · {lessons.length} modules</div>
+          <h1 className="mt-1 text-3xl md:text-4xl font-semibold tracking-tight">{course.title || 'Learning path'}</h1>
+          {course.tagline && <p className="mt-1.5 text-white/85 max-w-2xl">{course.tagline}</p>}
         </div>
       </div>
       {lessons.length === 0 ? (
@@ -965,6 +1019,7 @@ const StepTheory = ({ lesson, onNext }) => {
           </div>
         )
       })}
+      <LessonDiagram slug={lesson?.slug} />
       <button disabled={!allEmbedsAnswered} onClick={onNext} className="mt-4 h-11 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium inline-flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
         Continue to study cards <ArrowRight className="h-4 w-4" />
       </button>

@@ -4,6 +4,7 @@
 // without an account.
 
 import { Brain, Layers, ClipboardCheck } from 'lucide-react';
+import LessonDiagram from '@/components/LessonDiagram';
 
 const formatInline = (t) => {
   const parts = t.split(/(\*\*[^*]+\*\*)/g);
@@ -44,6 +45,8 @@ export default function SeoLessonBody({ lesson, moduleHref }) {
       <div className="mt-6 text-[15px] md:text-base">
         {paragraphs.map((p, i) => <Paragraph key={i} text={p} />)}
       </div>
+
+      <LessonDiagram slug={lesson.slug} />
 
       <section className="mt-8 grid gap-3 md:grid-cols-3" aria-label="Interactive module">
         {[
