@@ -130,6 +130,8 @@ export default async function Page({ params }) {
   if (!found) notFound();
   const { course, lesson, media } = found;
   const description = lesson.theory.split('\n\n')[0].replace(/\*\*/g, '').slice(0, 200);
+  // Interactive version of this module inside the app — free, no account needed.
+  const moduleHref = `/?course=${course.slug}&lesson=${lesson.slug}`;
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -204,13 +206,13 @@ export default async function Page({ params }) {
             </figure>
           )}
 
-          <SeoLessonBody lesson={lesson} />
+          <SeoLessonBody lesson={lesson} moduleHref={moduleHref} />
 
           <section className="mt-10 rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-indigo-50 p-6 md:p-8 text-center">
             <h2 className="text-xl md:text-2xl font-semibold text-slate-900">Ready to remember all of this?</h2>
-            <p className="mt-2 text-slate-600 max-w-md mx-auto">Free members unlock the interactive quiz, {lesson.flashcards.length} flashcards, and spaced-repetition reviews so knowledge actually sticks.</p>
-            <Link href="/" className="mt-5 inline-flex h-11 px-6 items-center rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium">Create your free account</Link>
-            <p className="mt-3 text-xs text-slate-500">No card, no ads. Newsletter is optional.</p>
+            <p className="mt-2 text-slate-600 max-w-md mx-auto">Test yourself with {lesson.flashcards.length} study cards and the knowledge check. Free, no account needed.</p>
+            <a href={moduleHref} className="mt-5 inline-flex h-11 px-6 items-center rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium">Start the interactive module</a>
+            <p className="mt-3 text-xs text-slate-500">Want daily review cards and saved progress? <Link href="/register" className="text-blue-700 hover:underline">Create a free account</Link> — optional.</p>
           </section>
 
           {media.sources?.length > 0 && (

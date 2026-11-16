@@ -14,6 +14,40 @@ import FeedbackButton from '@/components/FeedbackButton'
 
 const ICONS = { Flame, GlassWater, Sparkles }
 
+const SLUG_OK = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
+
+// Read ?course=&lesson= from the current URL and turn it into an in-app route.
+function routeFromUrl() {
+  if (typeof window === 'undefined') return null
+  const qs = new URLSearchParams(window.location.search)
+  const course = qs.get('course')
+  const lesson = qs.get('lesson')
+  if (!course || !SLUG_OK.test(course)) return null
+  if (lesson && SLUG_OK.test(lesson)) return { name: 'lesson', courseSlug: course, lessonSlug: lesson }
+  return { name: 'course', slug: course }
+}
+
+// Inverse of routeFromUrl — returns the URL that represents an in-app route.
+function urlForRoute(r) {
+  if (!r) return null
+  if (r.name === 'course' && r.slug) return `/?course=${r.slug}`
+  if (r.name === 'lesson' && r.courseSlug && r.lessonSlug) return `/?course=${r.courseSlug}&lesson=${r.lessonSlug}`
+  if (r.name === 'landing' || r.name === 'dashboard') return '/'
+  return null // study / profile: leave the URL as it is
+}
+
+// Small banner shown to visitors without an account. Accounts are optional:
+// they only add saved progress, daily review cards (Study) and posting comments.
+const SaveProgressBanner = ({ text = 'Save your progress and get daily review cards — free account.' }) => (
+  <div className="rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-4 md:p-5 flex flex-wrap items-center justify-between gap-3">
+    <p className="text-sm text-slate-700">{text}</p>
+    <div className="flex items-center gap-2">
+      <a href="/login" className="h-10 px-4 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 text-sm font-medium inline-flex items-center">Log in</a>
+      <a href="/register" className="h-10 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium inline-flex items-center gap-1.5">Create free account <ArrowRight className="h-4 w-4" /></a>
+    </div>
+  </div>
+)
+
 const api = async (path, opts = {}) => {
   const res = await fetch(`/api${path}`, {
     method: opts.method || 'GET',
@@ -39,10 +73,31 @@ function App() {
       try {
         const u = await api('/me')
         setUser(u); setRoute({ name: 'dashboard' })
-      } catch { /* not logged in */ }
+      } catch { /* not logged in — that's fine, accounts are optional */ }
+      // Deep links: /?course=<slug> and /?course=<slug>&lesson=<slug> open the
+      // course or the interactive module directly — no account required.
+      // Used by the /learn/<slug> pages and by links shared from social media.
+      const deep = routeFromUrl()
+      if (deep) setRoute(deep)
       setBooting(false)
     })()
   }, [])
+
+  // Keep the address bar in sync so course/module URLs can be shared and bookmarked.
+  useEffect(() => {
+    if (booting || typeof window === 'undefined') return
+    const target = urlForRoute(route)
+    if (target && target !== window.location.pathname + window.location.search) {
+      window.history.pushState(null, '', target)
+    }
+  }, [route, booting])
+
+  // Browser back/forward: follow the URL back into the matching in-app route.
+  useEffect(() => {
+    const onPop = () => setRoute(routeFromUrl() || { name: user ? 'dashboard' : 'landing' })
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [user])
 
   const login = useCallback((u) => {
     setUser(u)
@@ -66,7 +121,7 @@ function App() {
           <div className="min-h-[60vh] grid place-items-center text-slate-500"><Loader2 className="h-6 w-6 animate-spin" /></div>
         ) : (
           <div className="fade-in">
-            {route.name === 'landing' && <Landing courses={courses} onCta={() => { if (typeof window !== 'undefined') window.location.href = '/register' }} />}
+            {route.name === 'landing' && <Landing courses={courses} onNav={go} />}
             {route.name === 'dashboard' && <Dashboard user={user} courses={courses} onNav={go} />}
             {route.name === 'course' && <CourseView slug={route.slug} onNav={go} user={user} />}
             {route.name === 'lesson' && <LessonView courseSlug={route.courseSlug} lessonSlug={route.lessonSlug} user={user} onNav={go} />}
@@ -170,7 +225,7 @@ const TopBar = ({ user, onNav, onLogout }) => {
             <>
               <a href="/#paths"  onClick={closeAnd()} className="h-12 flex items-center border-b border-slate-100 text-slate-900 text-base font-medium">Learning Paths</a>
               <a href="/about"   onClick={closeAnd()} className="h-12 flex items-center border-b border-slate-100 text-slate-900 text-base font-medium">About</a>
-              <a href="/register" onClick={closeAnd()} className="mt-4 h-12 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium inline-flex items-center justify-center gap-2">Start Learning</a>
+              <a href="/#paths" onClick={closeAnd()} className="mt-4 h-12 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium inline-flex items-center justify-center gap-2">Start Learning</a>
             </>
           )}
           {user && (
@@ -216,8 +271,13 @@ const BottomNav = ({ user, route, onNav }) => {
 //           Structured vs Scattered · Science · Career · Certifications ·
 //           Promise · FAQ · Closing CTA
 // =====================================================================
-const Landing = ({ courses }) => {
+const Landing = ({ courses, onNav }) => {
   const publishedCount = courses?.length || 0
+  const firstCourse = courses?.[0]?.slug
+  const startFirst = (e) => {
+    if (!firstCourse) return // courses not loaded yet: let the #paths anchor scroll instead
+    e.preventDefault(); onNav({ name: 'course', slug: firstCourse })
+  }
   return (
     <div className="pb-8">
 
@@ -233,7 +293,7 @@ const Landing = ({ courses }) => {
           Free. Structured. Evidence-based. Built for your career.
         </p>
         <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
-          <a href="/register" className="h-12 px-7 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium inline-flex items-center gap-2 transition">
+          <a href="#paths" onClick={startFirst} className="h-12 px-7 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium inline-flex items-center gap-2 transition">
             Start Learning <ArrowRight className="h-4 w-4" />
           </a>
           <a href="#paths" className="h-12 px-5 text-slate-700 hover:text-slate-900 font-medium inline-flex items-center gap-1 transition">
@@ -241,7 +301,7 @@ const Landing = ({ courses }) => {
           </a>
         </div>
         <p className="mt-8 text-xs text-slate-400 tracking-wide">
-          Free forever · No ads · No credit card
+          Free forever · No ads · No account needed
         </p>
       </section>
 
@@ -336,7 +396,8 @@ const Landing = ({ courses }) => {
               {(courses || []).map((c) => (
                 <a
                   key={c.slug}
-                  href="/register"
+                  href={`/?course=${c.slug}`}
+                  onClick={(e) => { e.preventDefault(); onNav({ name: 'course', slug: c.slug }) }}
                   className="flex items-baseline justify-between py-5 group hover:bg-slate-50 -mx-4 px-4 rounded-md transition"
                 >
                   <div className="min-w-0 pr-4">
@@ -526,10 +587,10 @@ const Landing = ({ courses }) => {
             Start when you are ready.
           </h2>
           <p className="mt-6 text-base md:text-lg text-slate-600 leading-relaxed">
-            Create a free account. No credit card. No games. Just learning.
+            No account needed. Open a module and start. No games. Just learning.
           </p>
           <div className="mt-10">
-            <a href="/register" className="h-12 px-8 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium inline-flex items-center gap-2 transition">
+            <a href="#paths" onClick={startFirst} className="h-12 px-8 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium inline-flex items-center gap-2 transition">
               Begin <ArrowRight className="h-4 w-4" />
             </a>
           </div>
@@ -689,7 +750,7 @@ const CourseView = ({ slug, onNav, user }) => {
       <h1 className="text-xl font-semibold text-slate-900">Learning path unavailable</h1>
       <p className="text-sm text-slate-600">{error}</p>
       <div className="flex items-center justify-center gap-2 pt-2">
-        <button onClick={() => onNav({ name: 'dashboard' })} className="h-10 px-5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-medium">Back to dashboard</button>
+        <button onClick={() => onNav({ name: user ? 'dashboard' : 'landing' })} className="h-10 px-5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-medium">{user ? 'Back to dashboard' : 'All learning paths'}</button>
         <button onClick={() => { setError(null); setCourse(null); api(`/courses/${slug}`).then(setCourse).catch(() => setError('Still not available. Please try again in a moment.')) }} className="h-10 px-5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium">Try again</button>
       </div>
     </div>
@@ -703,7 +764,7 @@ const CourseView = ({ slug, onNav, user }) => {
 
   return (
     <div className="space-y-8">
-      <button onClick={() => onNav({ name: 'dashboard' })} className="text-sm text-slate-500 hover:text-slate-800 inline-flex items-center gap-1"><ChevronLeft className="h-4 w-4" /> Dashboard</button>
+      <button onClick={() => onNav({ name: user ? 'dashboard' : 'landing' })} className="text-sm text-slate-500 hover:text-slate-800 inline-flex items-center gap-1"><ChevronLeft className="h-4 w-4" /> {user ? 'Dashboard' : 'All learning paths'}</button>
       <div className="flex items-start gap-4">
         <div className={`h-14 w-14 rounded-xl bg-gradient-to-br ${accent} grid place-items-center text-white shadow-sm`}>
           <Icon className="h-7 w-7" />
@@ -812,7 +873,7 @@ const LessonView = ({ courseSlug, lessonSlug, user, onNav }) => {
       </div>
       {STEPS[step] === 'objectives' && <StepObjectives lesson={lesson} media={data.media} onNext={() => setStep(1)} />}
       {STEPS[step] === 'theory' && <StepTheory lesson={lesson} onNext={() => setStep(2)} />}
-      {STEPS[step] === 'flashcards' && <StepFlashcards lesson={lesson} onNext={() => setStep(3)} />}
+      {STEPS[step] === 'flashcards' && <StepFlashcards lesson={lesson} user={user} onNext={() => setStep(3)} />}
       {STEPS[step] === 'quiz' && <StepQuiz lesson={lesson} onNext={(score) => { setStep(4); complete(score) }} />}
       {STEPS[step] === 'done' && <StepDone lesson={lesson} next={next} courseSlug={courseSlug} onNav={onNav} user={user} />}
       <div className="pt-4 border-t border-slate-100 flex justify-end">
@@ -943,7 +1004,7 @@ const EmbeddedQuestion = ({ q, value, onAnswer }) => {
   )
 }
 
-const StepFlashcards = ({ lesson, onNext }) => {
+const StepFlashcards = ({ lesson, user, onNext }) => {
   const cards = Array.isArray(lesson?.flashcards) ? lesson.flashcards : []
   const [i, setI] = useState(0)
   const [flipped, setFlipped] = useState(false)
@@ -953,7 +1014,7 @@ const StepFlashcards = ({ lesson, onNext }) => {
       <section className="rounded-2xl border border-slate-200 bg-white p-6 md:p-8 text-center">
         <Layers className="h-6 w-6 text-blue-600 mx-auto" />
         <h3 className="mt-3 text-lg font-semibold text-slate-900">{cards.length === 0 ? 'No study cards for this module' : 'All study cards reviewed'}</h3>
-        <p className="mt-1 text-sm text-slate-600">{cards.length === 0 ? 'Continue to the knowledge check.' : 'They will now enter your spaced-repetition queue for daily practice.'}</p>
+        <p className="mt-1 text-sm text-slate-600">{cards.length === 0 ? 'Continue to the knowledge check.' : user ? 'They will now enter your spaced-repetition queue for daily practice.' : 'Create a free account to get these cards back for daily review.'}</p>
         <button onClick={onNext} className="mt-6 h-11 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium inline-flex items-center gap-2">Take the knowledge check <ArrowRight className="h-4 w-4" /></button>
       </section>
     )
@@ -1066,7 +1127,7 @@ const StepDone = ({ lesson, next, courseSlug, onNav, user }) => {
       <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 md:p-8 text-center">
         <PartyPopper className="h-6 w-6 text-emerald-600 mx-auto" />
         <h3 className="mt-3 text-2xl font-semibold text-slate-900">Module complete</h3>
-        <p className="mt-1 text-sm text-slate-700">Your study cards are now in the practice queue. Come back tomorrow to keep them fresh.</p>
+        <p className="mt-1 text-sm text-slate-700">{user ? 'Your study cards are now in the practice queue. Come back tomorrow to keep them fresh.' : 'Nice work. Keep going with the next module.'}</p>
         <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
           {next && (
             <button onClick={() => onNav({ name: 'lesson', courseSlug, lessonSlug: next.slug })} className="h-11 px-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium inline-flex items-center gap-2">Next: {next.title} <ArrowRight className="h-4 w-4" /></button>
@@ -1074,13 +1135,18 @@ const StepDone = ({ lesson, next, courseSlug, onNav, user }) => {
           <button onClick={() => onNav({ name: 'course', slug: courseSlug })} className="h-11 px-6 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-medium">Back to path</button>
         </div>
       </div>
+      {!user && <SaveProgressBanner />}
       <div className="rounded-2xl border border-slate-200 bg-white p-6">
         <h4 className="font-semibold text-slate-900">Discussion</h4>
         <p className="text-sm text-slate-500 mt-0.5">Ask a question or share something you learned.</p>
-        <div className="mt-3 flex gap-2">
-          <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Add a comment…" className="flex-1 h-10 rounded-lg border border-slate-200 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          <button onClick={post} className="h-10 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium">Post</button>
-        </div>
+        {user ? (
+          <div className="mt-3 flex gap-2">
+            <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Add a comment…" className="flex-1 h-10 rounded-lg border border-slate-200 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <button onClick={post} className="h-10 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium">Post</button>
+          </div>
+        ) : (
+          <p className="mt-3 text-sm text-slate-600"><a href="/login" className="text-blue-700 font-medium hover:underline">Log in</a> or <a href="/register" className="text-blue-700 font-medium hover:underline">create a free account</a> to join the discussion.</p>
+        )}
         <div className="mt-4 space-y-3">
           {comments.length === 0 && <div className="text-sm text-slate-400">Be the first to comment.</div>}
           {comments.map((c) => (

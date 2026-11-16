@@ -1,7 +1,9 @@
-// Renders lesson theory + a locked preview of interactive features.
-// Server component: no interactivity, but the CTA hints at what’s locked.
+// Renders lesson theory + a preview of the interactive features.
+// Server component: no interactivity here — the interactive module (study cards,
+// knowledge check) opens in the app at /?course=<course>&lesson=<lesson>, free and
+// without an account.
 
-import { Lock, Brain, Layers, ClipboardCheck } from 'lucide-react';
+import { Brain, Layers, ClipboardCheck } from 'lucide-react';
 
 const formatInline = (t) => {
   const parts = t.split(/(\*\*[^*]+\*\*)/g);
@@ -23,7 +25,7 @@ const Paragraph = ({ text }) => {
   return <p className="my-4 leading-relaxed text-slate-700">{formatInline(text)}</p>;
 };
 
-export default function SeoLessonBody({ lesson }) {
+export default function SeoLessonBody({ lesson, moduleHref }) {
   const paragraphs = lesson.theory.split('\n\n');
   return (
     <div className="mt-8">
@@ -43,18 +45,17 @@ export default function SeoLessonBody({ lesson }) {
         {paragraphs.map((p, i) => <Paragraph key={i} text={p} />)}
       </div>
 
-      <section className="mt-8 grid gap-3 md:grid-cols-3">
+      <section className="mt-8 grid gap-3 md:grid-cols-3" aria-label="Interactive module">
         {[
           { icon: Brain, title: `${lesson.embedded?.length || 0} embedded questions`, note: 'Active-recall in-line' },
           { icon: Layers, title: `${lesson.flashcards.length} study cards`, note: 'Spaced repetition' },
           { icon: ClipboardCheck, title: `${lesson.quiz.length}-question knowledge check`, note: 'Explanations included' },
         ].map((f, i) => (
-          <div key={i} className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-center relative">
-            <Lock className="h-4 w-4 text-slate-400 absolute top-3 right-3" aria-hidden="true" />
+          <a key={i} href={moduleHref} className="rounded-xl border border-slate-200 bg-slate-50 hover:border-blue-400 hover:bg-white p-4 text-center transition">
             <f.icon className="h-5 w-5 text-blue-600 mx-auto" />
             <div className="mt-2 font-medium text-slate-900 text-sm">{f.title}</div>
             <div className="text-xs text-slate-500">{f.note}</div>
-          </div>
+          </a>
         ))}
       </section>
     </div>
