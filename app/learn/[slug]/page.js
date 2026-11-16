@@ -5,6 +5,7 @@ import { AI_COURSES } from '@/lib/ai-content';
 import { getMedia } from '@/lib/media';
 import { getDb } from '@/lib/mongo';
 import SeoLessonBody from './seo-body';
+import { mergeLesson } from '@/lib/lesson-merge';
 import PublicFooter from '@/components/PublicFooter';
 import OscLogo from '@/components/OscLogo';
 
@@ -43,8 +44,9 @@ async function findByLessonSlug(slug) {
     const canonicalCourse = COURSES.find((c) => c.slug === courseSlug) || AI_COURSES.find((c) => c.slug === courseSlug);
     const canonicalLesson = canonicalCourse?.lessons?.find((x) => x.slug === lessonSlug);
     if (!canonicalLesson) return dbLesson;
-    // Canonical fills gaps; DB fields win over canonical (admin edits are authoritative).
-    return { ...canonicalLesson, ...dbLesson };
+    // Canonical fills gaps; DB fields win over canonical (admin edits are authoritative),
+    // except for newer content revisions shipped in the code (see lib/lesson-merge.js).
+    return mergeLesson(canonicalLesson, dbLesson);
   };
   try {
     const db = await getDb();
@@ -153,7 +155,7 @@ export default async function Page({ params }) {
     timeRequired: `PT${lesson.minutes}M`,
     url: `${siteUrl}/learn/${slug}`,
     mainEntityOfPage: `${siteUrl}/learn/${slug}`,
-    citation: (media.sources || []).map((s) => ({ '@type': 'CreativeWork', name: s.label, url: s.url })),
+    citation: (media.sources || []).map((s) => (s.url ? { '@type': 'CreativeWork', name: s.label, url: s.url } : { '@type': 'CreativeWork', name: s.label })),
   };
 
   const breadcrumbLd = {
@@ -221,7 +223,11 @@ export default async function Page({ params }) {
               <ul className="mt-3 space-y-2 text-sm">
                 {media.sources.map((s, i) => (
                   <li key={i}>
-                    <a href={s.url} rel="noopener noreferrer nofollow" target="_blank" className="text-blue-700 hover:underline break-words">{s.label} ↗</a>
+                    {s.url ? (
+                      <a href={s.url} rel="noopener noreferrer nofollow" target="_blank" className="text-blue-700 hover:underline break-words">{s.label} ↗</a>
+                    ) : (
+                      <span className="text-slate-700">{s.label}</span>
+                    )}
                   </li>
                 ))}
               </ul>
