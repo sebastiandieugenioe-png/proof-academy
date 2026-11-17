@@ -16,11 +16,11 @@ const manrope = Manrope({
 export const metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL || 'https://onlinespiritsclub.com'),
   title: {
-    default: 'Online Spirits Club \u2014 Learn spirits, cocktails & hospitality',
+    default: 'Online Spirits Club \u2014 Free spirits, beer, wine & cocktail lessons',
     template: '%s',
   },
-  description: 'The free, science-based platform to learn spirits, cocktails, beer and hospitality. Evidence-based modules in 3\u20135 minutes.',
-  keywords: ['spirits', 'cocktails', 'whiskey', 'gin', 'bartending', 'hospitality', 'online course', 'flashcards'],
+  description: 'Free 5-minute lessons on spirits, beer, wine and cocktails for bartenders and hospitality staff. Fact-checked, with study cards and quizzes. No account needed.',
+  keywords: ['bartender training', 'free bartending course', 'spirits', 'whiskey', 'gin', 'rum', 'tequila', 'beer', 'wine', 'cocktails', 'hospitality training', 'flashcards'],
   applicationName: 'Online Spirits Club',
   manifest: '/manifest.json',
   openGraph: {
