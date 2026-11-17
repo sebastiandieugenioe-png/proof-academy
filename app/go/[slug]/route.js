@@ -18,6 +18,7 @@ import { isSafeSlug, isSafeId } from '@/lib/validators';
 import { ensureMigrationsRun } from '@/lib/migrations';
 import {
   COOKIE_NAMES,
+  hasConsent,
   ATTR_COOKIE_MAX_AGE,
   SESSION_COOKIE_MAX_AGE,
   attributionCookieOptions,
@@ -52,14 +53,17 @@ export async function GET(request, { params }) {
     ? NextResponse.redirect(target, 302)
     : NextResponse.redirect(new URL('/', request.url), 302);
 
-  // ---- Cookies ------------------------------------------------------------
+  // ---- Cookies (only with consent — see CONSENT_COOKIE in lib/attribution) --
+  // Without consent the click is still counted below, but nothing is stored
+  // on the visitor's device.
+  const consent = hasConsent(request);
   const existingVid = request.cookies.get(COOKIE_NAMES.visitor)?.value;
   const vid = existingVid && isSafeId(existingVid) ? existingVid : mintId();
-  res.cookies.set(COOKIE_NAMES.visitor, vid, attributionCookieOptions(ATTR_COOKIE_MAX_AGE));
+  if (consent) res.cookies.set(COOKIE_NAMES.visitor, vid, attributionCookieOptions(ATTR_COOKIE_MAX_AGE));
 
   const existingSid = request.cookies.get(COOKIE_NAMES.session)?.value;
   const sid = existingSid && isSafeId(existingSid) ? existingSid : mintId();
-  res.cookies.set(COOKIE_NAMES.session, sid, attributionCookieOptions(SESSION_COOKIE_MAX_AGE));
+  if (consent) res.cookies.set(COOKIE_NAMES.session, sid, attributionCookieOptions(SESSION_COOKIE_MAX_AGE));
 
   const touchObj = {
     source: link.utmSource || null,
@@ -71,7 +75,7 @@ export async function GET(request, { params }) {
     url: `/go/${link.slug}`,
   };
   const encoded = encodeTouch(touchObj);
-  if (encoded) {
+  if (encoded && consent) {
     // First touch — write only if the cookie is missing.
     const hadFirst = !!request.cookies.get(COOKIE_NAMES.firstTouch)?.value;
     if (!hadFirst) {

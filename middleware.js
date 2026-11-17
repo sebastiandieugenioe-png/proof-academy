@@ -19,6 +19,7 @@
 import { NextResponse } from 'next/server';
 import {
   COOKIE_NAMES,
+  hasConsent,
   ATTR_COOKIE_MAX_AGE,
   SESSION_COOKIE_MAX_AGE,
   attributionCookieOptions,
@@ -30,6 +31,16 @@ import {
 export function middleware(request) {
   const url = request.nextUrl;
   const res = NextResponse.next();
+
+  // ---- consent gate --------------------------------------------------------
+  // No consent → set nothing, and remove attribution cookies left from before
+  // (e.g. consent withdrawn). See CONSENT_COOKIE in lib/attribution.js.
+  if (!hasConsent(request)) {
+    for (const name of Object.values(COOKIE_NAMES)) {
+      if (request.cookies.get(name)) res.cookies.set(name, '', { path: '/', maxAge: 0 });
+    }
+    return res;
+  }
 
   // ---- visitor id (30d) ---------------------------------------------------
   let vid = request.cookies.get(COOKIE_NAMES.visitor)?.value;
