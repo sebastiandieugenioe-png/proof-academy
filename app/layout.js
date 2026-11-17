@@ -58,7 +58,7 @@ export const viewport = {
 export default function RootLayout({ children }) {
   const adClient = adsenseClientId() // null until the publisher ID is set in lib/adsense.js
   return (
-    <html lang="en" className={manrope.variable}>
+    <html lang="en" className={manrope.variable} suppressHydrationWarning>
       <head>
         {/* Icons + manifest are auto-injected by Next.js metadata (see icons + manifest fields above). */}
         <meta name="apple-mobile-web-app-capable" content="yes" />
