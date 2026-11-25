@@ -300,7 +300,7 @@ def mix_sfx(scenes, wav_path, total):
 
 
 # ---------------------------------------------------------------- shared CTA scene
-def cta_scene(lesson_title, duration=3.6, kicker="FREE 5-MINUTE LESSON"):
+def cta_scene(lesson_title, duration=3.6, kicker="FREE 5-MINUTE LESSON", extra="+ flashcards that make it stick"):
     logo = Image.open(BRAND["logo"]).convert("RGBA").resize((220, 220), Image.LANCZOS)
     plate = rounded((260, 260), 60, (255, 255, 255, 255))
     plate.alpha_composite(logo, (20, 20))
@@ -309,6 +309,7 @@ def cta_scene(lesson_title, duration=3.6, kicker="FREE 5-MINUTE LESSON"):
     link = text_block("Link in bio", "black", 64, BRAND["white"])
     url = text_block(BRAND["url"], "semi", 44, BRAND["muted"])
     legal = text_block(BRAND["legal"], "semi", 34, BRAND["dim"])
+    extra_img = text_block(extra, "bold", 50, BRAND["gold"], max_w=920) if extra else None
     pill = rounded((link.width + 120, link.height + 50), 60, BRAND["gold"] + (255,))
     link_dark = text_block("Link in bio", "black", 64, BRAND["bg_top"])
 
@@ -317,6 +318,9 @@ def cta_scene(lesson_title, duration=3.6, kicker="FREE 5-MINUTE LESSON"):
         paste_center(img, kicker, W / 2, 790, alpha=prog(t, 0.3, 0.3))
         paste_center(img, title, W / 2, 790 + 60 + title.height / 2, scale=ease_out_back(prog(t, 0.4, 0.5)))
         y = 790 + 120 + title.height + 70
+        if extra_img:
+            paste_center(img, extra_img, W / 2, 790 + 80 + title.height + 30, alpha=prog(t, 0.7, 0.3))
+            y += 70
         s = ease_out_back(prog(t, 0.9, 0.45)) * (1 + 0.04 * math.sin(max(0, t - 1.4) * 6))
         paste_center(img, pill, W / 2, y, scale=s)
         paste_center(img, link_dark, W / 2, y - 4, scale=s)
