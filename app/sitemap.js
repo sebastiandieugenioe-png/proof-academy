@@ -1,6 +1,7 @@
 import { allLessonPointers } from '@/lib/content';
 import { AI_COURSES } from '@/lib/ai-content';
 import { getDb } from '@/lib/mongo';
+import { GUIDES } from '@/lib/guides';
 
 const site = process.env.NEXT_PUBLIC_BASE_URL || 'https://onlinespiritsclub.com';
 
@@ -11,6 +12,13 @@ export default async function sitemap() {
   const base = [
     { url: `${site}/`, lastModified: now, changeFrequency: 'weekly', priority: 1 },
     { url: `${site}/about`, lastModified: now, changeFrequency: 'monthly', priority: 0.6 },
+    { url: `${site}/guides`, lastModified: now, changeFrequency: 'weekly', priority: 0.7 },
+    ...GUIDES.map((g) => ({
+      url: `${site}/guides/${g.slug}`,
+      lastModified: new Date(`${g.updated || g.published}T12:00:00Z`),
+      changeFrequency: 'monthly',
+      priority: 0.8,
+    })),
   ];
   const staticLessons = allLessonPointers().map((p) => ({
     url: `${site}/learn/${p.lessonSlug}`,

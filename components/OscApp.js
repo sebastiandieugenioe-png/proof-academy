@@ -175,6 +175,7 @@ const TopBar = ({ user, onNav, onLogout }) => {
           {!user && (
             <>
               <a href="/#paths"  className="text-sm px-3 h-9 inline-flex items-center rounded-md hover:bg-slate-100 text-slate-700">Learning Paths</a>
+              <a href="/guides"  className="text-sm px-3 h-9 inline-flex items-center rounded-md hover:bg-slate-100 text-slate-700">Guides</a>
               <a href="/about"   className="text-sm px-3 h-9 inline-flex items-center rounded-md hover:bg-slate-100 text-slate-700">About</a>
               <button onClick={() => { if (typeof window !== 'undefined') window.location.href = '/login' }} className="ml-1 text-sm h-9 px-3 inline-flex items-center rounded-md hover:bg-slate-100 text-slate-700 font-medium">Log in</button>
             </>
@@ -232,6 +233,7 @@ const TopBar = ({ user, onNav, onLogout }) => {
           {!user && (
             <>
               <a href="/#paths"  onClick={closeAnd()} className="h-12 flex items-center border-b border-slate-100 text-slate-900 text-base font-medium">Learning Paths</a>
+              <a href="/guides"  onClick={closeAnd()} className="h-12 flex items-center border-b border-slate-100 text-slate-900 text-base font-medium">Guides</a>
               <a href="/about"   onClick={closeAnd()} className="h-12 flex items-center border-b border-slate-100 text-slate-900 text-base font-medium">About</a>
               <a href={START_HREF} onClick={(e) => { e.preventDefault(); setMobileOpen(false); onNav({ name: 'course', slug: START_PATH }) }} className="mt-4 h-12 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium inline-flex items-center justify-center gap-2">Start Learning</a>
             </>
