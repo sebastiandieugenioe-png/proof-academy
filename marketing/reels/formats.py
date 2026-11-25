@@ -218,3 +218,164 @@ def myth_fact_scenes(myths, fact, note=None):
 
 __all__ = ["hook_scene", "chat_scene", "versus_scene", "statement_scene", "quiz_scenes",
            "myth_fact_scenes", "cta_scene"]
+
+
+# ================================================================ new formats (25/11/2026)
+def _countdown(img, t, start, count, y=1500):
+    if start <= t < start + count:
+        n = count - int(t - start)
+        c = text_block(str(n), "black", 160, BRAND["gold"])
+        paste_center(img, c, W / 2, y, scale=ease_out_back(((t - start) % 1) / 0.3))
+
+
+# ---------------------------------------------------------------- Did you know?
+def did_you_know_scenes(fact, detail=None, duration=5.5):
+    kick = text_block("DID YOU KNOW?", "black", 64, BRAND["gold"])
+    big = text_block(fact, "black", 96, BRAND["white"], max_w=930)
+    det = text_block(detail, "bold", 52, BRAND["muted"], max_w=900) if detail else None
+
+    def draw(img, t):
+        cy = H / 2 - (90 if det else 0)
+        paste_center(img, kick, W / 2, cy - big.height / 2 - 90, scale=ease_out_back(prog(t, 0, 0.4)),
+                     rot=3 * math.sin(t * 3) * (1 - prog(t, 0.4, 0.6)))
+        paste_center(img, big, W / 2, cy, scale=ease_out_back(prog(t, 0.5, 0.5)))
+        if det:
+            paste_center(img, det, W / 2, cy + big.height / 2 + 120, alpha=prog(t, 1.8, 0.4))
+    sfx = [(0, "whoosh", 0.6), (0.5, "thump", 0.8)] + ([(1.8, "chime", 0.6)] if det else [])
+    return [Scene(duration, draw, sfx)]
+
+
+# ---------------------------------------------------------------- True or false
+def true_false_scenes(statement, is_true, explanation, count=3):
+    kick = text_block("TRUE OR FALSE?", "black", 56, BRAND["gold"])
+    st = text_block(f"“{statement}”", "black", 84, BRAND["white"], max_w=920)
+    ex = text_block(explanation, "bold", 50, BRAND["muted"], max_w=900)
+    btn = {k: text_block(k, "black", 64, BRAND["white"]) for k in ("TRUE", "FALSE")}
+    start = 1.6
+    reveal = start + count
+    dur = reveal + 3.4
+
+    def draw(img, t):
+        paste_center(img, kick, W / 2, 400, alpha=prog(t, 0, 0.3))
+        paste_center(img, st, W / 2, 400 + 90 + st.height / 2, scale=ease_out_back(prog(t, 0.1, 0.45)))
+        by = 400 + 90 + st.height + 170
+        for i, k in enumerate(("TRUE", "FALSE")):
+            right = (k == "TRUE") == is_true
+            col = (255, 255, 255, 40)
+            if t >= reveal:
+                col = (34, 197, 94, 235) if right else (239, 68, 68, 90)
+            b = rounded((400, 150), 40, col, outline=(255, 255, 255, 110), width=3)
+            b.alpha_composite(btn[k], ((400 - btn[k].width) // 2, (150 - btn[k].height) // 2 + 6))
+            s = ease_out_back(prog(t, 0.9 + 0.2 * i, 0.35))
+            if t >= reveal and right:
+                s *= 1 + 0.07 * math.sin(min(1, (t - reveal) / 0.3) * math.pi)
+            paste_center(img, b, W / 2 + (-230 if i == 0 else 230), by, scale=s)
+        _countdown(img, t, start, count, y=by + 260)
+        if t >= reveal:
+            paste_center(img, ex, W / 2, by + 260 + ex.height / 2, alpha=prog(t, reveal + 0.3, 0.3))
+    sfx = [(0, "whoosh", 0.6), (0.9, "pop", 0.5), (1.1, "pop", 0.5)]
+    sfx += [(start + k, "tick", 0.9) for k in range(count)]
+    sfx += [(reveal, "ding" if True else "buzz", 0.9)]
+    return [Scene(dur, draw, sfx)]
+
+
+# ---------------------------------------------------------------- Guess the drink
+def guess_scenes(clues, answer, detail=None, count=3):
+    kick = text_block("GUESS THE DRINK", "black", 60, BRAND["gold"])
+    cl = [text_block(f"{i+1}.  {c}", "bold", 56, BRAND["white"], max_w=820, align="left") for i, c in enumerate(clues)]
+    ans = text_block(answer, "black", 110, BRAND["gold"], max_w=920)
+    det = text_block(detail, "bold", 48, BRAND["muted"], max_w=900) if detail else None
+    per = 1.4
+    start = 0.6 + per * len(cl)
+    reveal = start + count
+    dur = reveal + 3.4
+
+    def draw(img, t):
+        paste_center(img, kick, W / 2, 330, scale=ease_out_back(prog(t, 0, 0.4)))
+        y = 470
+        for i, c in enumerate(cl):
+            s0 = 0.6 + per * i
+            if t < s0:
+                break
+            box = rounded((940, c.height + 70), 36, (255, 255, 255, 30))
+            box.alpha_composite(c, (50, 40))
+            x_off = (1 - ease_out_cubic(prog(t, s0, 0.35))) * 300
+            paste_center(img, box, W / 2 + x_off, y + box.height / 2, alpha=prog(t, s0, 0.25))
+            y += box.height + 40
+        _countdown(img, t, start, count, y=y + 140)
+        if t >= reveal:
+            paste_center(img, ans, W / 2, y + 150, scale=ease_out_back(prog(t, reveal, 0.45)))
+            if det:
+                paste_center(img, det, W / 2, y + 150 + ans.height / 2 + 90, alpha=prog(t, reveal + 0.6, 0.3))
+    sfx = [(0, "whoosh", 0.6)] + [(0.6 + per * i, "pop", 0.6) for i in range(len(cl))]
+    sfx += [(start + k, "tick", 0.9) for k in range(count)] + [(reveal, "ding", 0.9)]
+    return [Scene(dur, draw, sfx)]
+
+
+# ---------------------------------------------------------------- Which is which?
+def which_is_which_scenes(question, a, b, answer_a, answer_b, count=3):
+    """a/b: list of 2-3 short traits for each card; answer_x: the label revealed on each card."""
+    q = text_block(question, "black", 80, BRAND["white"], max_w=920)
+
+    def card(label, traits, reveal_text, revealed):
+        lab = text_block(revealed and reveal_text or label, "black", 64 if revealed else 110,
+                         BRAND["gold"] if revealed else BRAND["white"], max_w=420)
+        tr = text_block("\n".join(traits), "bold", 42, BRAND["white"], max_w=400, line_gap=1.3)
+        c = rounded((470, lab.height + tr.height + 140), 44, (255, 255, 255, 34), outline=(255, 255, 255, 90), width=3)
+        c.alpha_composite(lab, ((470 - lab.width) // 2, 40))
+        c.alpha_composite(tr, ((470 - tr.width) // 2, 80 + lab.height))
+        return c
+    start = 2.0
+    reveal = start + count
+    dur = reveal + 3.2
+
+    def draw(img, t):
+        paste_center(img, q, W / 2, 420, scale=ease_out_back(prog(t, 0, 0.45)))
+        rv = t >= reveal
+        for i, (lab, tr, ans) in enumerate((("A", a, answer_a), ("B", b, answer_b))):
+            c = card(lab, tr, ans, rv)
+            s = ease_out_back(prog(t, 0.7 + 0.3 * i, 0.4))
+            if rv:
+                s *= 1 + 0.05 * math.sin(min(1, (t - reveal) / 0.3) * math.pi)
+            paste_center(img, c, W / 2 + (-255 if i == 0 else 255), 1000, scale=s)
+        _countdown(img, t, start, count, y=1500)
+    sfx = [(0, "whoosh", 0.6), (0.7, "pop", 0.6), (1.0, "pop", 0.6)]
+    sfx += [(start + k, "tick", 0.9) for k in range(count)] + [(reveal, "ding", 0.9)]
+    return [Scene(dur, draw, sfx)]
+
+
+# ---------------------------------------------------------------- Hook + key points (experience / story)
+def points_scenes(title, points, kicker=None, per=1.8):
+    k = text_block(kicker, "bold", 46, BRAND["gold"]) if kicker else None
+    tt = text_block(title, "black", 80, BRAND["white"], max_w=920)
+    pts = []
+    for i, p in enumerate(points):
+        num = text_block(str(i + 1), "black", 70, BRAND["bg_top"])
+        txt = text_block(p, "bold", 52, BRAND["white"], max_w=720, align="left")
+        h = max(txt.height + 40, 120)
+        row = Image.new("RGBA", (940, h), (0, 0, 0, 0))
+        circ = rounded((110, 110), 55, BRAND["gold"] + (255,))
+        circ.alpha_composite(num, ((110 - num.width) // 2, (110 - num.height) // 2 + 4))
+        row.alpha_composite(circ, (0, (h - 110) // 2))
+        row.alpha_composite(txt, (150, (h - txt.height) // 2 + 4))
+        pts.append(row)
+    dur = 1.2 + per * len(pts) + 1.4
+
+    def draw(img, t):
+        y = 360
+        if k:
+            paste_center(img, k, W / 2, y, alpha=prog(t, 0, 0.3)); y += 80
+        paste_center(img, tt, W / 2, y + tt.height / 2, scale=ease_out_back(prog(t, 0.1, 0.45)))
+        y += tt.height + 90
+        for i, r in enumerate(pts):
+            s0 = 1.2 + per * i
+            if t < s0:
+                break
+            x_off = (1 - ease_out_cubic(prog(t, s0, 0.35))) * -300
+            paste_center(img, r, W / 2 + x_off, y + r.height / 2, alpha=prog(t, s0, 0.25))
+            y += r.height + 50
+    sfx = [(0, "whoosh", 0.6), (0.1, "thump", 0.7)] + [(1.2 + per * i, "pop", 0.6) for i in range(len(pts))]
+    return [Scene(dur, draw, sfx)]
+
+
+__all__ += ["did_you_know_scenes", "true_false_scenes", "guess_scenes", "which_is_which_scenes", "points_scenes"]
