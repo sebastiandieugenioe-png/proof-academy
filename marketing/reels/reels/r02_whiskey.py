@@ -59,6 +59,7 @@ if __name__ == "__main__":
         engine.SUBS = engine.build_subs_from_phrases(pspans) if pspans else engine.build_subs(SEGMENTS, spans)
         print('exact phrase alignment:', bool(pspans))
         print("scene durations:", [round(x, 2) for x in durs], "voice:", round(total, 2))
+    engine.MUSIC = None if "--no-music" in sys.argv else engine.pick_music(2)
     chat_at = points_at = None
     if voice and pspans:
         st = {p: a for a, b, p in pspans}

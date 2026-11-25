@@ -403,6 +403,47 @@ def mix_sfx(scenes, wav_path, total):  # noqa: F811  (voice under SFX)
         subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", VOICE, "-i", tmp, "-filter_complex",
                         "[0:a]aresample=44100,volume=1.0[v];[1:a]volume=0.35[s];[v][s]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.95[o]",
                         "-map", "[o]", "-ac", "1", "-ar", "44100", "-t", f"{total:.3f}", wav_path], check=True)
+    if MUSIC:
+        add_music(wav_path, total)
+
+
+# ================================================================ background music (brand tracks)
+MUSIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "music")
+MUSIC_TRACKS = ["gem_of_love.mp3", "on_my_level.mp3", "rubberband.mp3", "little_kitty.mp3", "holding_on.mp3"]
+MUSIC = None          # track file name in MUSIC_DIR, or None for no music
+MUSIC_START = 8.0     # seconds into the track (skip soft intros)
+MUSIC_LEVEL_DB = -30  # target mean loudness of the bed before ducking
+
+
+def pick_music(reel_number):
+    """Rotate brand tracks by reel number so consecutive reels sound different."""
+    return MUSIC_TRACKS[(reel_number - 1) % len(MUSIC_TRACKS)]
+
+
+def _mean_db(path):
+    r = subprocess.run(["ffmpeg", "-hide_banner", "-i", path, "-af", "volumedetect", "-f", "null", "-"],
+                       capture_output=True, text=True)
+    for line in r.stderr.splitlines():
+        if "mean_volume" in line:
+            return float(line.split("mean_volume:")[1].split()[0])
+    return -14.0
+
+
+def add_music(wav_path, total):
+    """Mix the brand track under voice+SFX, ducked by the voice (sidechain), with fades."""
+    track = os.path.join(MUSIC_DIR, MUSIC)
+    gain = MUSIC_LEVEL_DB - _mean_db(track)
+    tmp = wav_path + ".vo.wav"
+    os.replace(wav_path, tmp)
+    fade_out = max(0.0, total - 1.5)
+    fc = (f"[1:a]atrim=start={MUSIC_START},asetpts=PTS-STARTPTS,aresample=44100,aformat=channel_layouts=stereo,"
+          f"volume={gain:.1f}dB,afade=t=in:d=0.6,afade=t=out:st={fade_out:.2f}:d=1.5[m];"
+          "[0:a]aformat=channel_layouts=stereo,asplit=2[v][sc];"
+          "[m][sc]sidechaincompress=threshold=0.03:ratio=6:attack=20:release=350[md];"
+          "[v][md]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95[o]")
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", tmp, "-i", track, "-filter_complex", fc,
+                    "-map", "[o]", "-ac", "2", "-ar", "44100", "-t", f"{total:.3f}", wav_path], check=True)
+    os.remove(tmp)
 
 
 def align_breaks(audio_path, segments, min_sil=0.2, noise="-35dB"):
