@@ -31,7 +31,7 @@ const contentHtml = `
 <p><strong>Online Spirits Club</strong> is a free educational platform for people who make hospitality happen — bartenders, waiters, sommeliers, baristas, students, home enthusiasts. We teach the essentials of spirits, cocktails, beer, wine and service in short, focused lessons you can finish on a break.</p>
 
 <h2>Why we exist</h2>
-<p>Great hospitality is built on knowledge — where a spirit comes from, why a cocktail works, how to describe a wine to a guest without pretence. That knowledge is scattered across expensive courses, dense books, and word of mouth. We wanted to make it accessible to anyone with a phone and five minutes.</p>
+<p>Great hospitality starts with people: being friendly and connecting with your guests comes first. Knowledge is what takes you further — where a spirit comes from, why a cocktail works, how to describe a wine to a guest without pretence. That knowledge is scattered across expensive courses, dense books, and word of mouth. We wanted to make it accessible to anyone with a phone and five minutes.</p>
 
 <p>So we built Online Spirits Club: a place where you can learn something real about your craft, for free, without ads or paywalls, whenever you have a moment.</p>
 

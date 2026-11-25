@@ -40,9 +40,9 @@ export default function AboutPage() {
             What we believe
           </div>
           <div className="space-y-6 text-lg text-slate-700 leading-relaxed">
-            <p>Great hospitality is built on knowledge, not personality.</p>
-            <p>Knowledge is a discipline. It rewards structure, repetition and time.</p>
-            <p>Professionals deserve serious educational institutions &mdash; not marketplaces, not video libraries, not sponsored content. That is what we are building.</p>
+            <p>Great hospitality starts with people. Being friendly and actually connecting with your guests comes first. Always.</p>
+            <p>Knowledge is what takes you further. It's what gets you into a better bar, a better job, and gives you the confidence to answer any question a guest throws at you.</p>
+            <p>So we made learning it easy: five minutes, a few flashcards, and it sticks. Free.</p>
           </div>
         </section>
 
