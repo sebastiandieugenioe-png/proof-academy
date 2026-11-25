@@ -330,6 +330,16 @@ def cta_scene(lesson_title, duration=3.6, kicker="FREE 5-MINUTE LESSON", extra="
     return Scene(duration, draw, sfx=[(0.0, "whoosh", 0.6), (0.45, "pop", 0.7), (0.9, "chime", 0.8)])
 
 
+# Rule since 25/11/2026: every reel points to the long guide on the site about its topic.
+GUIDE_VOICE_LINE = "Full guide on our site, plus a free five-minute lesson and flashcards. Link in bio."
+
+
+def guide_cta_scene(topic, duration=3.8):
+    """CTA for reels that have a guide in /guides: 'FULL GUIDE ON THE SITE' + topic + lesson/flashcards line."""
+    return cta_scene(topic, duration=duration, kicker="FULL GUIDE ON OUR SITE",
+                     extra="+ free 5-min lesson & flashcards")
+
+
 # ================================================================ voice sync + subtitles
 SUBS = []          # [(start, end, text)] in global seconds; drawn by chrome()
 VOICE = None       # path to narration audio (mixed under SFX)
