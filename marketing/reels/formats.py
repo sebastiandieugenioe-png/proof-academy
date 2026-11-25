@@ -24,7 +24,7 @@ def hook_scene(line, sub=None, duration=2.6, shake=False):
 
 
 # ---------------------------------------------------------------- chat
-def chat_scene(messages, title=None, step=1.7, typing=0.7, tail=1.6):
+def chat_scene(messages, title=None, step=1.7, typing=0.7, tail=1.6, fit=None, at=None):
     """messages: list of (side, text, highlight_words). side 'guest' (left) or 'bar' (right).
     Bartender messages show a typing indicator first."""
     max_w = 760
@@ -41,6 +41,9 @@ def chat_scene(messages, title=None, step=1.7, typing=0.7, tail=1.6):
     label_bar = text_block("Bartender", "semi", 32, BRAND["gold"])
     head = text_block(title, "black", 64, BRAND["white"], max_w=900) if title else None
 
+    if fit:
+        n_bar = sum(1 for sd, _ in bubbles if sd == "bar")
+        step = max(0.9, (fit - 0.3 - tail - typing * n_bar) / max(1, len(bubbles) - 1 + 0.6))
     # timeline
     times, cur = [], 0.3
     for side, _ in bubbles:
@@ -48,7 +51,9 @@ def chat_scene(messages, title=None, step=1.7, typing=0.7, tail=1.6):
             cur += typing
         times.append(cur)
         cur += step
-    duration = cur - step + tail
+    duration = fit or (cur - step + tail)
+    if at:
+        times = list(at)
 
     def draw(img, t):
         top = 260
@@ -345,7 +350,7 @@ def which_is_which_scenes(question, a, b, answer_a, answer_b, count=3):
 
 
 # ---------------------------------------------------------------- Hook + key points (experience / story)
-def points_scenes(title, points, kicker=None, per=1.8):
+def points_scenes(title, points, kicker=None, per=1.8, fit=None, at=None):
     k = text_block(kicker, "bold", 46, BRAND["gold"]) if kicker else None
     tt = text_block(title, "black", 80, BRAND["white"], max_w=920)
     pts = []
@@ -359,7 +364,9 @@ def points_scenes(title, points, kicker=None, per=1.8):
         row.alpha_composite(circ, (0, (h - 110) // 2))
         row.alpha_composite(txt, (150, (h - txt.height) // 2 + 4))
         pts.append(row)
-    dur = 1.2 + per * len(pts) + 1.4
+    if fit:
+        per = max(1.0, (fit - 2.0) / len(pts))
+    dur = fit or (1.2 + per * len(pts) + 1.4)
 
     def draw(img, t):
         y = 360
@@ -368,13 +375,13 @@ def points_scenes(title, points, kicker=None, per=1.8):
         paste_center(img, tt, W / 2, y + tt.height / 2, scale=ease_out_back(prog(t, 0.1, 0.45)))
         y += tt.height + 90
         for i, r in enumerate(pts):
-            s0 = 1.2 + per * i
+            s0 = at[i] if at else 1.2 + per * i
             if t < s0:
                 break
             x_off = (1 - ease_out_cubic(prog(t, s0, 0.35))) * -300
             paste_center(img, r, W / 2 + x_off, y + r.height / 2, alpha=prog(t, s0, 0.25))
             y += r.height + 50
-    sfx = [(0, "whoosh", 0.6), (0.1, "thump", 0.7)] + [(1.2 + per * i, "pop", 0.6) for i in range(len(pts))]
+    sfx = [(0, "whoosh", 0.6), (0.1, "thump", 0.7)] + [((at[i] if at else 1.2 + per * i), "pop", 0.6) for i in range(len(pts))]
     return [Scene(dur, draw, sfx)]
 
 

@@ -300,11 +300,11 @@ def mix_sfx(scenes, wav_path, total):
 
 
 # ---------------------------------------------------------------- shared CTA scene
-def cta_scene(lesson_title, duration=3.6):
+def cta_scene(lesson_title, duration=3.6, kicker="FREE 5-MINUTE LESSON"):
     logo = Image.open(BRAND["logo"]).convert("RGBA").resize((220, 220), Image.LANCZOS)
     plate = rounded((260, 260), 60, (255, 255, 255, 255))
     plate.alpha_composite(logo, (20, 20))
-    kicker = text_block("FREE 5-MINUTE LESSON", "bold", 44, BRAND["gold"])
+    kicker = text_block(kicker, "bold", 44, BRAND["gold"])
     title = text_block(lesson_title, "black", 96, BRAND["white"], max_w=920)
     link = text_block("Link in bio", "black", 64, BRAND["white"])
     url = text_block(BRAND["url"], "semi", 44, BRAND["muted"])
@@ -324,3 +324,166 @@ def cta_scene(lesson_title, duration=3.6):
         paste_center(img, legal, W / 2, H - 250, alpha=prog(t, 1.2, 0.3))
 
     return Scene(duration, draw, sfx=[(0.0, "whoosh", 0.6), (0.45, "pop", 0.7), (0.9, "chime", 0.8)])
+
+
+# ================================================================ voice sync + subtitles
+SUBS = []          # [(start, end, text)] in global seconds; drawn by chrome()
+VOICE = None       # path to narration audio (mixed under SFX)
+
+
+def detect_breaks(audio_path, n_breaks, min_sil=0.25, noise="-35dB"):
+    """Return (boundaries, speech_spans): the n_breaks longest silences (sorted by time)
+    split the narration into n_breaks+1 segments."""
+    r = subprocess.run(["ffmpeg", "-i", audio_path, "-af", f"silencedetect=noise={noise}:d={min_sil}", "-f", "null", "-"],
+                       capture_output=True, text=True)
+    sil, start = [], None
+    for line in r.stderr.splitlines():
+        if "silence_start" in line:
+            start = float(line.split("silence_start:")[1].split()[0])
+        elif "silence_end" in line and start is not None:
+            end = float(line.split("silence_end:")[1].split("|")[0])
+            sil.append((start, end)); start = None
+    dur = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", audio_path],
+                               capture_output=True, text=True).stdout.strip())
+    inner = [s for s in sil if s[0] > 0.05 and s[1] < dur - 0.05]
+    pick = sorted(sorted(inner, key=lambda s: s[1] - s[0], reverse=True)[:n_breaks])
+    if len(pick) < n_breaks:
+        raise RuntimeError(f"found {len(pick)} pauses, expected {n_breaks}")
+    lead = sil[0][1] if sil and sil[0][0] <= 0.05 else 0.0
+    spans, cur = [], lead
+    for s, e in pick:
+        spans.append((cur, s)); cur = e
+    spans.append((cur, dur))
+    return pick, spans, dur
+
+
+def build_subs(segments, spans, max_words=5):
+    subs = []
+    for text, (s, e) in zip(segments, spans):
+        words = text.split()
+        chunks = [" ".join(words[i:i + max_words]) for i in range(0, len(words), max_words)]
+        total = sum(len(c) for c in chunks) or 1
+        t = s
+        for c in chunks:
+            d = (e - s) * len(c) / total
+            subs.append((t, t + d, c)); t += d
+    return subs
+
+
+def draw_subs(img, gt):
+    cur = next((x for x in SUBS if x[0] <= gt < x[1]), None)
+    if not cur:
+        return
+    txt = text_block(cur[2], "black", 58, BRAND["white"], max_w=900)
+    pill = rounded((txt.width + 70, txt.height + 40), 30, (2, 6, 23, 200))
+    pill.alpha_composite(txt, (35, 24))
+    paste_center(img, pill, W / 2, H - 420)
+
+
+_chrome_base = chrome
+
+
+def chrome(img, gt, total):  # noqa: F811  (adds subtitles on top)
+    draw_subs(img, gt)
+    _chrome_base(img, gt, total)
+
+
+_mix_base = mix_sfx
+
+
+def mix_sfx(scenes, wav_path, total):  # noqa: F811  (voice under SFX)
+    _mix_base(scenes, wav_path, total)
+    if VOICE:
+        tmp = wav_path + ".sfx.wav"
+        os.replace(wav_path, tmp)
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", VOICE, "-i", tmp, "-filter_complex",
+                        "[0:a]aresample=44100,volume=1.0[v];[1:a]volume=0.35[s];[v][s]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.95[o]",
+                        "-map", "[o]", "-ac", "1", "-ar", "44100", "-t", f"{total:.3f}", wav_path], check=True)
+
+
+def align_breaks(audio_path, segments, min_sil=0.2, noise="-35dB"):
+    """Snap each expected segment boundary (estimated from character count) to the nearest real pause.
+    Works when the TTS model ignores <break> tags and pauses naturally."""
+    r = subprocess.run(["ffmpeg", "-i", audio_path, "-af", f"silencedetect=noise={noise}:d={min_sil}", "-f", "null", "-"],
+                       capture_output=True, text=True)
+    sil, start = [], None
+    for line in r.stderr.splitlines():
+        if "silence_start" in line:
+            start = float(line.split("silence_start:")[1].split()[0])
+        elif "silence_end" in line and start is not None:
+            sil.append((start, float(line.split("silence_end:")[1].split("|")[0]))); start = None
+    dur = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", audio_path],
+                               capture_output=True, text=True).stdout.strip())
+    lead = sil[0][1] if sil and sil[0][0] <= 0.05 else 0.0
+    inner = [s for s in sil if s[0] > 0.05 and s[1] < dur - 0.05]
+    lens = [len(s) for s in segments]
+    tot = sum(lens)
+    breaks, cum, used = [], 0, set()
+    for L in lens[:-1]:
+        cum += L
+        exp = lead + (dur - lead) * cum / tot
+        cand = [(abs((s + e) / 2 - exp), i) for i, (s, e) in enumerate(inner)
+                if i not in used and (not breaks or s > breaks[-1][1] - 1e-6)]
+        _, i = min(cand)
+        used.add(i)
+        breaks.append(inner[i])
+    spans, cur = [], lead
+    for s, e in breaks:
+        spans.append((cur, s)); cur = e
+    spans.append((cur, dur))
+    return breaks, spans, dur
+
+
+import re as _re
+
+
+def _phrases(seg):
+    """Split on sentence-ish punctuation where TTS voices usually pause (. ? ! :), not commas."""
+    parts = [p.strip() for p in _re.split(r"(?<=[.?!:])\s+", seg) if p.strip()]
+    return parts or [seg]
+
+
+def align_phrases(audio_path, segments, noise="-35dB"):
+    """Exact alignment when the number of pauses matches the number of phrase gaps.
+    Returns (breaks, spans, dur, phrase_spans) with phrase_spans = [(start, end, text)]."""
+    for min_sil in (0.25, 0.22, 0.2, 0.18, 0.3, 0.35):
+        r = subprocess.run(["ffmpeg", "-i", audio_path, "-af", f"silencedetect=noise={noise}:d={min_sil}", "-f", "null", "-"],
+                           capture_output=True, text=True)
+        sil, start = [], None
+        for line in r.stderr.splitlines():
+            if "silence_start" in line:
+                start = float(line.split("silence_start:")[1].split()[0])
+            elif "silence_end" in line and start is not None:
+                sil.append((start, float(line.split("silence_end:")[1].split("|")[0]))); start = None
+        dur = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
+                                    audio_path], capture_output=True, text=True).stdout.strip())
+        lead = sil[0][1] if sil and sil[0][0] <= 0.05 else 0.0
+        inner = [s for s in sil if s[0] > 0.05 and s[1] < dur - 0.05]
+        phr = [(si, p) for si, seg in enumerate(segments) for p in _phrases(seg)]
+        if len(inner) == len(phr) - 1:
+            pspans, cur = [], lead
+            for (s, e), (si, p) in zip(inner + [(dur, dur)], phr):
+                pspans.append((cur, s, p, si)); cur = e
+            breaks, spans = [], []
+            for si in range(len(segments)):
+                mine = [x for x in pspans if x[3] == si]
+                spans.append((mine[0][0], mine[-1][1]))
+            for si in range(len(segments) - 1):
+                a = spans[si][1]; b = spans[si + 1][0]
+                breaks.append((a, b))
+            return breaks, spans, dur, [(a, b, p) for a, b, p, _ in pspans]
+    b, s, d = align_breaks(audio_path, segments)
+    return b, s, d, None
+
+
+def build_subs_from_phrases(pspans, max_words=5):
+    subs = []
+    for s, e, text in pspans:
+        words = text.split()
+        chunks = [" ".join(words[i:i + max_words]) for i in range(0, len(words), max_words)]
+        total = sum(len(c) for c in chunks) or 1
+        t = s
+        for c in chunks:
+            d = (e - s) * len(c) / total
+            subs.append((t, t + d, c)); t += d
+    return subs
