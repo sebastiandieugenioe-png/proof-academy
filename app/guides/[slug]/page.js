@@ -58,7 +58,7 @@ export default async function GuidePage({ params }) {
     description: g.description,
     datePublished: g.published,
     dateModified: g.updated || g.published,
-    author: { '@type': 'Person', name: author.name, jobTitle: author.role, url: `${siteUrl}/about` },
+    author: { '@type': 'Person', name: author.name, jobTitle: author.role, url: author.linkedin || `${siteUrl}/about`, ...(author.linkedin ? { sameAs: [author.linkedin] } : {}) },
     publisher: { '@type': 'Organization', name: 'Online Spirits Club', url: siteUrl },
     mainEntityOfPage: url,
     url,
@@ -194,6 +194,11 @@ export default async function GuidePage({ params }) {
               <div className="font-semibold text-slate-900">{author.name}</div>
               <div className="text-sm text-slate-500">{author.role}</div>
               <p className="mt-2 text-sm text-slate-700 leading-relaxed">{author.bio}</p>
+              {author.linkedin && (
+                <a href={author.linkedin} rel="me noopener" target="_blank" className="mt-2 inline-block text-sm font-medium text-blue-700 hover:underline">
+                  Connect with me on LinkedIn
+                </a>
+              )}
             </div>
           </section>
 
