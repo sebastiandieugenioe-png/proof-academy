@@ -15,7 +15,7 @@ SEGMENTS = [
     "Spicy? Rye: peppery and dry.",
     "Smoky? A Scotch from Islay.",
     "Bar manager tip: recommend something you've tried yourself.",
-    "Learn every whiskey style in five minutes, for free. Link in bio.",
+    "Learn every whiskey style in five minutes, then lock it in with free flashcards. Link in bio.",
 ]
 GROUPS = [(0, 1), (2, 3), (4, 6), (7, 7), (8, 8)]   # segments per scene
 DEFAULT = [2.8, 8.0, 7.5, 3.0, 3.8]
