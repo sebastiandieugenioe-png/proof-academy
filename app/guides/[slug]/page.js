@@ -196,7 +196,7 @@ export default async function GuidePage({ params }) {
               <p className="mt-2 text-sm text-slate-700 leading-relaxed">{author.bio}</p>
               {author.linkedin && (
                 <a href={author.linkedin} rel="me noopener" target="_blank" className="mt-2 inline-block text-sm font-medium text-blue-700 hover:underline">
-                  Connect with me on LinkedIn
+                  LinkedIn profile
                 </a>
               )}
             </div>
