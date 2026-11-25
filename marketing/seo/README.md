@@ -2,10 +2,12 @@
 
 Same dynamic as the reels: the owner chooses, Claude does the rest.
 
-1. **Sunday:** the weekly task proposes 2–3 guide ideas in the "Calendario de contenido" sheet (Formato = "Artículo SEO", Estado = "Propuesta"). Each answers one question people actually search, ideally on the same topic as a reel that week.
-2. **Owner:** marks the ones he wants as "Elegido" and adds 2–3 lines of his own experience (column B).
-3. **Claude:** writes `lib/guides/<slug>.js` (see the format in `lib/guides/index.js`), adds it to `GUIDES`, commits and pushes.
-4. **Owner:** deploys with the usual Emergent prompt (one deploy per week for all new guides).
+**Article first, then reels** (owner's rule, 25/11/2026). Each week = 3 articles, cut into 7 reels that all point back to their article.
+
+1. **Sunday:** the weekly task adds 3 article rows to the "Calendario de contenido" sheet ("[ARTÍCULO A1] …", Formato = "Artículo SEO") and, under each one, its 2-3 reel rows ("[A1] <hook>"). All in Estado "Propuesta".
+2. **Owner:** marks the articles he wants as "Elegido" (their reels go with them; he can drop any reel) and adds 2–3 lines of his own experience (column B).
+3. **Claude:** writes the article first (`lib/guides/<slug>.js`, added to `GUIDES`), commits and pushes. Then makes that article's reels with `engine.guide_cta_scene()` so each one sends people to the guide.
+4. **Owner:** deploys with the Emergent prompt (Claude always gives it ready to paste), then schedules the reels.
 5. **Monthly:** check Search Console (queries with impressions) and improve those guides; bump `updated`.
 
 ## Rules
