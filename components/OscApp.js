@@ -1445,7 +1445,7 @@ const ProfileView = ({ user, setUser, onNav }) => {
               This will permanently erase your account, your learning mastery, every study card practice record, all comments you have posted, and your newsletter preferences. Some anonymised statistics may be retained (with no personal data). This action is <strong className="font-semibold">permanent and cannot be undone</strong>.
             </p>
             <p className="mt-2 text-xs text-red-700/80">
-              Want a copy of your data first? Email <a href="mailto:hello@onlinespiritsclub.com" className="underline">hello@onlinespiritsclub.com</a> from this address and we&rsquo;ll send you a GDPR data export within 30 days.
+              Want a copy of your data first? Email <a href="mailto:onlinespiritsclub@gmail.com" className="underline">onlinespiritsclub@gmail.com</a> from this address and we&rsquo;ll send you a GDPR data export within 30 days.
             </p>
             <button
               type="button"

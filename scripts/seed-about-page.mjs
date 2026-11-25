@@ -21,7 +21,7 @@ const MONGO_URL = process.env.MONGO_URL;
 if (!MONGO_URL) { console.error('MONGO_URL is not set.'); process.exit(1); }
 const DB_NAME = (!process.env.DB_NAME || process.env.DB_NAME === 'your_database_name') ? 'osc_db' : process.env.DB_NAME;
 
-const contactEmail = 'hello@onlinespiritsclub.com';
+const contactEmail = 'onlinespiritsclub@gmail.com';
 const siteUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://onlinespiritsclub.com';
 const lastUpdated = new Date().toISOString().slice(0, 10);
 

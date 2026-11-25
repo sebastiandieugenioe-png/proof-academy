@@ -1,6 +1,6 @@
 // One-shot maintenance: force-refresh all legal page content in the DB
 // to match the current lib/legal-pages.js source. Used after unifying
-// contact emails to hello@onlinespiritsclub.com. Safe to re-run — only
+// contact emails to onlinespiritsclub@gmail.com. Safe to re-run — only
 // touches the 6 legal slugs from getLegalPages() and preserves ids.
 //
 // Usage:  node scripts/refresh-legal-pages.mjs

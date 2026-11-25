@@ -25,10 +25,10 @@ if (!MONGO_URL) { console.error('MONGO_URL is not set.'); process.exit(1); }
 const DB_NAME = (!process.env.DB_NAME || process.env.DB_NAME === 'your_database_name') ? 'osc_db' : process.env.DB_NAME;
 
 // Placeholders — edit these once your inboxes are set up, or update via Admin → Pages.
-const contactEmail  = 'hello@onlinespiritsclub.com';
-const privacyEmail  = 'privacy@onlinespiritsclub.com';
-const supportEmail  = 'support@onlinespiritsclub.com';
-const contentEmail  = 'content@onlinespiritsclub.com';
+const contactEmail  = 'onlinespiritsclub@gmail.com';
+const privacyEmail  = 'onlinespiritsclub@gmail.com';
+const supportEmail  = 'onlinespiritsclub@gmail.com';
+const contentEmail  = 'onlinespiritsclub@gmail.com';
 
 const siteUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://onlinespiritsclub.com';
 const lastUpdated = new Date().toISOString().slice(0, 10);
