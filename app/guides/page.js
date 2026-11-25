@@ -31,7 +31,7 @@ export default function GuidesIndex() {
         <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500 font-medium">Guides</div>
         <h1 className="mt-4 text-4xl md:text-5xl font-semibold tracking-tight">Straight answers for behind the bar.</h1>
         <p className="mt-4 text-lg text-slate-600 leading-relaxed">
-          What to say, what to recommend and how to sound sure of it. Each guide links to the free 5-minute lessons and flashcards behind it.
+          What to say, what to recommend, and how to sound like you know your stuff. Every guide links to the free 5-minute lessons and flashcards behind it.
         </p>
 
         <ul className="mt-12 divide-y divide-slate-200 border-y border-slate-200">

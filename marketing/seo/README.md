@@ -9,6 +9,7 @@ Same dynamic as the reels: the owner chooses, Claude does the rest.
 5. **Monthly:** check Search Console (queries with impressions) and improve those guides; bump `updated`.
 
 ## Rules
+- **Voice: follow `VOICE.md`.** Casual, short, Sebastián's way of talking. Never formal or posh.
 - Facts only from the site's lessons; every guide links to the lessons it uses.
 - The owner's experience is what makes each guide worth ranking: no guide without it.
 - Max 2–3 new guides a week (Google's "scaled content abuse" policy targets mass-produced pages).

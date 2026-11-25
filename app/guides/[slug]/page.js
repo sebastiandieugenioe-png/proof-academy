@@ -150,7 +150,7 @@ export default async function GuidePage({ params }) {
               </div>
               <h2 className="mt-3 text-2xl font-semibold tracking-tight">Lock it in with flashcards</h2>
               <p className="mt-2 text-slate-300 leading-relaxed">
-                Read the lesson in five minutes, then review the flashcards. With a free account, the cards come back for review over the following days, so it sticks without long study sessions.
+                Five minutes for the lesson, then the flashcards. Make a free account and the cards come back over the next few days, so it actually sticks. No long study sessions.
               </p>
               <ul className="mt-5 grid gap-2 sm:grid-cols-2">
                 {g.lessons.map((l) => (
