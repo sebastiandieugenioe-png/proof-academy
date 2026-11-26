@@ -19,3 +19,8 @@ flashcards, quiz, Study review with a free account); no scientific claims or sta
 - Post captions mention the guide too: "Full guide on our site (link in bio) + free 5-min lesson & flashcards." YouTube description gets the full guide URL.
 - No guide yet for the topic: use the normal `cta_scene` (lesson + flashcards) and propose a guide for that topic in the next weekly ideas.
 - Captions and voice lines follow the casual voice in `marketing/seo/VOICE.md`.
+
+## Finn + reelkit (26/11/2026)
+- `engine.FINN = True` draws Finn bottom centre behind a gold-edged counter, subtitles on his chest. Mouth opens with the voice loudness (needs `engine.VOICE`). Poses per scene via `engine.FINN_POSES`; `None` hides him (CTA, full-screen cards like versus).
+- `reelkit.run(...)` does voice alignment, music rotation, Finn poses and render for a reel. See `reels/r03`–`r10`.
+- Voice scripts for ElevenLabs (voice Adam): `SCRIPTS_r03-r10.md`. Run: `python3 reels/r03_cocktail_question.py path/to/r03_cocktail_question.mp3`.

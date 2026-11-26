@@ -542,3 +542,93 @@ def build_subs_from_phrases(pspans, max_words=5):
             d = (e - s) * len(c) / total
             subs.append((t, t + d, c)); t += d
     return subs
+
+
+# ================================================================ Finn (mascot) behind the bar
+# Layout from the reference account: Finn bottom centre behind a counter, subtitles on his chest.
+# FINN_POSES = [(global_start_s, pose_or_None)]; pose in idle/point/open/thumbs, None hides Finn (e.g. CTA).
+# Mouth opens when the voice is loud at that frame, so it flaps with the syllables.
+FINN = False
+FINN_POSES = [(0.0, "idle")]
+FINN_H = 520                 # on-screen height of the bust
+FINN_DIR = os.path.join(HERE, "mascot")
+_finn_cache, _venv = {}, None
+
+
+def _finn_img(pose, mouth):
+    key = (pose, mouth)
+    if key not in _finn_cache:
+        png = os.path.join(FINN_DIR, "png", f"finn_{pose}_{mouth}.png")
+        if not os.path.exists(png):
+            os.makedirs(os.path.dirname(png), exist_ok=True)
+            subprocess.run(["rsvg-convert", "-h", "700", os.path.join(FINN_DIR, f"finn_{pose}_{mouth}.svg"),
+                            "-o", png], check=True)
+        im = Image.open(png).convert("RGBA").crop((40, 210, 697, 700))   # same box for every pose
+        _finn_cache[key] = im.resize((round(im.width * FINN_H / im.height), FINN_H), Image.LANCZOS)
+    return _finn_cache[key]
+
+
+def _voice_env():
+    """Per-frame loudness of VOICE, 0..1 (cached)."""
+    global _venv
+    if _venv is None:
+        if not VOICE:
+            _venv = np.zeros(1)
+        else:
+            raw = subprocess.run(["ffmpeg", "-loglevel", "error", "-i", VOICE, "-ac", "1", "-ar", "16000",
+                                  "-f", "s16le", "-"], capture_output=True, check=True).stdout
+            a = np.frombuffer(raw, np.int16).astype(np.float32) / 32768
+            hop = 16000 // FPS
+            n = len(a) // hop
+            rms = np.sqrt((a[:n * hop].reshape(n, hop) ** 2).mean(1))
+            _venv = rms / (np.percentile(rms, 95) + 1e-9)
+    return _venv
+
+
+def _finn_pose(gt):
+    pose = None
+    for s, p in FINN_POSES:
+        if s <= gt:
+            pose = p
+    return pose
+
+
+def draw_finn(img, gt):
+    pose = _finn_pose(gt)
+    if not pose:
+        return
+    env = _voice_env()
+    k = int(gt * FPS)
+    talking = k < len(env) and env[k] > 0.28 and (k // 2) % 3 != 2   # small gaps so it reads as talking
+    fi = _finn_img(pose, "open" if talking else "smile")
+    bob = 4 * math.sin(gt * 2.4)
+    img.alpha_composite(fi, (int((W - fi.width) / 2), int(H - FINN_H - 50 + bob)))
+    # bar counter
+    d = ImageDraw.Draw(img)
+    d.rectangle((0, H - 120, W, H), fill=(12, 20, 40, 255))
+    d.rectangle((0, H - 126, W, H - 116), fill=BRAND["gold"])
+
+
+def draw_subs_finn(img, gt):
+    cur = next((x for x in SUBS if x[0] <= gt < x[1]), None)
+    if not cur:
+        return
+    txt = text_block(cur[2], "black", 54, BRAND["white"], max_w=860)
+    pill = rounded((txt.width + 60, txt.height + 34), 28, (2, 6, 23, 215))
+    pill.alpha_composite(txt, (30, 20))
+    paste_center(img, pill, W / 2, H - 215)
+
+
+def chrome(img, gt, total):  # noqa: F811  (Finn + subtitles on his chest)
+    if FINN and _finn_pose(gt):
+        draw_finn(img, gt)
+        draw_subs_finn(img, gt)
+        d = ImageDraw.Draw(img)
+        d.rounded_rectangle((60, 70, W - 60, 80), 5, fill=(255, 255, 255, 50))
+        d.rounded_rectangle((60, 70, 60 + (W - 120) * clamp(gt / total), 80), 5, fill=BRAND["gold"])
+        f = font("semi", 30)
+        t = BRAND["handle"]
+        d.text(((W - f.getlength(t)) / 2, H - 80), t, font=f, fill=(255, 255, 255, 170))
+    else:
+        draw_subs(img, gt)
+        _chrome_base(img, gt, total)
